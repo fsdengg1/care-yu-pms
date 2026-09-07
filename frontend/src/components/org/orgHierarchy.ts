@@ -164,6 +164,8 @@ function sortTeams(teams: Team[]): Team[] {
     return (left === -1 ? 99 : left) - (right === -1 ? 99 : right) || a.name.localeCompare(b.name);
   });
 }
+
+function roleRank(roleCode: string, roles: Role[]): number {
   const index = roles.findIndex((role) => role.code === roleCode);
   return index === -1 ? 999 : index;
 }
