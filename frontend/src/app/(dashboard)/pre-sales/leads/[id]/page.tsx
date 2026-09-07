@@ -16,13 +16,12 @@ import { NotificationsApi } from '@/lib/notificationsApi';
 import { TasksApi } from '@/lib/tasksApi';
 import { formatInrCompact, WORKFLOW_ACTION_SUCCESS, workflowActionFromQuery, workflowStatusPresentation } from '@/lib/format';
 import { projectStageFlowSummary } from '@/lib/projectStageFlow';
-import ProjectStageFlow from '@/components/leads/ProjectStageFlow';
 import { canCreateLead, canCreateLeadTask } from '@/lib/rbac';
 import {
   Lead, LeadActivity, LeadComment, LeadDocument, LeadStatusHistory,
   FeasibilityTeamAssignment, FeasibilityEmployeeAllocation, Team, User, PriorityLevel, AssignmentType, AssignmentHistory, EntityDocument, Task
 } from '@/lib/types';
-import { resolveLeadIdFromLocation } from '@/lib/leadRoutes';
+import { resolveLeadIdFromLocation, leadDetailHref } from '@/lib/leadRoutes';
 import {
     ArrowLeft, CheckCircle2, AlertTriangle, Send, Plus, X,
   Check, RotateCcw, Paperclip, Scan, ShieldAlert, Users, ChevronRight,
@@ -63,6 +62,8 @@ export default function LeadDetailPage() {
   const [forwardReason, setForwardReason] = useState('');
 
   const [activeTab, setActiveTab] = useState<TabKey>('overview');
+  const [loadError, setLoadError] = useState<string | null>(null);
+  const [loading, setLoading] = useState(true);
 
   // PM Return Modal
   const [showReturnModal, setShowReturnModal] = useState(false);
@@ -112,6 +113,13 @@ export default function LeadDetailPage() {
   const [clarificationComment, setClarificationComment] = useState('');
 
   const loadData = useCallback(async () => {
+    if (!leadId) {
+      setLoadError('Lead not found. The link may be invalid or expired.');
+      setLoading(false);
+      return;
+    }
+    setLoading(true);
+    setLoadError(null);
     const payload = await LeadApi.get(leadId);
     if (payload) {
       setLead(payload.lead);
@@ -126,21 +134,28 @@ export default function LeadDetailPage() {
       setAllUsers(payload.users?.length ? payload.users : StorageService.getUsers());
       setAssignmentHistory(payload.assignmentHistory || []);
       setLeadTasks(payload.tasks || []);
+      setLoading(false);
       return;
     }
     setAllTeams(StorageService.getTeams());
     setAllUsers(StorageService.getUsers());
+    setLoadError('Unable to load this lead. It may have been removed or you may not have access.');
+    setLoading(false);
   }, [leadId]);
 
   useEffect(() => {
     const u = StorageService.getCurrentUser();
     setCurrentUser(u);
-    loadData();
+    if (!u) {
+      router.replace('/login');
+      return;
+    }
+    void loadData();
     const tab = new URLSearchParams(window.location.search).get('tab');
     const action = workflowActionFromQuery(new URLSearchParams(window.location.search).get('action'));
-    if (action) {
+    if (action && leadId) {
       setWorkflowFeedback({ kind: action, message: WORKFLOW_ACTION_SUCCESS[action] });
-      window.history.replaceState({}, '', `/pre-sales/leads/${leadId}`);
+      window.history.replaceState({}, '', leadDetailHref(leadId));
     }
     if (
       tab === 'overview' ||
@@ -157,9 +172,24 @@ export default function LeadDetailPage() {
     ) {
       setActiveTab(tab);
     }
-  }, [loadData]);
+  }, [leadId, loadData, router]);
 
-  if (!currentUser || !lead) {
+  if (!currentUser) {
+    return <div className="p-12 text-center text-slate-400 text-xs">Loading Lead Details…</div>;
+  }
+
+  if (loadError) {
+    return (
+      <div className="p-12 text-center space-y-4">
+        <p className="text-rose-300 text-sm">{loadError}</p>
+        <Link href="/pre-sales/leads" className="inline-flex items-center gap-1 text-cyan-400 hover:text-cyan-300 text-xs font-medium">
+          <ArrowLeft className="w-3.5 h-3.5" /> Back to Leads
+        </Link>
+      </div>
+    );
+  }
+
+  if (loading || !lead) {
     return <div className="p-12 text-center text-slate-400 text-xs">Loading Lead Details…</div>;
   }
 
@@ -524,12 +554,6 @@ export default function LeadDetailPage() {
       </div>
 
       <WorkflowStatusBanner status={lead.status} lead={lead} feedback={workflowFeedback} error={actionError} showStage={false} />
-
-      <ProjectStageFlow
-        lead={lead}
-        canForward={canForward}
-        onForward={() => setShowForwardModal(true)}
-      />
 
       <SmartEmailNotificationPanel entityType="LEAD" entityId={lead.id} />
 

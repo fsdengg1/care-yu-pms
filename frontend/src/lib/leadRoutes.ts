@@ -21,5 +21,9 @@ export function resolveLeadIdFromLocation(
     const segment = decodeURIComponent(match[1]);
     if (!RESERVED_LEAD_SEGMENTS.has(segment)) return segment;
   }
+  if (typeof window !== 'undefined') {
+    const fromQuery = new URLSearchParams(window.location.search).get('id');
+    if (fromQuery) return fromQuery;
+  }
   return '';
 }

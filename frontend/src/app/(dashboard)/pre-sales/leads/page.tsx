@@ -7,8 +7,7 @@ import { StorageService } from '@/lib/storage';
 import { Lead, LeadStatus, User } from '@/lib/types';
 import { canCreateLead, isCeoViewOnly, userIsOnLeadTeam } from '@/lib/rbac';
 import { LeadApi } from '@/lib/leadApi';
-import { formatInrCompact, PIPELINE_STAGE_LABELS } from '@/lib/format';
-import { leadPipelineDisplay } from '@/lib/leadPipelineDisplay';
+import { formatInrCompact, formatLongDate, PIPELINE_STAGE_LABELS } from '@/lib/format';
 import { leadDetailHref } from '@/lib/leadRoutes';
 import { workflowActionLabel } from '@/lib/workflowActionLabel';
 import { 
@@ -209,12 +208,12 @@ export default function LeadsListPage() {
                     {lead.business_vertical}
                   </span>
                 </div>
-                <Link
+                <a
                   href={leadDetailHref(lead.id)}
                   className="px-3 py-1 bg-cyan-600 hover:bg-cyan-500 text-white font-medium rounded text-[11px] flex items-center gap-1"
                 >
                   Review Lead <ArrowRight className="w-3 h-3" />
-                </Link>
+                </a>
               </div>
             ))}
           </div>
@@ -244,12 +243,12 @@ export default function LeadsListPage() {
                     PM Reason: &quot;{lead.pm_return_reason || 'Please provide additional technical details'}&quot;
                   </div>
                 </div>
-                <Link
+                <a
                   href={leadDetailHref(lead.id)}
                   className="px-3 py-1 bg-amber-600 hover:bg-amber-500 text-slate-950 font-bold rounded text-[11px] flex items-center gap-1"
                 >
                   Update & Resubmit <ArrowRight className="w-3 h-3" />
-                </Link>
+                </a>
               </div>
             ))}
           </div>
@@ -341,20 +340,32 @@ export default function LeadsListPage() {
             <thead className="bg-slate-950/80 text-slate-400 uppercase tracking-wider text-[10px] border-b border-slate-800">
               <tr>
                 <th className="p-3">Lead ID</th>
-                <th className="p-3">Customer</th>
-                {isCEO ? <th className="p-3">Project</th> : <th className="p-3">Lead Title & Customer</th>}
-                {isCEO ? <th className="p-3">Value</th> : <th className="p-3">Business Vertical</th>}
-                {isCEO ? <th className="p-3">Stage</th> : <th className="p-3">Sales Owner</th>}
-                {isCEO ? <th className="p-3">Owner</th> : <th className="p-3">Priority</th>}
-                {!isCEO && <th className="p-3">Status</th>}
-                {!isCEO && <th className="p-3">Lead Date</th>}
+                {isCEO ? (
+                  <>
+                    <th className="p-3">Customer</th>
+                    <th className="p-3">Project</th>
+                    <th className="p-3">Value</th>
+                    <th className="p-3">Stage</th>
+                    <th className="p-3">Owner</th>
+                  </>
+                ) : (
+                  <>
+                    <th className="p-3">Customer</th>
+                    <th className="p-3">Lead Title</th>
+                    <th className="p-3">Business Vertical</th>
+                    <th className="p-3">Sales Owner</th>
+                    <th className="p-3">Lead Date</th>
+                    <th className="p-3">Priority</th>
+                    <th className="p-3">Status</th>
+                  </>
+                )}
                 <th className="p-3 text-right">Actions</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-800/60 text-slate-300">
               {visibleLeads.length === 0 ? (
                 <tr>
-                  <td colSpan={8} className="p-12 text-center text-slate-500 text-xs">
+                  <td colSpan={isCEO ? 7 : 9} className="p-12 text-center text-slate-500 text-xs">
                     <Inbox className="w-8 h-8 mx-auto mb-2 text-slate-600" />
                     <p>No leads found.</p>
                     {canCreateLead(currentUser) && (
@@ -367,7 +378,6 @@ export default function LeadsListPage() {
               ) : (
                 visibleLeads.map(lead => {
                   const statusInfo = STATUS_BADGES[lead.status] || { label: lead.status, style: 'bg-slate-800 text-slate-300' };
-                  const pipeline = leadPipelineDisplay(lead);
                   const statusLabel = workflowActionLabel(lead);
 
                   return (
@@ -387,13 +397,13 @@ export default function LeadsListPage() {
                         </>
                       ) : (
                         <>
-                      <td className="p-3">
-                        <div className="font-bold text-slate-100">{lead.title}</div>
-                        <div className="text-[11px] text-slate-400">{lead.customer_name} • <span className="text-slate-500">{lead.customer_type}</span></div>
-                        {pipeline.quotation && <div className="text-[11px] text-cyan-400">{pipeline.quotation} · {pipeline.stage}</div>}
-                      </td>
-                      <td className="p-3 text-slate-300 font-medium">{lead.business_vertical}</td>
+                      <td className="p-3 text-slate-100">{lead.customer_name}</td>
+                      <td className="p-3 font-semibold text-slate-200">{lead.title}</td>
+                      <td className="p-3 text-slate-300 font-medium">{lead.customer_type}</td>
                       <td className="p-3 text-slate-400">{lead.sales_owner}</td>
+                      <td className="p-3 text-slate-400 font-mono text-[11px]">
+                        {formatLongDate(lead.created_at)}
+                      </td>
                       <td className="p-3">
                         <span className={`px-2 py-0.5 rounded text-[10px] font-semibold border ${
                           lead.priority === 'Critical' ? 'bg-rose-950 text-rose-300 border-rose-800' :
@@ -408,18 +418,15 @@ export default function LeadsListPage() {
                           {statusLabel}
                         </span>
                       </td>
-                      <td className="p-3 text-slate-400 font-mono text-[11px]">
-                        {new Date(lead.created_at).toLocaleDateString()}
-                      </td>
                         </>
                       )}
                       <td className="p-3 text-right">
-                        <Link
+                        <a
                           href={leadDetailHref(lead.id)}
                           className="px-2.5 py-1 bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 rounded text-[11px] font-medium inline-flex items-center gap-1 transition-colors"
                         >
                           <Eye className="w-3.5 h-3.5" /> View
-                        </Link>
+                        </a>
                       </td>
                     </tr>
                   );
