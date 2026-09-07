@@ -433,7 +433,7 @@ export async function ensureLiveDirectory() {
   users = await ensureTeamPerson(users, { name: 'Arun', email: ARUN_LIVE_EMAIL, matchName: 'arun', exactName: true });
   users = await ensureTeamPerson(users, { name: 'Aakash', email: robotLeadEmail(), matchName: 'aakash', exactName: true });
   users = await ensureTeamPerson(users, { name: 'Kabitha', email: KABITHA_EMAIL, matchName: 'kabitha', exactName: true });
-  users = await ensureTeamPerson(users, { name: 'Mr and Mrs Posu Raja', email: RAJA_EMAIL, matchName: 'raja', exactName: true });
+  users = await ensureTeamPerson(users, { name: 'Raja', email: RAJA_EMAIL, matchName: 'raja', exactName: true });
   // FSD Engineer stays as a login/report account but is hidden from Daily Work Updates people pickers.
 
   const repaired: User[] = [];

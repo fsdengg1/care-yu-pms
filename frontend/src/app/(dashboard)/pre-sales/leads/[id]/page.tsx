@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState, useEffect, useCallback } from 'react';
-import { useParams, useRouter } from 'next/navigation';
+import { useParams, usePathname, useRouter, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import { StorageService } from '@/lib/storage';
 import { LeadApi } from '@/lib/leadApi';
@@ -22,6 +22,7 @@ import {
   Lead, LeadActivity, LeadComment, LeadDocument, LeadStatusHistory,
   FeasibilityTeamAssignment, FeasibilityEmployeeAllocation, Team, User, PriorityLevel, AssignmentType, AssignmentHistory, EntityDocument, Task
 } from '@/lib/types';
+import { resolveLeadIdFromLocation } from '@/lib/leadRoutes';
 import {
     ArrowLeft, CheckCircle2, AlertTriangle, Send, Plus, X,
   Check, RotateCcw, Paperclip, Scan, ShieldAlert, Users, ChevronRight,
@@ -33,7 +34,9 @@ type TabKey = 'overview' | 'customer' | 'requirement' | 'technical' | 'commercia
 export default function LeadDetailPage() {
   const params = useParams();
   const router = useRouter();
-  const leadId = params.id as string;
+  const pathname = usePathname();
+  const searchParams = useSearchParams();
+  const leadId = resolveLeadIdFromLocation(params.id, pathname, searchParams.get('id'));
 
   const [currentUser, setCurrentUser] = useState<User | null>(null);
   const [lead, setLead] = useState<Lead | null>(null);

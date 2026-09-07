@@ -1,4 +1,5 @@
 import { NotificationItem } from './types';
+import { leadDetailHref } from './leadRoutes';
 
 function conversationTab(item: NotificationItem) {
   if (item.type === 'ANNOUNCEMENT') return 'forum';
@@ -23,12 +24,12 @@ export function notificationHref(item: NotificationItem) {
     return `/messages?tab=${tab}&conversation=${encodeURIComponent(item.entity_id)}&c=${encodeURIComponent(item.entity_id)}`;
   }
   if (item.type === 'STAGE_COMPLETED') {
-    return item.entity_type === 'PROJECT' ? `/projects/${item.entity_id}` : `/pre-sales/leads/${item.entity_id}`;
+    return item.entity_type === 'PROJECT' ? `/projects/${item.entity_id}` : leadDetailHref(item.entity_id);
   }
   if (item.type === 'TASK_ASSIGNED' || item.type === 'TASK_FORWARDED' || item.type === 'ACTION_REQUIRED' || item.type === 'APPROVAL_REQUIRED') {
     if (item.entity_type === 'TASK') return `/my-work?task=${encodeURIComponent(item.entity_id)}`;
   }
-  if (item.entity_type === 'LEAD') return `/pre-sales/leads/${item.entity_id}`;
+  if (item.entity_type === 'LEAD') return leadDetailHref(item.entity_id);
   if (item.entity_type === 'PROJECT') return `/projects/${item.entity_id}`;
   if (item.entity_type === 'DAILY_UPDATE') return `/daily-updates/${item.entity_id}`;
   if (item.entity_type === 'ESCALATION') return `/dashboard/ceo/escalations/${item.entity_id}`;

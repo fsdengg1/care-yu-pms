@@ -72,7 +72,9 @@ const redirects = [
   '/projects/:id/activity  /projects/active/index.html  200',
   '/projects/:id  /projects/active/index.html  200',
   '/daily-updates/:id  /daily-updates/index.html  200',
-  '/pre-sales/leads/:id  /pre-sales/leads/index.html  200',
+  '/pre-sales/leads/create  /pre-sales/leads/create/index.html  200',
+  '/pre-sales/leads/detail  /pre-sales/leads/detail/index.html  200',
+  '/pre-sales/leads/:id  /pre-sales/leads/detail/index.html  200',
   '/dashboard/ceo/escalations/:id  /dashboard/ceo/escalations/index.html  200',
   '/*  /login/index.html  200',
 ].join('\n') + '\n';

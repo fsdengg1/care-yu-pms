@@ -152,7 +152,7 @@ export default function OrgChart({
                   }`}
                 >
                   <div className="text-xs sm:text-sm font-bold leading-tight">
-                    {ctoUser ? chartDisplayName(ctoUser) : 'IlayaRaja'}
+                    {ctoUser ? chartDisplayName(ctoUser) : 'Raja'}
                   </div>
                   <div className="mt-0.5 text-[11px] font-semibold text-teal-100">CTO</div>
                   <div className="mt-0.5 text-[10px] font-medium text-teal-100/90">

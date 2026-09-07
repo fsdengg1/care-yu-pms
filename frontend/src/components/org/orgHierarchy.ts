@@ -152,7 +152,10 @@ const CEO_REPORT_ORDER = ['CTO', 'BUSINESS_HEAD', 'ENG_DIRECTOR'];
 export function chartDisplayName(user: User): string {
   const name = user.name.trim();
   if (user.role_code === 'CEO' && /bernard/i.test(name)) return 'Bernard Hamilton';
-  if (user.role_code === 'CTO' && !/ilaya/i.test(name)) return 'IlayaRaja';
+  if (user.role_code === 'CTO') {
+    if (/^raja$/i.test(name) || user.email?.toLowerCase() === 'raja@careyu.ai') return 'Raja';
+    if (!/ilaya/i.test(name)) return 'IlayaRaja';
+  }
   if (user.role_code === 'BUSINESS_HEAD' && /shradha|sharadha/i.test(name)) return 'Sharadha Patil';
   return name;
 }
