@@ -16,8 +16,17 @@
     ]
   },
   "vars": {
+    "CLOUDFLARE_WORKER": "1",
     "NODE_ENV": "production",
     "APP_TIMEZONE": "Asia/Kolkata",
-    "DATABASE_SSL": "true"
-  }
+    "DATABASE_SSL": "true",
+    "CORS_ORIGIN": "https://careyu-frontend.pages.dev,https://pms.careyu.ai",
+    "FRONTEND_URL": "https://careyu-frontend.pages.dev"
+  },
+  "hyperdrive": [
+    {
+      "binding": "HYPERDRIVE",
+      "id": "6cfb190968a546e8ac667c6c616d6f4d"
+    }
+  ]
 }

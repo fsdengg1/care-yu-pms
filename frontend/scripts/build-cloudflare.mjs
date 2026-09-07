@@ -31,13 +31,14 @@ function processHtmlDir(srcDir, destDir) {
   fs.mkdirSync(destDir, { recursive: true });
   for (const entry of fs.readdirSync(srcDir, { withFileTypes: true })) {
     const srcPath = path.join(srcDir, entry.name);
+    const destName = entry.isDirectory() ? entry.name : entry.name.replace(/\.html$/, '');
+    if (destName === 'favicon.ico') continue;
     if (entry.isDirectory()) {
       processHtmlDir(srcPath, path.join(destDir, entry.name));
     } else if (entry.name === 'index.html') {
       fs.copyFileSync(srcPath, path.join(destDir, 'index.html'));
     } else if (entry.name.endsWith('.html')) {
-      const routeName = entry.name.replace(/\.html$/, '');
-      const pageDir = path.join(destDir, routeName);
+      const pageDir = path.join(destDir, destName);
       fs.mkdirSync(pageDir, { recursive: true });
       fs.copyFileSync(srcPath, path.join(pageDir, 'index.html'));
     }
@@ -46,11 +47,26 @@ function processHtmlDir(srcDir, destDir) {
 
 processHtmlDir(nextServerApp, outDir);
 
+const mediaDir = path.join(nextStatic, 'media');
+if (fs.existsSync(mediaDir)) {
+  const favicon = fs.readdirSync(mediaDir).find((name) => name.startsWith('favicon') && name.endsWith('.ico'));
+  if (favicon) {
+    fs.copyFileSync(path.join(mediaDir, favicon), path.join(outDir, 'favicon.ico'));
+  }
+}
+
 if (!fs.existsSync(path.join(outDir, 'login', 'index.html'))) {
   console.warn('[build-cloudflare] WARNING: login/index.html missing!');
 }
 
+const apiOrigin = (
+  process.env.NEXT_PUBLIC_API_URL ||
+  process.env.CLOUDFLARE_API_ORIGIN ||
+  'https://careyu-backend-api.aicareyuautomation.workers.dev'
+).replace(/\/$/, '');
+
 const redirects = [
+  `/api/*  ${apiOrigin}/api/:splat  200`,
   '/_next/static/*  /_next/static/:splat  200',
   '/assets/*  /assets/:splat  200',
   '/projects/:id/activity  /projects/active/index.html  200',

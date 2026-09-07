@@ -1,7 +1,7 @@
 import express from 'express';
 import cors from 'cors';
 import { env } from './config/env.js';
-import { initStore, isStoreInitialized, shutdownStore, store } from './store/db.js';
+import { initStore, isStoreInitialized, store } from './store/db.js';
 import authRouter from './routes/auth.js';
 import masterRouter from './routes/master.js';
 import dashboardRouter from './routes/dashboard.js';
@@ -19,8 +19,6 @@ import chatRouter from './routes/chat.js';
 import forumRouter from './routes/forum.js';
 import tasksRouter from './routes/tasks.js';
 import executiveOverviewRouter from './routes/executiveOverview.js';
-import { startNotificationScheduler } from './lib/reminderJob.js';
-import { startEmailReportScheduler } from './lib/emailReportJob.js';
 import { logEmailConfigOnStartup } from './lib/emailDiagnostics.js';
 import { ensureLiveDirectory } from './lib/directoryRoles.js';
 import { ensureRobotLeadAccount } from './lib/robotLead.js';
@@ -48,6 +46,10 @@ function isAllowedOrigin(origin: string | undefined) {
   if (env.corsOrigins.includes(incoming)) return true;
   try {
     const url = new URL(incoming);
+    // Allow Cloudflare Pages production and preview deployments
+    if (url.hostname === 'careyu-frontend.pages.dev' || url.hostname.endsWith('.careyu-frontend.pages.dev')) {
+      return true;
+    }
     const swapped = new URL(incoming);
     if (url.hostname === 'localhost') swapped.hostname = '127.0.0.1';
     else if (url.hostname === '127.0.0.1') swapped.hostname = 'localhost';
@@ -96,6 +98,16 @@ app.use((_req, res, next) => {
 });
 app.use(cors(corsOptions));
 app.options('/{*path}', cors(corsOptions));
+app.use((req, _res, next) => {
+  if ((req as { _preParsedBody?: unknown })._preParsedBody !== undefined) {
+    req.body = (req as { _preParsedBody?: unknown })._preParsedBody;
+    (req as { _body?: boolean })._body = true;
+  }
+  next();
+});
+app.use(express.json({ limit: '20mb' }));
+app.use(express.urlencoded({ extended: true, limit: '20mb' }));
+
 app.get('/', (_req, res) => {
   res.json({
     ok: true,
@@ -139,6 +151,10 @@ async function initializeBackend() {
   console.log(
     `Store ready (source=${storeInfo.source}, users=${storeInfo.counts.users}, pendingSignups=${storeInfo.counts.pendingSignups ?? 0}, leads=${storeInfo.counts.leads}, projects=${storeInfo.counts.projects})`
   );
+  if (process.env.CLOUDFLARE_WORKER === '1') {
+    logEmailConfigOnStartup();
+    return;
+  }
   const leads = store.getLeads();
   const retired = leads.map((lead) => {
     if (String(lead.status) !== 'LIVE_CASE_DEMONSTRATION' && String(lead.pipeline_stage) !== 'LIVE_DEMO') return lead;
@@ -153,43 +169,3 @@ async function initializeBackend() {
   logEmailConfigOnStartup();
 }
 
-async function start() {
-  console.log('Starting CareYu backend...');
-  console.log(`[boot] NODE_ENV=${env.nodeEnv} PORT=${env.port} databaseSsl=${env.databaseSsl}`);
-
-  await initializeBackend();
-  startNotificationScheduler();
-  startEmailReportScheduler();
-
-  const server = app.listen(env.port, '0.0.0.0', () => {
-    console.log(`Careyu backend listening on 0.0.0.0:${env.port}`);
-  });
-
-  server.on('error', (error: NodeJS.ErrnoException) => {
-    if (error.code === 'EADDRINUSE') {
-      console.error(
-        `Port ${env.port} is already in use by another application. Stop that process or set PORT in backend/.env to a free port.`
-      );
-      process.exit(1);
-    }
-    throw error;
-  });
-
-  const shutdown = async (signal: string) => {
-    console.log(`${signal} received, shutting down...`);
-    server.close(async () => {
-      await shutdownStore();
-      process.exit(0);
-    });
-  };
-
-  process.on('SIGINT', () => void shutdown('SIGINT'));
-  process.on('SIGTERM', () => void shutdown('SIGTERM'));
-}
-
-if (process.env.CF_PAGES !== '1' && process.env.CLOUDFLARE_WORKER !== '1' && !process.env.WORKER_ENV) {
-  start().catch((error) => {
-    console.error('Failed to start backend:', error);
-    process.exit(1);
-  });
-}

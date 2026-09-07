@@ -514,8 +514,8 @@ function emptyDb(): DbShape {
 }
 
 function readLocalDbFile(): Partial<DbShape> | null {
-  if (!fs.existsSync(localDbPath)) return null;
   try {
+    if (!fs.existsSync(localDbPath)) return null;
     return JSON.parse(fs.readFileSync(localDbPath, 'utf8')) as Partial<DbShape>;
   } catch {
     return null;
@@ -715,7 +715,11 @@ export async function initStore(options?: { forceImportLocal?: boolean }): Promi
   counts: Record<string, number>;
 }> {
   await pingDatabase();
-  await ensureSchema();
+  if (process.env.CLOUDFLARE_WORKER === '1') {
+    console.info('[store] Skipping DDL ensureSchema on Cloudflare Worker HTTP isolate');
+  } else {
+    await ensureSchema();
+  }
 
   const fromPostgres = await loadAllCollections();
   const postgresHasData = collectionsHaveData(fromPostgres);
@@ -761,7 +765,12 @@ export async function initStore(options?: { forceImportLocal?: boolean }): Promi
   }
 
   cache = merged;
-  await persistDb(merged);
+  const workerHttp = process.env.CLOUDFLARE_WORKER === '1';
+  if (!workerHttp || source !== 'postgres') {
+    await persistDb(merged);
+  } else {
+    console.info('[store] Skipping full persist on Cloudflare Worker cold start');
+  }
   initialized = true;
 
   return { source, counts: countRecords(loadDb()) };

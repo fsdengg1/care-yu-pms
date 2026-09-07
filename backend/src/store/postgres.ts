@@ -7,7 +7,9 @@ if (typeof dns?.setDefaultResultOrder === 'function') {
   dns.setDefaultResultOrder('ipv4first');
 }
 
-const { Pool } = pg;
+const { Pool, Client } = pg;
+
+let pool: pg.Pool | null = null;
 
 export type CollectionName =
   | 'users'
@@ -80,7 +82,41 @@ export const COLLECTION_NAMES: CollectionName[] = [
   'systemMeta',
 ];
 
-let pool: pg.Pool | null = null;
+function createWorkerClientPool(): pg.Pool {
+  const config: pg.ClientConfig = {
+    connectionString: env.databaseUrl,
+    ssl: false,
+  };
+
+  const fake = {
+    async query(text: string | { text: string; values?: unknown[] }, values?: unknown[]) {
+      const client = new Client(config);
+      await client.connect();
+      try {
+        if (typeof text === 'string') return await client.query(text, values);
+        return await client.query(text);
+      } finally {
+        await client.end().catch(() => undefined);
+      }
+    },
+    async connect() {
+      const client = new Client(config);
+      await client.connect();
+      (client as pg.PoolClient).release = (() => {
+        void client.end().catch(() => undefined);
+      }) as pg.PoolClient['release'];
+      return client;
+    },
+    async end() {
+      return;
+    },
+    on() {
+      return fake;
+    },
+  };
+
+  return fake as unknown as pg.Pool;
+}
 
 function connectionStringWithoutSslMode(url: string): string {
   try {
@@ -95,14 +131,24 @@ function connectionStringWithoutSslMode(url: string): string {
 
 export function getPool(): pg.Pool {
   if (!pool) {
-    pool = new Pool({
-      connectionString: connectionStringWithoutSslMode(env.databaseUrl),
-      // Managed Postgres (Aiven) uses a provider CA; for app use we accept TLS without pinning the CA file.
-      ssl: env.databaseSsl ? { rejectUnauthorized: false } : false,
-      max: 3,
-      connectionTimeoutMillis: 60000,
-      idleTimeoutMillis: 30000,
-    });
+    const worker = process.env.CLOUDFLARE_WORKER === '1';
+    const hyperdrive = process.env.HYPERDRIVE_ACTIVE === '1';
+    if (worker && hyperdrive) {
+      pool = createWorkerClientPool();
+    } else {
+      pool = new Pool({
+        connectionString: hyperdrive ? env.databaseUrl : connectionStringWithoutSslMode(env.databaseUrl),
+        ssl: hyperdrive ? false : env.databaseSsl ? { rejectUnauthorized: false } : false,
+        max: worker ? 1 : 3,
+        connectionTimeoutMillis: worker ? 15000 : 60000,
+        idleTimeoutMillis: worker ? 5000 : 30000,
+        allowExitOnIdle: Boolean(worker),
+      });
+      pool.on('error', (err) => {
+        console.warn('[pg-pool] Background client error, resetting pool:', err.message);
+        pool = null;
+      });
+    }
   }
   return pool;
 }
@@ -258,42 +304,52 @@ export async function saveAllCollections(
 }
 
 export async function closePool(): Promise<void> {
-  if (pool) {
-    await pool.end();
-    pool = null;
+  const current = pool;
+  pool = null;
+  if (current) {
+    try {
+      if (!(current as any).ending && !(current as any).ended) {
+        await current.end();
+      }
+    } catch (e) {
+      console.warn('[store] closePool error ignored:', e instanceof Error ? e.message : e);
+    }
   }
 }
 
-export async function pingDatabase(): Promise<void> {
-  const timeoutMs = 30000;
-  const attempts = 5;
+async function pingWithCurrentConfig(timeoutMs: number, attempts: number): Promise<void> {
   let lastError: unknown;
-
   for (let attempt = 1; attempt <= attempts; attempt += 1) {
     try {
+      const p = getPool();
       await Promise.race([
-        getPool().query('SELECT 1'),
+        p.query('SELECT 1'),
         new Promise<never>((_, reject) => {
           setTimeout(() => {
-            reject(new Error(`Database connection timed out after ${timeoutMs / 1000}s. Check DATABASE_URL, SSL, and network access.`));
+            reject(new Error(`Database connection timed out after ${timeoutMs / 1000}s.`));
           }, timeoutMs);
         }),
       ]);
+      console.info('[store] Database ping successful');
       return;
     } catch (error) {
       lastError = error;
       console.error(
-        `[store] Database ping failed (attempt ${attempt}/${attempts})`,
-        error instanceof Error ? error.message : error
+        `[store] Database ping failed (attempt ${attempt}/${attempts}):`,
+        error instanceof Error ? `${error.name}: ${error.message}` : error
       );
       await closePool();
       if (attempt < attempts) {
-        await new Promise((resolve) => setTimeout(resolve, 2000 * attempt));
+        await new Promise((resolve) => setTimeout(resolve, 1000 * attempt));
       }
     }
   }
+  throw lastError instanceof Error ? lastError : new Error(String(lastError));
+}
 
-  throw lastError instanceof Error
-    ? lastError
-    : new Error('Database connection failed.');
+export async function pingDatabase(): Promise<void> {
+  const worker = process.env.CLOUDFLARE_WORKER === '1';
+  const timeoutMs = worker ? 20000 : 20000;
+  const attempts = worker ? 2 : 3;
+  await pingWithCurrentConfig(timeoutMs, attempts);
 }

@@ -42,11 +42,14 @@ export async function loginWithApi(
 ): Promise<{ ok: true; user: User; token: string } | { ok: false; error: string; code?: string }> {
   const result = await apiRequest<{ user: User; token: string }>('/api/auth/login', {
     method: 'POST',
-    body: JSON.stringify({ email: email.trim(), password, rememberMe }),
+    body: JSON.stringify({ workEmail: email.trim(), email: email.trim(), password, rememberMe }),
   });
 
   if (!result.ok) {
     return { ok: false, error: result.message, code: result.code };
+  }
+  if (!result.data?.token || !result.data?.user) {
+    return { ok: false, error: 'Unable to sign in. Please check the backend server.' };
   }
 
   return { ok: true, user: result.data.user, token: result.data.token };
@@ -57,7 +60,7 @@ export async function lookupLoginModeWithApi(
 ): Promise<{ loginMode: 'password' | 'invitation' }> {
   const result = await apiRequest<{ loginMode: 'password' | 'invitation' }>('/api/auth/login-mode', {
     method: 'POST',
-    body: JSON.stringify({ email: email.trim() }),
+    body: JSON.stringify({ workEmail: email.trim(), email: email.trim() }),
   });
   if (!result.ok) return { loginMode: 'password' };
   return { loginMode: result.data.loginMode === 'invitation' ? 'invitation' : 'password' };
@@ -86,7 +89,7 @@ export async function requestInvitationWithApi(
 ): Promise<{ ok: true; message: string } | { ok: false; error: string; code?: string }> {
   const result = await apiRequest<{ message: string }>('/api/auth/request-invitation', {
     method: 'POST',
-    body: JSON.stringify({ email: email.trim() }),
+    body: JSON.stringify({ workEmail: email.trim(), email: email.trim() }),
   });
   if (!result.ok) return { ok: false, error: result.message, code: result.code };
   return { ok: true, message: result.data.message };
@@ -186,7 +189,7 @@ export async function forgotPasswordWithApi(
 ): Promise<{ ok: true; message: string } | { ok: false; error: string }> {
   const result = await apiRequest<{ message: string }>('/api/auth/forgot-password', {
     method: 'POST',
-    body: JSON.stringify({ email: email.trim() }),
+    body: JSON.stringify({ workEmail: email.trim(), email: email.trim() }),
   });
   if (!result.ok) return { ok: false, error: result.message };
   return { ok: true, message: result.data.message };
@@ -296,7 +299,7 @@ export function getDashboardPath(roleCode: string): string {
       return '/dashboard/cto';
     case 'BUSINESS_HEAD':
       return '/dashboard/business-head';
-    case 'ENG_DIRECTOR':
+    case 'ENGG_DIRECTOR':
       return '/dashboard/engineering';
     case 'PROJECT_MANAGER':
     case 'PROJECT_ENGINEER':

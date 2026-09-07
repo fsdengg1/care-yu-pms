@@ -6,19 +6,31 @@ function isLoopbackHost(hostname: string) {
 
 function resolveApiBaseUrl() {
   const configured = (process.env.NEXT_PUBLIC_API_URL ?? '').replace(/\/$/, '');
+  const productionApi = 'https://careyu-backend-api.aicareyuautomation.workers.dev';
 
   if (typeof window !== 'undefined') {
     const { hostname, origin } = window.location;
     if (isLoopbackHost(hostname)) {
       return '';
     }
-    if (!configured) return '';
-    try {
-      if (new URL(configured).origin === origin) return '';
-    } catch {
-      return '';
+    if (configured) {
+      try {
+        const apiUrl = new URL(configured);
+        if (apiUrl.origin === origin) return '';
+        if (isLoopbackHost(apiUrl.hostname)) return productionApi;
+        return configured;
+      } catch {
+        return productionApi;
+      }
     }
-    return configured;
+    if (
+      hostname === 'careyu-frontend.pages.dev' ||
+      hostname.endsWith('.careyu-frontend.pages.dev') ||
+      hostname === 'pms.careyu.ai'
+    ) {
+      return productionApi;
+    }
+    return '';
   }
 
   return configured;
@@ -26,13 +38,17 @@ function resolveApiBaseUrl() {
 
 export const API_URL = resolveApiBaseUrl();
 
+function backendUnreachableMessage() {
+  return 'Unable to sign in. Please check the backend server.';
+}
+
 export async function apiRequest<T>(
   path: string,
   options: RequestInit = {}
 ): Promise<{ ok: true; data: T } | { ok: false; status: number; message: string; code?: string; errors?: { field: string; message: string }[] }> {
   try {
     const headers = new Headers(options.headers);
-    if (!headers.has('Content-Type') && options.body) {
+    if (!headers.has('Content-Type') && options.body && !(options.body instanceof FormData) && !(options.body instanceof Blob)) {
       headers.set('Content-Type', 'application/json');
     }
     const token = StorageService.getAuthToken();
@@ -47,22 +63,31 @@ export async function apiRequest<T>(
       referrerPolicy: 'same-origin',
     });
 
-    const payload = await response.json().catch(() => ({}));
     const contentType = response.headers.get('content-type') || '';
+    const payload = contentType.includes('application/json')
+      ? await response.json().catch(() => ({}))
+      : {};
+
+    if (!contentType.includes('application/json')) {
+      return {
+        ok: false,
+        status: response.status,
+        message: backendUnreachableMessage(),
+      };
+    }
+
     if (!response.ok) {
       const emptyBody = !payload || typeof payload !== 'object' || !('message' in payload);
       const proxyDown =
         response.status === 502 ||
         response.status === 503 ||
         response.status === 504 ||
-        (response.status >= 500 &&
-          emptyBody &&
-          (contentType.includes('text/html') || Object.keys(payload as object).length === 0));
+        (response.status >= 500 && emptyBody);
       return {
         ok: false,
         status: response.status,
         message: proxyDown
-          ? 'Unable to reach the server. Start the backend (port 4100), then sign in again.'
+          ? backendUnreachableMessage()
           : payload.message || 'Request failed. Please try again.',
         code: typeof payload.code === 'string' ? payload.code : undefined,
         errors: Array.isArray(payload.errors) ? payload.errors : undefined,
@@ -74,7 +99,7 @@ export async function apiRequest<T>(
     return {
       ok: false,
       status: 0,
-      message: 'Unable to reach the server. Please confirm the backend is running.',
+      message: backendUnreachableMessage(),
     };
   }
 }
