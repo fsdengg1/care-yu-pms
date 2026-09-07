@@ -9,7 +9,7 @@ import { canCreateLead, canDeleteLead, canEditLeadInput, isCeoViewOnly, userIsOn
 import { LeadApi } from '@/lib/leadApi';
 import { formatInrCompact, formatLongDate, PIPELINE_STAGE_LABELS } from '@/lib/format';
 import { leadDetailHref } from '@/lib/leadRoutes';
-import { workflowActionLabel } from '@/lib/workflowActionLabel';
+import { workflowActionLabel, SUBMISSION_STAGE_LABELS } from '@/lib/workflowActionLabel';
 import { 
   Building2, 
   Plus, 
@@ -29,21 +29,21 @@ import {
 
 const STATUS_BADGES: Record<LeadStatus, { label: string; style: string }> = {
   DRAFT: { label: 'Draft', style: 'bg-slate-800 text-slate-300 border-slate-700' },
-  SUBMITTED_TO_PM: { label: 'Submitted to PM for Review', style: 'bg-cyan-950 text-cyan-300 border-cyan-700' },
-  UNDER_PM_REVIEW: { label: 'Submitted to PM for Review', style: 'bg-cyan-950 text-cyan-300 border-cyan-700' },
+  SUBMITTED_TO_PM: { label: SUBMISSION_STAGE_LABELS.PM, style: 'bg-cyan-950 text-cyan-300 border-cyan-700' },
+  UNDER_PM_REVIEW: { label: SUBMISSION_STAGE_LABELS.PM, style: 'bg-cyan-950 text-cyan-300 border-cyan-700' },
   RETURNED_TO_SALES: { label: 'Returned for Clarification', style: 'bg-amber-950 text-amber-300 border-amber-800' },
   ADDITIONAL_INFORMATION_REQUIRED: { label: 'Returned for Clarification', style: 'bg-amber-950 text-amber-300 border-amber-800' },
-  RESUBMITTED_TO_PM: { label: 'Submitted to PM for Review', style: 'bg-cyan-950 text-cyan-300 border-cyan-700' },
-  ACCEPTED_FOR_FEASIBILITY: { label: 'Submitted to Feasibility Team', style: 'bg-emerald-950 text-emerald-300 border-emerald-700' },
-  FEASIBILITY_IN_PROGRESS: { label: 'Submitted to Feasibility Team', style: 'bg-indigo-950 text-indigo-300 border-indigo-800' },
-  FEASIBILITY_SUBMITTED: { label: 'Submitted to PM for Review', style: 'bg-cyan-950 text-cyan-300 border-cyan-700' },
+  RESUBMITTED_TO_PM: { label: SUBMISSION_STAGE_LABELS.PM, style: 'bg-cyan-950 text-cyan-300 border-cyan-700' },
+  ACCEPTED_FOR_FEASIBILITY: { label: SUBMISSION_STAGE_LABELS.VISION_TEAM, style: 'bg-emerald-950 text-emerald-300 border-emerald-700' },
+  FEASIBILITY_IN_PROGRESS: { label: SUBMISSION_STAGE_LABELS.VISION_TEAM, style: 'bg-indigo-950 text-indigo-300 border-indigo-800' },
+  FEASIBILITY_SUBMITTED: { label: SUBMISSION_STAGE_LABELS.PM, style: 'bg-cyan-950 text-cyan-300 border-cyan-700' },
   FEASIBILITY_RETURNED: { label: 'Returned for Clarification', style: 'bg-amber-950 text-amber-300 border-amber-800' },
   FEASIBILITY_REJECTED: { label: 'Rejected', style: 'bg-rose-950 text-rose-300 border-rose-700' },
   COSTING_IN_PROGRESS: { label: 'Submitted to Procurement Review', style: 'bg-violet-950 text-violet-300 border-violet-800' },
-  COSTING_SUBMITTED: { label: 'Submitted to PM for Review', style: 'bg-cyan-950 text-cyan-300 border-cyan-700' },
+  COSTING_SUBMITTED: { label: SUBMISSION_STAGE_LABELS.PM, style: 'bg-cyan-950 text-cyan-300 border-cyan-700' },
   COSTING_RETURNED: { label: 'Returned for Clarification', style: 'bg-amber-950 text-amber-300 border-amber-800' },
   COSTING_REJECTED: { label: 'Rejected', style: 'bg-rose-950 text-rose-300 border-rose-700' },
-  QUOTATION: { label: 'Submitted to Business Head for Review', style: 'bg-cyan-950 text-cyan-300 border-cyan-800' },
+  QUOTATION: { label: SUBMISSION_STAGE_LABELS.BUSINESS_HEAD, style: 'bg-cyan-950 text-cyan-300 border-cyan-800' },
   NEGOTIATION: { label: 'Submitted to Customer', style: 'bg-orange-950 text-orange-300 border-orange-800' },
   ORDER_CONVERTED: { label: 'Approved', style: 'bg-emerald-950 text-emerald-300 border-emerald-800' },
   WON: { label: 'Approved', style: 'bg-emerald-950 text-emerald-300 border-emerald-800' },
@@ -331,7 +331,7 @@ export default function LeadsListPage() {
           >
             <option value="ALL">All Statuses</option>
             <option value="DRAFT">Draft</option>
-            <option value="SUBMITTED_TO_PM">Submitted to PM for Review</option>
+            <option value="SUBMITTED_TO_PM">{SUBMISSION_STAGE_LABELS.PM}</option>
             <option value="RETURNED_TO_SALES">Returned for Clarification</option>
             <option value="ACCEPTED_FOR_FEASIBILITY">Approved</option>
             <option value="CANCELLED">Rejected</option>

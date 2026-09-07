@@ -24,7 +24,7 @@ import {
 } from './responsibility.js';
 import { assertAllowedTransition, LeadWorkflowError, leadOwnerId, PM_REVIEW_STATUSES } from './leadValidation.js';
 import { dispatchHandover, procurementUsers } from './lifecycleNotify.js';
-import { applyLeadWorkflowContext, workflowContextForStatus } from './workflowEngine.js';
+import { applyLeadWorkflowContext, leadSubmissionStatusLabel, workflowContextForStatus } from './workflowEngine.js';
 import { CAREYU_OFFICE_ADDRESS } from './company.js';
 
 export function parseMoney(raw: unknown): number {
@@ -294,7 +294,7 @@ export function notify(partial: Omit<NotificationItem, 'id' | 'created_at' | 're
     ctaLabel: 'Open',
     actionUrl: partial.action_url || (lead ? `/pre-sales/leads/${lead.id}` : undefined),
     type: partial.type,
-    status: ctx?.status_label || lead?.status,
+    status: lead ? leadSubmissionStatusLabel(lead) : ctx?.status_label,
     previousStatus: lead?.previous_status,
     dueDate: lead?.due_date || lead?.customer_target_date,
     assignedBy: lead?.assigned_by_name || actor?.name,

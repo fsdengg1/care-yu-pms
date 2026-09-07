@@ -6,7 +6,8 @@ import { StorageService } from '@/lib/storage';
 import { DailyUpdatesApi } from '@/lib/dailyUpdatesApi';
 import { LeadApi } from '@/lib/leadApi';
 import { ProjectsApi } from '@/lib/projectsApi';
-import { formatLongDate, LEAD_STATUS_LABELS, WORK_STATUS_LABELS } from '@/lib/format';
+import { formatLongDate, WORK_STATUS_LABELS } from '@/lib/format';
+import { workflowActionLabel } from '@/lib/workflowActionLabel';
 import { GanttChartSquare, Scan, ShieldAlert, MessageSquare, Inbox, ArrowRight, FileText, Clock } from 'lucide-react';
 import Link from 'next/link';
 import PendingActionsCard from '@/components/work/PendingActionsCard';
@@ -210,7 +211,7 @@ export default function PMDashboard({ user }: { user: User }) {
                     <td className="py-2.5 pr-3 font-semibold text-slate-100">{lead.title}</td>
                     <td className="py-2.5 pr-3">{lead.sales_owner}</td>
                     <td className="py-2.5 pr-3 text-amber-300">{lead.priority}</td>
-                    <td className="py-2.5 pr-3">{LEAD_STATUS_LABELS[lead.status] || lead.status}</td>
+                    <td className="py-2.5 pr-3">{workflowActionLabel(lead)}</td>
                     <td className="py-2.5 text-right">
                       <Link href={lead.href} className="inline-flex items-center gap-1 rounded bg-cyan-600 px-3 py-1 text-[11px] font-bold text-white hover:bg-cyan-500">
                         View <ArrowRight className="h-3 w-3" />
