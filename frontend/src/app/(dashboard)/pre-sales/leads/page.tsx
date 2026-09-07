@@ -5,7 +5,7 @@ import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { StorageService } from '@/lib/storage';
 import { Lead, LeadStatus, User } from '@/lib/types';
-import { canCreateLead, isCeoViewOnly, userIsOnLeadTeam } from '@/lib/rbac';
+import { canCreateLead, canDeleteLead, canEditLeadInput, isCeoViewOnly, userIsOnLeadTeam } from '@/lib/rbac';
 import { LeadApi } from '@/lib/leadApi';
 import { formatInrCompact, formatLongDate, PIPELINE_STAGE_LABELS } from '@/lib/format';
 import { leadDetailHref } from '@/lib/leadRoutes';
@@ -21,7 +21,10 @@ import {
   CheckCircle2, 
   AlertTriangle, 
   ArrowRight,
-  FileText
+  FileText,
+  Pencil,
+  Trash2,
+  Loader2
 } from 'lucide-react';
 
 const STATUS_BADGES: Record<LeadStatus, { label: string; style: string }> = {
@@ -58,15 +61,32 @@ export default function LeadsListPage() {
   const [verticalFilter, setVerticalFilter] = useState<string>('ALL');
   const [priorityFilter, setPriorityFilter] = useState<string>('ALL');
   const [stageFilter, setStageFilter] = useState<string>('ALL');
+  const [deletingId, setDeletingId] = useState<string | null>(null);
+  const [actionError, setActionError] = useState<string | null>(null);
+
+  const loadLeads = async () => {
+    const apiLeads = await LeadApi.list();
+    setLeads(apiLeads);
+  };
 
   useEffect(() => {
     const user = StorageService.getCurrentUser();
     setCurrentUser(user);
-    void (async () => {
-      const apiLeads = await LeadApi.list();
-      setLeads(apiLeads);
-    })();
+    void loadLeads();
   }, []);
+
+  const handleDeleteLead = async (lead: Lead) => {
+    if (!window.confirm(`Delete draft lead ${lead.lead_number}? This cannot be undone.`)) return;
+    setActionError(null);
+    setDeletingId(lead.id);
+    const result = await LeadApi.delete(lead.id);
+    setDeletingId(null);
+    if (!result.ok) {
+      setActionError(result.message || `Unable to delete ${lead.lead_number}.`);
+      return;
+    }
+    setLeads((current) => current.filter((item) => item.id !== lead.id));
+  };
 
   if (!currentUser) return null;
 
@@ -334,6 +354,11 @@ export default function LeadsListPage() {
       </div>
 
       {/* Main Leads Table */}
+      {actionError && (
+        <div className="mb-3 rounded-lg border border-rose-800 bg-rose-950/40 px-3 py-2 text-xs text-rose-200">
+          {actionError}
+        </div>
+      )}
       <div className="bg-slate-900/90 rounded-xl border border-slate-800 overflow-hidden shadow-sm">
         <div className="overflow-x-auto">
           <table className="w-full text-left text-xs">
@@ -421,12 +446,37 @@ export default function LeadsListPage() {
                         </>
                       )}
                       <td className="p-3 text-right">
-                        <a
-                          href={leadDetailHref(lead.id)}
-                          className="px-2.5 py-1 bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 rounded text-[11px] font-medium inline-flex items-center gap-1 transition-colors"
-                        >
-                          <Eye className="w-3.5 h-3.5" /> View
-                        </a>
+                        <div className="inline-flex items-center justify-end gap-1.5">
+                          <a
+                            href={leadDetailHref(lead.id)}
+                            className="px-2.5 py-1 bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 rounded text-[11px] font-medium inline-flex items-center gap-1 transition-colors"
+                          >
+                            <Eye className="w-3.5 h-3.5" /> View
+                          </a>
+                          {canEditLeadInput(currentUser, lead) && (
+                            <Link
+                              href={`/pre-sales/leads/create?id=${encodeURIComponent(lead.id)}`}
+                              className="px-2.5 py-1 bg-cyan-950 hover:bg-cyan-900 text-cyan-200 border border-cyan-800 rounded text-[11px] font-medium inline-flex items-center gap-1 transition-colors"
+                            >
+                              <Pencil className="w-3.5 h-3.5" /> Edit
+                            </Link>
+                          )}
+                          {canDeleteLead(currentUser, lead) && (
+                            <button
+                              type="button"
+                              disabled={deletingId === lead.id}
+                              onClick={() => void handleDeleteLead(lead)}
+                              className="px-2.5 py-1 bg-rose-950 hover:bg-rose-900 text-rose-200 border border-rose-800 rounded text-[11px] font-medium inline-flex items-center gap-1 transition-colors disabled:cursor-not-allowed disabled:opacity-50"
+                            >
+                              {deletingId === lead.id ? (
+                                <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                              ) : (
+                                <Trash2 className="w-3.5 h-3.5" />
+                              )}
+                              Delete
+                            </button>
+                          )}
+                        </div>
                       </td>
                     </tr>
                   );

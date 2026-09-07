@@ -215,6 +215,22 @@ export function saveLead(lead: Lead): Lead {
   return next;
 }
 
+export function deleteLead(lead: Lead, user: User): void {
+  const leads = store.getLeads().filter((item) => item.id !== lead.id);
+  store.saveLeads(leads);
+  store.saveLeadDocuments(store.getLeadDocuments().filter((item) => item.lead_id !== lead.id));
+  store.saveLeadComments(store.getLeadComments().filter((item) => item.lead_id !== lead.id));
+  store.saveLeadActivities(store.getLeadActivities().filter((item) => item.lead_id !== lead.id));
+  store.saveLeadStatusHistory(store.getLeadStatusHistory().filter((item) => item.lead_id !== lead.id));
+  store.saveFeasibilityTeamAssignments(
+    store.getFeasibilityTeamAssignments().filter((item) => item.lead_id !== lead.id)
+  );
+  store.saveFeasibilityEmployeeAllocations(
+    store.getFeasibilityEmployeeAllocations().filter((item) => item.lead_id !== lead.id)
+  );
+  audit(user, lead, 'LEAD_DELETED', `${user.name} deleted draft lead ${lead.lead_number}.`);
+}
+
 export function recordHistory(
   lead: Lead,
   oldStatus: LeadStatus,

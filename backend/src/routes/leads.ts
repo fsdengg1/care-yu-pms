@@ -39,6 +39,7 @@ import {
   isProcurementUser,
   newId,
   parseMoney,
+  deleteLead,
   removeDocument,
   saveLead,
   stageFromStatus,
@@ -420,6 +421,24 @@ router.post('/', requireAuth, requirePermission('create:lead'), async (req: Auth
       return submitExistingLead(lead, user, body);
     });
     return res.status(201).json(payloadFor(created));
+  } catch (error) {
+    return workflowError(res, error);
+  }
+});
+
+router.delete('/:id', requireAuth, requirePermission('edit:lead', 'create:lead'), (req: AuthedRequest, res) => {
+  const user = req.user!;
+  const lead = findLead(paramId(req));
+  if (!lead) return res.status(404).json({ message: 'Lead not found.' });
+  if (lead.status !== 'DRAFT') {
+    return res.status(400).json({ message: 'Only draft leads can be deleted.' });
+  }
+  if (!canEditProjectInput(user, lead)) {
+    return forbidden(res, 'You do not have permission to delete this lead.');
+  }
+  try {
+    transact(() => deleteLead(lead, user));
+    return res.json({ ok: true, lead_number: lead.lead_number });
   } catch (error) {
     return workflowError(res, error);
   }
