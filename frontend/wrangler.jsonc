@@ -5,5 +5,5 @@
   "compatibility_flags": [
     "nodejs_compat"
   ],
-  "pages_build_output_dir": ".next/server/app"
+  "pages_build_output_dir": ".cloudflare-out"
 }

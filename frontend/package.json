@@ -4,9 +4,9 @@
   "private": true,
   "scripts": {
     "dev": "next dev",
-    "build": "next build",
+    "build": "next build && node scripts/build-cloudflare.mjs",
     "start": "next start",
-    "deploy:pages": "wrangler pages deploy .next",
+    "deploy:pages": "wrangler pages deploy .cloudflare-out --project-name=careyu-frontend",
     "lint": "eslint",
     "demo:record": "node scripts/record-demo.mjs"
   },

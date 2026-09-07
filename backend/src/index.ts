@@ -96,7 +96,14 @@ app.use((_req, res, next) => {
 });
 app.use(cors(corsOptions));
 app.options('/{*path}', cors(corsOptions));
-app.use(express.json({ limit: '20mb' }));
+app.get('/', (_req, res) => {
+  res.json({
+    ok: true,
+    service: 'careyu-backend-api',
+    message: 'CareYu PMS Backend API Service',
+    health: '/api/health',
+  });
+});
 
 app.get('/api/health', (_req, res) => {
   res.json({

@@ -1,0 +1,8 @@
+/_next/static/*  /_next/static/:splat  200
+/assets/*  /assets/:splat  200
+/projects/:id/activity  /projects/active/index.html  200
+/projects/:id  /projects/active/index.html  200
+/daily-updates/:id  /daily-updates/index.html  200
+/pre-sales/leads/:id  /pre-sales/leads/index.html  200
+/dashboard/ceo/escalations/:id  /dashboard/ceo/escalations/index.html  200
+/*  /login/index.html  200

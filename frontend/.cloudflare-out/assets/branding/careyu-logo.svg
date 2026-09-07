@@ -1,0 +1,7 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 40 40" role="img" aria-label="Care Yu Automation">
+  <rect width="40" height="40" rx="10" fill="#0B1F3A"/>
+  <rect x="6" y="6" width="12" height="12" rx="2.5" fill="#2563EB"/>
+  <rect x="22" y="6" width="12" height="12" rx="2.5" fill="#1D4ED8" opacity="0.9"/>
+  <rect x="6" y="22" width="12" height="12" rx="2.5" fill="#1E3A8A"/>
+  <path d="M24 24h8a4 4 0 0 1 4 4v4h-6a6 6 0 0 1-6-6v-2z" fill="#93C5FD"/>
+</svg>
