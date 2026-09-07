@@ -1,4 +1,3 @@
-import cron from 'node-cron';
 import { env } from '../config/env.js';
 import {
   getEmailReportScheduleConfig,
@@ -47,29 +46,35 @@ function ensureDefaultScheduleConfig() {
   }
 }
 
-export function startEmailReportScheduler() {
+export async function startEmailReportScheduler() {
   if (started || !env.schedulerEnabled) return;
+  if (process.env.CF_PAGES || process.env.CLOUDFLARE_WORKER || process.env.WORKER_ENV) return;
   started = true;
   const timezone = env.appTimezone || 'Asia/Kolkata';
   ensureDefaultScheduleConfig();
 
-  cron.schedule(
-    '15 11 * * *',
-    () => {
-      void runSlot('noon');
-    },
-    { timezone }
-  );
+  try {
+    const cron = (await import('node-cron')).default;
+    cron.schedule(
+      '15 11 * * *',
+      () => {
+        void runSlot('noon');
+      },
+      { timezone }
+    );
 
-  cron.schedule(
-    '15 19 * * *',
-    () => {
-      void runSlot('evening');
-    },
-    { timezone }
-  );
+    cron.schedule(
+      '15 19 * * *',
+      () => {
+        void runSlot('evening');
+      },
+      { timezone }
+    );
 
-  console.log(
-    `[scheduler] email report jobs started (11:15 and 19:15, timezone=${timezone})`
-  );
+    console.log(
+      `[scheduler] email report jobs started (11:15 and 19:15, timezone=${timezone})`
+    );
+  } catch (error) {
+    console.warn('[scheduler] node-cron not loaded:', error instanceof Error ? error.message : error);
+  }
 }

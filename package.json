@@ -11,6 +11,9 @@
     "dev:frontend": "npm run dev -w frontend",
     "dev:backend": "npm run dev -w backend",
     "build": "npm run build -w backend && npm run build -w frontend",
+    "deploy:backend": "npm run deploy:worker -w backend",
+    "deploy:frontend": "npm run deploy:pages -w frontend",
+    "dry-run": "npm run dry-run:worker -w backend",
     "start": "concurrently -n backend,frontend -c cyan,green \"npm run start -w backend\" \"npm run start -w frontend\"",
     "lint": "npm run lint -w frontend",
     "demo:record": "npm run demo:record -w frontend"

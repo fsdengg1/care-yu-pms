@@ -3,8 +3,9 @@ import pg from 'pg';
 import { env } from '../config/env.js';
 import { User } from '../types.js';
 
-// Render/Node 22 often tries IPv6 first; Aiven Postgres is IPv4-only and then times out.
-dns.setDefaultResultOrder('ipv4first');
+if (typeof dns?.setDefaultResultOrder === 'function') {
+  dns.setDefaultResultOrder('ipv4first');
+}
 
 const { Pool } = pg;
 

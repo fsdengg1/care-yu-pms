@@ -1,4 +1,3 @@
-import cron from 'node-cron';
 import { env } from '../config/env.js';
 import { store } from '../store/db.js';
 import { Lead, Task, User } from '../types.js';
@@ -220,16 +219,22 @@ export async function runDailyDigests() {
   }
 }
 
-export function startNotificationScheduler() {
+export async function startNotificationScheduler() {
   if (started || !env.schedulerEnabled) return;
+  if (process.env.CF_PAGES || process.env.CLOUDFLARE_WORKER || process.env.WORKER_ENV) return;
   started = true;
-  cron.schedule('*/15 * * * *', () => {
-    void runPendingReminders();
-  });
-  cron.schedule('0 8 * * *', () => {
-    void runDailyDigests();
-  });
-  console.log(
-    `[scheduler] notification jobs started (reminder every 15m, digest 08:00, after ${env.reminderAfterHours}h, max ${env.maxReminders})`
-  );
+  try {
+    const cron = (await import('node-cron')).default;
+    cron.schedule('*/15 * * * *', () => {
+      void runPendingReminders();
+    });
+    cron.schedule('0 8 * * *', () => {
+      void runDailyDigests();
+    });
+    console.log(
+      `[scheduler] notification jobs started (reminder every 15m, digest 08:00, after ${env.reminderAfterHours}h, max ${env.maxReminders})`
+    );
+  } catch (error) {
+    console.warn('[scheduler] node-cron not loaded:', error instanceof Error ? error.message : error);
+  }
 }

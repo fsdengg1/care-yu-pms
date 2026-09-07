@@ -27,7 +27,8 @@ import { ensureRobotLeadAccount } from './lib/robotLead.js';
 import { ensureActionItemTasks } from './lib/actionItemSheet.js';
 import emailRouter from './routes/email.js';
 
-const app = express();
+export const app = express();
+export { initializeBackend };
 
 function isLoopbackHost(hostname: string) {
   return hostname === 'localhost' || hostname === '127.0.0.1' || hostname === '::1';
@@ -125,10 +126,8 @@ app.use('/api', documentsRouter);
 app.use('/api', operationsRouter);
 app.use('/api', masterRouter);
 
-async function start() {
-  console.log('Starting CareYu backend...');
-  console.log(`[boot] NODE_ENV=${env.nodeEnv} PORT=${env.port} databaseSsl=${env.databaseSsl}`);
-
+async function initializeBackend() {
+  if (isStoreInitialized()) return;
   const storeInfo = await initStore();
   console.log(
     `Store ready (source=${storeInfo.source}, users=${storeInfo.counts.users}, pendingSignups=${storeInfo.counts.pendingSignups ?? 0}, leads=${storeInfo.counts.leads}, projects=${storeInfo.counts.projects})`
@@ -145,6 +144,13 @@ async function start() {
   await ensureRobotLeadAccount();
   ensureActionItemTasks();
   logEmailConfigOnStartup();
+}
+
+async function start() {
+  console.log('Starting CareYu backend...');
+  console.log(`[boot] NODE_ENV=${env.nodeEnv} PORT=${env.port} databaseSsl=${env.databaseSsl}`);
+
+  await initializeBackend();
   startNotificationScheduler();
   startEmailReportScheduler();
 
@@ -174,8 +180,9 @@ async function start() {
   process.on('SIGTERM', () => void shutdown('SIGTERM'));
 }
 
-start().catch((error) => {
-  console.error('Failed to start backend:', error);
-  process.exit(1);
-});
-
+if (process.env.CF_PAGES !== '1' && process.env.CLOUDFLARE_WORKER !== '1' && !process.env.WORKER_ENV) {
+  start().catch((error) => {
+    console.error('Failed to start backend:', error);
+    process.exit(1);
+  });
+}

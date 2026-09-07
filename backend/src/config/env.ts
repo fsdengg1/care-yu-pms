@@ -8,44 +8,47 @@ function stripEnvValue(value: string | undefined): string {
 }
 
 function loadBackendEnv() {
-  const here = path.dirname(fileURLToPath(import.meta.url));
-  const candidates = [
-    path.resolve(here, '../../.env'),
-    path.resolve(process.cwd(), '.env'),
-    path.resolve(here, '../../../backend/.env'),
-  ];
-  const envPath = candidates.find((candidate) => fs.existsSync(candidate));
-  const assignIfUnset = (key: string, raw: string | undefined) => {
-    const value = stripEnvValue(raw);
-    if (!value) return;
-    // Platform env (Render, etc.) always wins over a committed/local .env file.
-    if (process.env[key] == null || process.env[key] === '') {
-      process.env[key] = value;
-    }
-  };
+  try {
+    const metaUrl = import.meta?.url;
+    if (!metaUrl) return;
+    const here = path.dirname(fileURLToPath(metaUrl));
+    const candidates = [
+      path.resolve(here, '../../.env'),
+      path.resolve(process.cwd(), '.env'),
+      path.resolve(here, '../../../backend/.env'),
+    ];
+    const envPath = candidates.find((candidate) => {
+      try {
+        return fs.existsSync(candidate);
+      } catch {
+        return false;
+      }
+    });
+    const assignIfUnset = (key: string, raw: string | undefined) => {
+      const value = stripEnvValue(raw);
+      if (!value) return;
+      if (process.env[key] == null || process.env[key] === '') {
+        process.env[key] = value;
+      }
+    };
 
-  if (!envPath) {
-    dotenv.config({ quiet: true, override: false });
-    return;
-  }
-  const parsed = dotenv.parse(fs.readFileSync(envPath));
-  for (const [key, raw] of Object.entries(parsed)) {
-    assignIfUnset(key, raw);
+    if (!envPath) {
+      dotenv.config({ quiet: true, override: false });
+      return;
+    }
+    const parsed = dotenv.parse(fs.readFileSync(envPath));
+    for (const [key, raw] of Object.entries(parsed)) {
+      assignIfUnset(key, raw);
+    }
+  } catch {
+    // Ignore file system env loading errors in Cloudflare Worker environment
   }
 }
 
 loadBackendEnv(); // load backend/.env once at process start
 
-
-
-
-function required(name: string, fallback?: string): string {
+function required(name: string, fallback = ''): string {
   const value = stripEnvValue(process.env[name]) || fallback;
-  if (!value) {
-    throw new Error(
-      `Missing required environment variable: ${name}. Set it in the Render Environment tab (or backend/.env locally).`
-    );
-  }
   return value;
 }
 
@@ -125,61 +128,45 @@ function parseCorsOrigins(): string[] {
 }
 
 export const env = {
-  port: Number(process.env.PORT ?? 4000),
-  nodeEnv: process.env.NODE_ENV ?? 'development',
-  jwtSecret: required('JWT_SECRET', 'careyu-dev-jwt-secret-change-in-production'),
-  jwtExpiresIn: process.env.JWT_EXPIRES_IN ?? '8h',
-  jwtRememberExpiresIn: process.env.JWT_REMEMBER_EXPIRES_IN ?? '30d',
-  demoPassword: required('DEMO_PASSWORD', 'Careyu@123'),
-  /** Optional live-account login repair for the FSD engineer who cannot sign in. */
-  fsdEngg1Password: stripEnvValue(process.env.FSDENGG1_PASSWORD),
-  businessHeadPassword: stripEnvValue(process.env.BUSINESSHEAD_PASSWORD),
-  robotLeadEmail: (process.env.ROBOT_LEAD_EMAIL ?? 'robottech@careyu.ai').trim().toLowerCase(),
-  robotLeadPassword: stripEnvValue(process.env.ROBOT_LEAD_PASSWORD) || 'Careyu@9865',
-  databaseUrl: required('DATABASE_URL'),
-  /** Aiven and most managed Postgres require SSL; set DATABASE_SSL=false only for local Postgres without TLS. */
-  databaseSsl: (process.env.DATABASE_SSL ?? 'true').toLowerCase() !== 'false',
-  frontendUrl: (process.env.FRONTEND_URL ?? 'http://localhost:3000').replace(/\/$/, ''),
-  /** Prefer ALLOWED_EMAIL_DOMAINS; ALLOWED_EMAIL_DOMAIN kept for backward compatibility. */
-  allowedEmailDomains: parseAllowedEmailDomains(),
-  emailProvider: parseEmailProvider(),
-  emailApiKey: firstEnv('ELASTIC_EMAIL_API_KEY', 'EMAIL_API_KEY'),
-  emailFrom: firstEnv('ELASTIC_EMAIL_FROM_EMAIL', 'ELASTIC_EMAIL_SENDER_EMAIL', 'EMAIL_FROM') || 'noreply@careyu.ai',
-  emailFromName: firstEnv('ELASTIC_EMAIL_FROM_NAME', 'ELASTIC_EMAIL_SENDER_NAME', 'EMAIL_FROM_NAME') || 'CareYu Automation',
-  emailReplyTo: process.env.EMAIL_REPLY_TO ?? '',
-  emailDebug: (process.env.EMAIL_DEBUG ?? 'false').toLowerCase() === 'true',
-  supportEmail: process.env.SUPPORT_EMAIL ?? 'admin@careyu.ai',
-  /** SMTP / Amazon SES SMTP (used when EMAIL_PROVIDER=smtp) */
-  smtpHost: process.env.SMTP_HOST ?? '',
-  smtpPort: Number(process.env.SMTP_PORT ?? 587),
-  smtpSecure: (process.env.SMTP_SECURE ?? 'false').toLowerCase() === 'true',
-  smtpUser: process.env.SMTP_USER ?? '',
-  smtpPass: process.env.SMTP_PASS ?? '',
-  emailVerificationTtlHours: Number(process.env.EMAIL_VERIFICATION_TTL_HOURS ?? 24),
-  passwordResetTtlMinutes: Number(
-    process.env.PASSWORD_RESET_EXPIRY_MINUTES ?? process.env.PASSWORD_RESET_TTL_MINUTES ?? 30
-  ),
-  invitationTtlHours: Number(process.env.INVITATION_EXPIRY_HOURS ?? process.env.INVITATION_TTL_HOURS ?? 24),
-  passwordSetupTtlMinutes: Number(process.env.PASSWORD_SETUP_TTL_MINUTES ?? 30),
-  defaultReportingManagerEmail: firstEmailAddress(
-    process.env.DEFAULT_REPORTING_MANAGER_EMAIL,
-    'robotlead1@careyu.ai'
-  ),
-  invitationNotifyEmails: parseEmailList(
-    process.env.INVITATION_NOTIFY_EMAILS ?? 'fsdengg1@careyu.ai',
-    parseEmailList(process.env.DEFAULT_REPORTING_MANAGER_EMAIL ?? 'robotlead1@careyu.ai')
-  ),
-  /** Development-only impersonation. Never enable in production. */
-  enableDevRolePreview:
-    (process.env.ENABLE_DEV_ROLE_PREVIEW ?? 'false').toLowerCase() === 'true' &&
-    (process.env.NODE_ENV ?? 'development') !== 'production',
-  corsOrigins: parseCorsOrigins(),
-  reminderAfterHours: Number(process.env.REMINDER_AFTER_HOURS ?? 24),
-  maxReminders: Number(process.env.MAX_REMINDERS ?? 3),
-  escalationAfterReminders: Number(process.env.ESCALATION_AFTER_REMINDERS ?? 3),
-  dailyDigestEnabled: (process.env.DAILY_DIGEST_ENABLED ?? 'true').toLowerCase() === 'true',
-  schedulerEnabled: (process.env.NOTIFICATION_SCHEDULER_ENABLED ?? 'true').toLowerCase() !== 'false',
-  /** IANA timezone for cron jobs (daily email reports, digests). Default Asia/Kolkata (IST). */
-  appTimezone: (process.env.APP_TIMEZONE ?? process.env.TZ ?? 'Asia/Kolkata').trim() || 'Asia/Kolkata',
-  defaultProjectManagerEmail: (process.env.DEFAULT_PROJECT_MANAGER_EMAIL ?? '').trim().toLowerCase(),
+  get port() { return Number(process.env.PORT ?? 4000); },
+  get nodeEnv() { return process.env.NODE_ENV ?? 'development'; },
+  get jwtSecret() { return required('JWT_SECRET', 'careyu-dev-jwt-secret-change-in-production'); },
+  get jwtExpiresIn() { return process.env.JWT_EXPIRES_IN ?? '8h'; },
+  get jwtRememberExpiresIn() { return process.env.JWT_REMEMBER_EXPIRES_IN ?? '30d'; },
+  get demoPassword() { return required('DEMO_PASSWORD', 'Careyu@123'); },
+  get fsdEngg1Password() { return stripEnvValue(process.env.FSDENGG1_PASSWORD); },
+  get businessHeadPassword() { return stripEnvValue(process.env.BUSINESSHEAD_PASSWORD); },
+  get robotLeadEmail() { return (process.env.ROBOT_LEAD_EMAIL ?? 'robottech@careyu.ai').trim().toLowerCase(); },
+  get robotLeadPassword() { return stripEnvValue(process.env.ROBOT_LEAD_PASSWORD) || 'Careyu@9865'; },
+  get databaseUrl() { return required('DATABASE_URL'); },
+  get databaseSsl() { return (process.env.DATABASE_SSL ?? 'true').toLowerCase() !== 'false'; },
+  get frontendUrl() { return (process.env.FRONTEND_URL ?? 'http://localhost:3000').replace(/\/$/, ''); },
+  get allowedEmailDomains() { return parseAllowedEmailDomains(); },
+  get emailProvider() { return parseEmailProvider(); },
+  get emailApiKey() { return firstEnv('ELASTIC_EMAIL_API_KEY', 'EMAIL_API_KEY'); },
+  get emailFrom() { return firstEnv('ELASTIC_EMAIL_FROM_EMAIL', 'ELASTIC_EMAIL_SENDER_EMAIL', 'EMAIL_FROM') || 'noreply@careyu.ai'; },
+  get emailFromName() { return firstEnv('ELASTIC_EMAIL_FROM_NAME', 'ELASTIC_EMAIL_SENDER_NAME', 'EMAIL_FROM_NAME') || 'CareYu Automation'; },
+  get emailReplyTo() { return process.env.EMAIL_REPLY_TO ?? ''; },
+  get emailDebug() { return (process.env.EMAIL_DEBUG ?? 'false').toLowerCase() === 'true'; },
+  get supportEmail() { return process.env.SUPPORT_EMAIL ?? 'admin@careyu.ai'; },
+  get smtpHost() { return process.env.SMTP_HOST ?? ''; },
+  get smtpPort() { return Number(process.env.SMTP_PORT ?? 587); },
+  get smtpSecure() { return (process.env.SMTP_SECURE ?? 'false').toLowerCase() === 'true'; },
+  get smtpUser() { return process.env.SMTP_USER ?? ''; },
+  get smtpPass() { return process.env.SMTP_PASS ?? ''; },
+  get emailVerificationTtlHours() { return Number(process.env.EMAIL_VERIFICATION_TTL_HOURS ?? 24); },
+  get passwordResetTtlMinutes() { return Number(process.env.PASSWORD_RESET_EXPIRY_MINUTES ?? process.env.PASSWORD_RESET_TTL_MINUTES ?? 30); },
+  get invitationTtlHours() { return Number(process.env.INVITATION_EXPIRY_HOURS ?? process.env.INVITATION_TTL_HOURS ?? 24); },
+  get passwordSetupTtlMinutes() { return Number(process.env.PASSWORD_SETUP_TTL_MINUTES ?? 30); },
+  get defaultReportingManagerEmail() { return firstEmailAddress(process.env.DEFAULT_REPORTING_MANAGER_EMAIL, 'robotlead1@careyu.ai'); },
+  get invitationNotifyEmails() { return parseEmailList(process.env.INVITATION_NOTIFY_EMAILS ?? 'fsdengg1@careyu.ai', parseEmailList(process.env.DEFAULT_REPORTING_MANAGER_EMAIL ?? 'robotlead1@careyu.ai')); },
+  get enableDevRolePreview() { return (process.env.ENABLE_DEV_ROLE_PREVIEW ?? 'false').toLowerCase() === 'true' && (process.env.NODE_ENV ?? 'development') !== 'production'; },
+  get corsOrigins() { return parseCorsOrigins(); },
+  get reminderAfterHours() { return Number(process.env.REMINDER_AFTER_HOURS ?? 24); },
+  get maxReminders() { return Number(process.env.MAX_REMINDERS ?? 3); },
+  get escalationAfterReminders() { return Number(process.env.ESCALATION_AFTER_REMINDERS ?? 3); },
+  get dailyDigestEnabled() { return (process.env.DAILY_DIGEST_ENABLED ?? 'true').toLowerCase() === 'true'; },
+  get schedulerEnabled() { return (process.env.NOTIFICATION_SCHEDULER_ENABLED ?? 'true').toLowerCase() !== 'false'; },
+  get appTimezone() { return (process.env.APP_TIMEZONE ?? process.env.TZ ?? 'Asia/Kolkata').trim() || 'Asia/Kolkata'; },
+  get defaultProjectManagerEmail() { return (process.env.DEFAULT_PROJECT_MANAGER_EMAIL ?? '').trim().toLowerCase(); },
 };
