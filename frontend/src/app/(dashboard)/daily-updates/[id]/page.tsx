@@ -2,7 +2,8 @@
 
 import React, { useEffect, useState } from 'react';
 import Link from 'next/link';
-import { useParams, useRouter } from 'next/navigation';
+import { useParams, usePathname, useRouter, useSearchParams } from 'next/navigation';
+import { resolveDailyUpdateIdFromLocation } from '@/lib/dailyUpdateRoutes';
 import { AlertTriangle, ArrowLeft, CheckCircle2, Paperclip, ShieldAlert } from 'lucide-react';
 import { StorageService } from '@/lib/storage';
 import { DailyUpdatesApi } from '@/lib/dailyUpdatesApi';
@@ -12,6 +13,9 @@ import { DailyUpdate, ProjectActivityItem, User } from '@/lib/types';
 
 export default function DailyUpdateDetailPage() {
   const params = useParams<{ id: string }>();
+  const pathname = usePathname();
+  const searchParams = useSearchParams();
+  const updateId = resolveDailyUpdateIdFromLocation(params.id, pathname, searchParams.get('id'));
   const router = useRouter();
   const [user, setUser] = useState<User | null>(null);
   const [update, setUpdate] = useState<DailyUpdate | null>(null);
@@ -23,7 +27,11 @@ export default function DailyUpdateDetailPage() {
   const [submittedFeedback, setSubmittedFeedback] = useState(false);
 
   const load = async () => {
-    const payload = await DailyUpdatesApi.get(params.id);
+    if (!updateId) {
+      setError('Daily update not found or you do not have access.');
+      return;
+    }
+    const payload = await DailyUpdatesApi.get(updateId);
     if (!payload) {
       setError('Daily update not found or you do not have access.');
       return;
@@ -40,9 +48,9 @@ export default function DailyUpdateDetailPage() {
     void load();
     if (typeof window !== 'undefined' && new URLSearchParams(window.location.search).get('action') === 'submitted') {
       setSubmittedFeedback(true);
-      window.history.replaceState({}, '', `/daily-updates/${params.id}`);
+      window.history.replaceState({}, '', `/daily-updates/${updateId}`);
     }
-  }, [params.id]);
+  }, [updateId]);
 
   if (!user) return null;
   if (error && !update) {

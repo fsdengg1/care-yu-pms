@@ -2,7 +2,8 @@
 
 import React, { useEffect, useState } from 'react';
 import Link from 'next/link';
-import { useParams } from 'next/navigation';
+import { useParams, usePathname, useSearchParams } from 'next/navigation';
+import { resolveEscalationIdFromLocation } from '@/lib/escalationRoutes';
 import { ArrowLeft, ShieldAlert } from 'lucide-react';
 import { apiRequest } from '@/lib/api';
 import { Escalation } from '@/lib/types';
@@ -10,7 +11,9 @@ import { ESCALATION_LEVEL_LABELS, formatDateTime } from '@/lib/format';
 
 export default function CeoEscalationDetailPage() {
   const params = useParams();
-  const id = params.id as string;
+  const pathname = usePathname();
+  const searchParams = useSearchParams();
+  const id = resolveEscalationIdFromLocation(params.id, pathname, searchParams.get('id'));
   const [escalation, setEscalation] = useState<Escalation | null>(null);
   const [canAct, setCanAct] = useState(false);
   const [canPromote, setCanPromote] = useState(false);
@@ -19,6 +22,10 @@ export default function CeoEscalationDetailPage() {
   const [error, setError] = useState<string | null>(null);
 
   const load = async () => {
+    if (!id) {
+      setError('Escalation not found.');
+      return;
+    }
     const result = await apiRequest<{ escalation: Escalation; can_act?: boolean; can_promote?: boolean }>(
       `/api/escalations/${id}`
     );

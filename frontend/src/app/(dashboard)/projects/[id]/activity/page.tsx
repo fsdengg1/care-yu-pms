@@ -2,7 +2,8 @@
 
 import React, { useEffect, useState } from 'react';
 import Link from 'next/link';
-import { useParams } from 'next/navigation';
+import { useParams, usePathname, useSearchParams } from 'next/navigation';
+import { resolveProjectIdFromLocation } from '@/lib/projectRoutes';
 import { History } from 'lucide-react';
 import { DailyUpdatesApi } from '@/lib/dailyUpdatesApi';
 import { formatLongDate } from '@/lib/format';
@@ -10,13 +11,20 @@ import { Project, ProjectActivityItem } from '@/lib/types';
 
 export default function ProjectActivityPage() {
   const params = useParams<{ id: string }>();
+  const pathname = usePathname();
+  const searchParams = useSearchParams();
+  const projectId = resolveProjectIdFromLocation(params.id, pathname, searchParams.get('id'));
   const [project, setProject] = useState<Project | null>(null);
   const [activity, setActivity] = useState<ProjectActivityItem[]>([]);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     void (async () => {
-      const payload = await DailyUpdatesApi.projectActivity(params.id);
+      if (!projectId) {
+        setError('Project activity is not available.');
+        return;
+      }
+      const payload = await DailyUpdatesApi.projectActivity(projectId);
       if (!payload) {
         setError('Project activity is not available.');
         return;
@@ -24,7 +32,7 @@ export default function ProjectActivityPage() {
       setProject(payload.project);
       setActivity(payload.activity);
     })();
-  }, [params.id]);
+  }, [projectId]);
 
   return (
     <div className="space-y-6 text-xs">

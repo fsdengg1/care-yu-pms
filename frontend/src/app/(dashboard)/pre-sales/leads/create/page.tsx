@@ -446,7 +446,9 @@ function CreateLeadForm() {
     setCustomFields((current) => [...current, { id: `cf-${Date.now()}`, name: '', value: '' }]);
   };
 
-  if (!currentUser) return null;
+  if (!currentUser) {
+    return <div className="p-6 text-slate-400">Loading lead form...</div>;
+  }
   const formStage = workflowStatusPresentation(leadStatus);
 
   return (

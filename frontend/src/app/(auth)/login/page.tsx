@@ -75,6 +75,7 @@ export default function LoginPage() {
     });
 
     const next = safeReturnPath(new URLSearchParams(window.location.search).get('next'));
+    submitting.current = false;
     router.push(next || getDashboardPath(result.user.role_code));
   };
 

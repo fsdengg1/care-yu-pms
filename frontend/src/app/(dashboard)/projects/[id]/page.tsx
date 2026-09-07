@@ -2,7 +2,8 @@
 
 import React, { useEffect, useState } from 'react';
 import Link from 'next/link';
-import { useParams, useRouter } from 'next/navigation';
+import { useParams, usePathname, useRouter, useSearchParams } from 'next/navigation';
+import { resolveProjectIdFromLocation } from '@/lib/projectRoutes';
 import { ArrowLeft, Bot, ShieldAlert } from 'lucide-react';
 import { ProjectsApi } from '@/lib/projectsApi';
 import { TasksApi } from '@/lib/tasksApi';
@@ -106,6 +107,9 @@ const INTAKE_FIELDS: Array<[string, string]> = [
 
 export default function ProjectDetailPage() {
   const params = useParams<{ id: string }>();
+  const pathname = usePathname();
+  const searchParams = useSearchParams();
+  const projectId = resolveProjectIdFromLocation(params.id, pathname, searchParams.get('id'));
   const router = useRouter();
   const [detail, setDetail] = useState<ProjectDetailPayload | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -136,7 +140,11 @@ export default function ProjectDetailPage() {
   const [selectedModuleId, setSelectedModuleId] = useState<string | null>(null);
 
   const load = async () => {
-    const payload = await ProjectsApi.get(params.id);
+    if (!projectId) {
+      setError('Project not found or you do not have access.');
+      return;
+    }
+    const payload = await ProjectsApi.get(projectId);
     if (!payload) {
       setError('Project not found or you do not have access.');
       return;
@@ -150,7 +158,7 @@ export default function ProjectDetailPage() {
   useEffect(() => {
     setUser(StorageService.getCurrentUser());
     void load();
-  }, [params.id]);
+  }, [projectId]);
 
   if (error && !detail) {
     return <div className="rounded-xl border border-rose-900 bg-rose-950/40 p-5 text-xs text-rose-300">{error}</div>;

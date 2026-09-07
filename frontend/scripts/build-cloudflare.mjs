@@ -69,14 +69,17 @@ const redirects = [
   `/api/*  ${apiOrigin}/api/:splat  200`,
   '/_next/static/*  /_next/static/:splat  200',
   '/assets/*  /assets/:splat  200',
-  '/projects/:id/activity  /projects/active/index.html  200',
-  '/projects/:id  /projects/active/index.html  200',
-  '/daily-updates/:id  /daily-updates/index.html  200',
+  '/projects/:id/activity  /projects/activity/index.html  200',
+  '/projects/:id  /projects/detail/index.html  200',
+  '/daily-updates/new  /daily-updates/new/index.html  200',
+  '/daily-updates/detail  /daily-updates/detail/index.html  200',
+  '/daily-updates/:id  /daily-updates/detail/index.html  200',
   '/pre-sales/leads/create  /pre-sales/leads/create/index.html  200',
   '/pre-sales/leads/detail  /pre-sales/leads/detail/index.html  200',
   '/pre-sales/leads/:id  /pre-sales/leads/detail/index.html  200',
-  '/dashboard/ceo/escalations/:id  /dashboard/ceo/escalations/index.html  200',
-  '/*  /login/index.html  200',
+  '/dashboard/ceo/escalations/detail  /dashboard/ceo/escalations/detail/index.html  200',
+  '/dashboard/ceo/escalations/:id  /dashboard/ceo/escalations/detail/index.html  200',
+  '/*  /index.html  200',
 ].join('\n') + '\n';
 fs.writeFileSync(path.join(outDir, '_redirects'), redirects, 'utf8');
 

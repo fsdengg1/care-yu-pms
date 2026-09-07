@@ -1,12 +1,21 @@
 import { StorageService } from './storage';
 
+const PRODUCTION_API_URL = 'https://careyu-backend-api.aicareyuautomation.workers.dev';
+
 function isLoopbackHost(hostname: string) {
   return hostname === 'localhost' || hostname === '127.0.0.1' || hostname === '::1';
 }
 
+function isCloudflareFrontendHost(hostname: string) {
+  return (
+    hostname === 'careyu-frontend.pages.dev' ||
+    hostname.endsWith('.careyu-frontend.pages.dev') ||
+    hostname === 'pms.careyu.ai'
+  );
+}
+
 function resolveApiBaseUrl() {
   const configured = (process.env.NEXT_PUBLIC_API_URL ?? '').replace(/\/$/, '');
-  const productionApi = 'https://careyu-backend-api.aicareyuautomation.workers.dev';
 
   if (typeof window !== 'undefined') {
     const { hostname, origin } = window.location;
@@ -17,18 +26,16 @@ function resolveApiBaseUrl() {
       try {
         const apiUrl = new URL(configured);
         if (apiUrl.origin === origin) return '';
-        if (isLoopbackHost(apiUrl.hostname)) return productionApi;
+        if (isLoopbackHost(apiUrl.hostname)) return PRODUCTION_API_URL;
         return configured;
       } catch {
-        return productionApi;
+        return PRODUCTION_API_URL;
       }
     }
-    if (
-      hostname === 'careyu-frontend.pages.dev' ||
-      hostname.endsWith('.careyu-frontend.pages.dev') ||
-      hostname === 'pms.careyu.ai'
-    ) {
-      return productionApi;
+    // Cloudflare Pages: call the Worker directly (CORS-enabled). Same-origin /api/* only
+    // when NEXT_PUBLIC_API_URL is explicitly set to the Pages origin.
+    if (isCloudflareFrontendHost(hostname)) {
+      return PRODUCTION_API_URL;
     }
     return '';
   }
@@ -39,7 +46,7 @@ function resolveApiBaseUrl() {
 export const API_URL = resolveApiBaseUrl();
 
 function backendUnreachableMessage() {
-  return 'Unable to sign in. Please check the backend server.';
+  return 'Unable to reach the server. Please check your connection and try again.';
 }
 
 export async function apiRequest<T>(
