@@ -11,6 +11,7 @@ import { CompareItem, DailyStatusPerson, DailyStatusRow, DailyStatusSubtask, app
 import { User } from '@/lib/types';
 import ConfirmDialog from '@/components/work/ConfirmDialog';
 import CompareView from '@/components/work/CompareView';
+import DailyStatusReportView from '@/components/work/DailyStatusReportView';
 import DailyStatusSheet from '@/components/work/DailyStatusSheet';
 import AdditionalTaskForm from '@/components/work/AdditionalTaskForm';
 import AddSubtaskForm, { EditableSubtask, subtaskToEditable } from '@/components/work/AddSubtaskForm';
@@ -68,6 +69,9 @@ function DailyWorkUpdatesInner() {
   const [deleteRow, setDeleteRow] = useState<DailyStatusRow | null>(null);
   const [workDate, setWorkDate] = useState(appTodayIso);
   const [period, setPeriod] = useState<'morning' | 'evening'>('morning');
+  const [activePanel, setActivePanel] = useState<'hub' | 'morning-status'>('hub');
+  const [reportRows, setReportRows] = useState<DailyStatusRow[]>([]);
+  const [reportLoading, setReportLoading] = useState(false);
 
   const canManageTasks = canCreateWorkTask(user);
   const canEditSheet = canEditDailySheet(user);
@@ -77,6 +81,9 @@ function DailyWorkUpdatesInner() {
     const next = date || appTodayIso();
     setWorkDate(next);
     writeStoredWorkDate(next);
+    if (activePanel === 'morning-status') {
+      void loadMorningReport(next);
+    }
   };
 
   const loadCompare = async (date?: string) => {
@@ -106,6 +113,17 @@ function DailyWorkUpdatesInner() {
     setSheetProjects(sheet.projects);
   };
 
+  const loadMorningReport = async (date = workDate) => {
+    setReportLoading(true);
+    const sheet = await DailyStatusApi.sheet(date, 'morning');
+    setReportLoading(false);
+    if (!sheet.ok) {
+      setError(sheet.message || 'Unable to load the morning status report.');
+      return;
+    }
+    setReportRows(sheet.rows);
+  };
+
   useEffect(() => {
     const current = StorageService.getCurrentUser();
     if (!current) return;
@@ -117,19 +135,28 @@ function DailyWorkUpdatesInner() {
 
   useEffect(() => {
     if (!user) return;
-    void loadSheet(workDate, period).catch(() => undefined);
+    const panel = activePanel;
     const refresh = () => {
+      if (panel === 'morning-status') {
+        void loadMorningReport(workDate).catch(() => undefined);
+        return;
+      }
       void loadSheet(workDate, period).catch(() => undefined);
     };
+    refresh();
     window.addEventListener('focus', refresh);
     const timer = window.setInterval(refresh, 12000);
     return () => {
       window.removeEventListener('focus', refresh);
       window.clearInterval(timer);
     };
-  }, [user, workDate, period]);
+  }, [user, workDate, period, activePanel]);
 
   const refreshSheet = async () => {
+    if (activePanel === 'morning-status') {
+      await loadMorningReport(workDate);
+      return;
+    }
     await loadSheet(workDate, period);
     setSelectedIds([]);
   };
@@ -215,7 +242,32 @@ function DailyWorkUpdatesInner() {
             <p className="mt-0.5 text-[11px] text-slate-400">Manage daily task updates and status directly from the central task sheet.</p>
           </div>
           <div className="flex flex-wrap gap-1.5">
-            {canAddTask && (
+            <button
+              type="button"
+              onClick={() => setActivePanel('hub')}
+              className={`inline-flex items-center gap-1 rounded-md px-2.5 py-1.5 font-bold transition-colors ${
+                activePanel === 'hub'
+                  ? 'bg-cyan-600 text-white shadow-sm'
+                  : 'border border-slate-700 text-slate-100 hover:border-cyan-600'
+              }`}
+            >
+              <FileText className="h-3.5 w-3.5" /> Daily Work Updates
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                setActivePanel('morning-status');
+                void loadMorningReport(workDate);
+              }}
+              className={`inline-flex items-center gap-1 rounded-md px-2.5 py-1.5 font-bold transition-colors ${
+                activePanel === 'morning-status'
+                  ? 'bg-amber-500 text-slate-950 shadow-sm'
+                  : 'border border-slate-700 text-slate-100 hover:border-amber-400'
+              }`}
+            >
+              <Sun className="h-3.5 w-3.5" /> Morning Status
+            </button>
+            {activePanel === 'hub' && canAddTask && (
               <button
                 type="button"
                 disabled={busy}
@@ -225,7 +277,7 @@ function DailyWorkUpdatesInner() {
                 <Plus className="h-3.5 w-3.5" /> Add Task
               </button>
             )}
-            {canAddTask && (
+            {activePanel === 'hub' && canAddTask && (
               <button
                 type="button"
                 disabled={busy || subtaskParents.length === 0}
@@ -236,44 +288,50 @@ function DailyWorkUpdatesInner() {
                 <ListPlus className="h-3.5 w-3.5" /> Add Subtask
               </button>
             )}
-            <button
-              type="button"
-              disabled={busy}
-              onClick={() => setAdditionalOpen(true)}
-              className="inline-flex items-center gap-1 rounded-md border border-slate-700 px-2.5 py-1.5 font-bold text-slate-100 hover:border-cyan-600 disabled:opacity-60"
-            >
-              <Plus className="h-3.5 w-3.5" /> Additional Task
-            </button>
-            <button
-              type="button"
-              disabled={busy}
-              onClick={async () => {
-                setPeriod('morning');
-                await loadSheet(workDate, 'morning');
-              }}
-              className={`inline-flex items-center gap-1 rounded-md px-2.5 py-1.5 font-bold transition-colors ${
-                period === 'morning'
-                  ? 'bg-amber-500 text-slate-950 font-extrabold shadow-sm'
-                  : 'border border-slate-700 text-slate-100 hover:border-amber-400'
-              }`}
-            >
-              <Sun className="h-3.5 w-3.5" /> Morning
-            </button>
-            <button
-              type="button"
-              disabled={busy}
-              onClick={async () => {
-                setPeriod('evening');
-                await loadSheet(workDate, 'evening');
-              }}
-              className={`inline-flex items-center gap-1 rounded-md px-2.5 py-1.5 font-bold transition-colors ${
-                period === 'evening'
-                  ? 'bg-indigo-600 text-white font-extrabold shadow-sm'
-                  : 'border border-slate-700 text-slate-100 hover:border-indigo-400'
-              }`}
-            >
-              <Moon className="h-3.5 w-3.5" /> Evening
-            </button>
+            {activePanel === 'hub' && (
+              <button
+                type="button"
+                disabled={busy}
+                onClick={() => setAdditionalOpen(true)}
+                className="inline-flex items-center gap-1 rounded-md border border-slate-700 px-2.5 py-1.5 font-bold text-slate-100 hover:border-cyan-600 disabled:opacity-60"
+              >
+                <Plus className="h-3.5 w-3.5" /> Additional Task
+              </button>
+            )}
+            {activePanel === 'hub' && (
+              <>
+                <button
+                  type="button"
+                  disabled={busy}
+                  onClick={async () => {
+                    setPeriod('morning');
+                    await loadSheet(workDate, 'morning');
+                  }}
+                  className={`inline-flex items-center gap-1 rounded-md px-2.5 py-1.5 font-bold transition-colors ${
+                    period === 'morning'
+                      ? 'bg-amber-500 text-slate-950 font-extrabold shadow-sm'
+                      : 'border border-slate-700 text-slate-100 hover:border-amber-400'
+                  }`}
+                >
+                  <Sun className="h-3.5 w-3.5" /> Morning
+                </button>
+                <button
+                  type="button"
+                  disabled={busy}
+                  onClick={async () => {
+                    setPeriod('evening');
+                    await loadSheet(workDate, 'evening');
+                  }}
+                  className={`inline-flex items-center gap-1 rounded-md px-2.5 py-1.5 font-bold transition-colors ${
+                    period === 'evening'
+                      ? 'bg-indigo-600 text-white font-extrabold shadow-sm'
+                      : 'border border-slate-700 text-slate-100 hover:border-indigo-400'
+                  }`}
+                >
+                  <Moon className="h-3.5 w-3.5" /> Evening
+                </button>
+              </>
+            )}
             <button
               type="button"
               disabled={compareBusy}
@@ -292,80 +350,91 @@ function DailyWorkUpdatesInner() {
       {error && <div className="mb-3 shrink-0 rounded-lg border border-rose-900 bg-rose-950/40 px-3 py-2 text-rose-300">{error}</div>}
       {notice && <div className="mb-3 shrink-0 rounded-lg border border-emerald-800 bg-emerald-950/40 px-3 py-2 text-emerald-200">{notice}</div>}
 
-      <DailyStatusSheet
-        rows={rows}
-        people={people}
-        projects={sheetProjects}
-        userId={user.id}
-        canEditAll={canEditSheet}
-        canDelete={canEditSheet || canManageTasks}
-        saved={saved}
-        selectedIds={selectedIds}
-        onSelectedIds={setSelectedIds}
-        workDate={workDate}
-        period={period}
-        onWorkDateChange={changeWorkDate}
-        onAddSubtask={canAddTask ? openAddSubtask : undefined}
-        onEditSubtask={canAddTask ? openEditSubtask : undefined}
-        onDeleteSubtask={
-          canAddTask
-            ? (sub) => {
-                setConfirmSubtaskDelete(sub);
-              }
-            : undefined
-        }
-        onEditUpdate={(row) => router.push(`/daily-updates/new?assignment=${encodeURIComponent(row.id)}`)}
-        onHideRow={async (row) => {
-          setError(null);
-          const id = row.id;
-          setRows((prev) => prev.map((item) => (item.id === id ? { ...item, sheetHidden: true } : item)));
-          setSelectedIds((prev) => prev.filter((item) => item !== id));
-          const result = await DailyStatusApi.updateRow(id, { sheet_hidden: true, work_date: workDate });
-          if (!result.ok) {
-            setError(result.message || 'Unable to hide this task.');
-            await loadSheet(workDate);
-            return;
+      {activePanel === 'morning-status' ? (
+        <DailyStatusReportView
+          rows={reportRows}
+          workDate={workDate}
+          reportLabel="11:15 AM Daily Report"
+          intro="Please find the 11:15 AM Daily Report below. This table uses the same Daily Work Updates records as the hub."
+          loading={reportLoading}
+          onWorkDateChange={changeWorkDate}
+        />
+      ) : (
+        <DailyStatusSheet
+          rows={rows}
+          people={people}
+          projects={sheetProjects}
+          userId={user.id}
+          canEditAll={canEditSheet}
+          canDelete={canEditSheet || canManageTasks}
+          saved={saved}
+          selectedIds={selectedIds}
+          onSelectedIds={setSelectedIds}
+          workDate={workDate}
+          period={period}
+          onWorkDateChange={changeWorkDate}
+          onAddSubtask={canAddTask ? openAddSubtask : undefined}
+          onEditSubtask={canAddTask ? openEditSubtask : undefined}
+          onDeleteSubtask={
+            canAddTask
+              ? (sub) => {
+                  setConfirmSubtaskDelete(sub);
+                }
+              : undefined
           }
-          setRows(result.data.rows.map((item) => (item.id === id ? { ...item, sheetHidden: true } : item)));
-          setNotice('Only that task was hidden. Open Hidden to restore it.');
-        }}
-        onRestoreRow={async (row) => {
-          setError(null);
-          const id = row.id;
-          setRows((prev) => prev.map((item) => (item.id === id ? { ...item, sheetHidden: false } : item)));
-          const result = await DailyStatusApi.updateRow(id, { sheet_hidden: false, work_date: workDate });
-          if (!result.ok) {
-            setError(result.message || 'Unable to restore this task.');
-            await loadSheet(workDate);
-            return;
-          }
-          setRows(result.data.rows.map((item) => (item.id === id ? { ...item, sheetHidden: false } : item)));
-          setNotice('Task restored to Daily Work Updates.');
-        }}
-        onDeleteRow={(row) => setDeleteRow(row)}
-        onAccept={async (row) => {
-          setError(null);
-          const result = await TasksApi.accept(row.id);
-          if (!result.ok) {
-            setError(result.message || 'Unable to accept this task.');
-            return;
-          }
-          setNotice('Task accepted. You can now edit this lead task here and in My Assigned Work.');
-          await refreshSheet();
-        }}
-        onPatch={async (id, body) => {
-          setError(null);
-          const result = await DailyStatusApi.updateRow(id, { ...body, work_date: workDate, period });
-          if (!result.ok) {
-            setError(result.message || 'Unable to save this change.');
-            return;
-          }
-          setRows(result.data.rows);
-          flashSaved();
-        }}
-        onExport={exportCsv}
-        onDelete={() => setConfirmDelete(true)}
-      />
+          onEditUpdate={(row) => router.push(`/daily-updates/new?assignment=${encodeURIComponent(row.id)}`)}
+          onHideRow={async (row) => {
+            setError(null);
+            const id = row.id;
+            setRows((prev) => prev.map((item) => (item.id === id ? { ...item, sheetHidden: true } : item)));
+            setSelectedIds((prev) => prev.filter((item) => item !== id));
+            const result = await DailyStatusApi.updateRow(id, { sheet_hidden: true, work_date: workDate });
+            if (!result.ok) {
+              setError(result.message || 'Unable to hide this task.');
+              await loadSheet(workDate);
+              return;
+            }
+            setRows(result.data.rows.map((item) => (item.id === id ? { ...item, sheetHidden: true } : item)));
+            setNotice('Only that task was hidden. Open Hidden to restore it.');
+          }}
+          onRestoreRow={async (row) => {
+            setError(null);
+            const id = row.id;
+            setRows((prev) => prev.map((item) => (item.id === id ? { ...item, sheetHidden: false } : item)));
+            const result = await DailyStatusApi.updateRow(id, { sheet_hidden: false, work_date: workDate });
+            if (!result.ok) {
+              setError(result.message || 'Unable to restore this task.');
+              await loadSheet(workDate);
+              return;
+            }
+            setRows(result.data.rows.map((item) => (item.id === id ? { ...item, sheetHidden: false } : item)));
+            setNotice('Task restored to Daily Work Updates.');
+          }}
+          onDeleteRow={(row) => setDeleteRow(row)}
+          onAccept={async (row) => {
+            setError(null);
+            const result = await TasksApi.accept(row.id);
+            if (!result.ok) {
+              setError(result.message || 'Unable to accept this task.');
+              return;
+            }
+            setNotice('Task accepted. You can now edit this lead task here and in My Assigned Work.');
+            await refreshSheet();
+          }}
+          onPatch={async (id, body) => {
+            setError(null);
+            const result = await DailyStatusApi.updateRow(id, { ...body, work_date: workDate, period });
+            if (!result.ok) {
+              setError(result.message || 'Unable to save this change.');
+              return;
+            }
+            setRows(result.data.rows);
+            flashSaved();
+          }}
+          onExport={exportCsv}
+          onDelete={() => setConfirmDelete(true)}
+        />
+      )}
 
       {compareOpen && compare && (
         <div className="fixed inset-0 z-[85] flex justify-end overflow-x-hidden bg-slate-950/60" onClick={() => setCompareOpen(false)}>

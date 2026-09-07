@@ -294,6 +294,57 @@ html.light .theme-app ::-webkit-scrollbar-thumb:hover {
   min-height: 420px;
 }
 
+.daily-status-report {
+  background: #f4f7fb;
+  border: 1px solid #cbd5e1;
+  display: flex;
+  flex-direction: column;
+  min-height: calc(100vh - 210px);
+  min-width: 0;
+}
+
+.daily-status-report-body {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow: auto;
+  padding: 16px;
+}
+
+.daily-status-report-card {
+  margin: 0 auto;
+  max-width: 1280px;
+  overflow: hidden;
+  border: 1px solid #e2e8f0;
+  border-radius: 12px;
+  background: #ffffff;
+}
+
+.daily-status-report-header {
+  background: #0b1f3a;
+  padding: 18px 22px;
+  border-radius: 12px 12px 0 0;
+}
+
+.daily-status-report-intro {
+  padding: 18px 22px 8px;
+}
+
+.daily-status-report-table-wrap {
+  padding: 8px 16px 24px;
+  overflow-x: auto;
+}
+
+.daily-status-report-table {
+  min-width: 1100px;
+}
+
+.daily-status-report-footer {
+  padding: 0 22px 20px;
+  font-size: 14px;
+  line-height: 1.6;
+  color: #0f172a;
+}
+
 .daily-status-workspace .task-access-badge-pending {
   border-color: #f59e0b;
   background: #fef3c7;
