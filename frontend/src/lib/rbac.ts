@@ -304,8 +304,11 @@ export function canHandleCommercial(user: User | null | undefined): boolean {
 export function canHandleLeadCommercial(user: User | null | undefined, lead: Lead | null | undefined): boolean {
   if (!user || !lead) return false;
   if (user.role_code === 'SYSTEM_ADMIN') return true;
-  if (!['BUSINESS_HEAD', 'ENG_DIRECTOR'].includes(user.role_code)) return false;
-  return lead.created_by_id === user.id;
+  if (!['BUSINESS_HEAD', 'ENG_DIRECTOR', 'SALES'].includes(user.role_code)) return false;
+  if (lead.created_by_id === user.id || lead.sales_owner_id === user.id) return true;
+  if (user.role_code === 'BUSINESS_HEAD' && lead.business_vertical === 'Business Head') return true;
+  if (user.role_code === 'ENG_DIRECTOR' && lead.business_vertical === 'Engineering Director') return true;
+  return false;
 }
 
 export function canPrepareQuotation(user: User | null | undefined, lead: Lead | null | undefined): boolean {

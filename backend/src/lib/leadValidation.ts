@@ -260,12 +260,12 @@ export function validateLeadPayload(body: Record<string, unknown>, options: { su
     for (const item of NAME_FIELDS) {
       validateNameField(errors, String(item.field), item.label, body[String(item.field)], item.requiredOnSubmit);
     }
-    if (!asString(body.requirement_summary)) {
-      push(errors, 'requirement_summary', 'Requirement Summary is required.');
-    }
-    const detailed = asString(body.detailed_requirement) || asString(body.project_description);
-    if (!detailed) {
-      push(errors, 'detailed_requirement', 'Detailed Requirement is required.');
+    const descriptionText =
+      asString(body.detailed_requirement) ||
+      asString(body.project_description) ||
+      asString(body.requirement_summary);
+    if (!descriptionText) {
+      push(errors, 'detailed_requirement', 'Project description or customer requirement is required.');
     }
     if (!asString(body.sales_owner_id) && !asString(body.sales_owner)) {
       push(errors, 'sales_owner', 'Sales Owner is required.');

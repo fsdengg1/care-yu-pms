@@ -236,7 +236,7 @@ export const LeadApi = {
       body: JSON.stringify(body),
     });
     if (result.ok) return syncPayload(result.data);
-    return null;
+    return { ok: false as const, message: result.message };
   },
 
   async convert(id: string) {

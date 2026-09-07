@@ -197,6 +197,34 @@ export default function LeadCyclePanels({ lead, currentUser, teams, users, assig
   const bumpQuoteGrowReset = () => setQuoteGrowReset((token) => token + 1);
   const bumpNegoGrowReset = () => setNegoGrowReset((token) => token + 1);
 
+  const sendRevisedQuotation = () => {
+    const revised = nego.revised_value.trim().replace(/,/g, '');
+    if (!revised || Number(revised) <= 0) {
+      setError('Enter a revised quotation value before sending.');
+      return;
+    }
+    void run(
+      () => LeadApi.negotiation(lead.id, { ...nego, action: 'REVISED_QUOTATION', revised_value: revised }),
+      'Unable to send revised quotation.',
+      'submit',
+      bumpNegoGrowReset,
+    );
+  };
+
+  const markLeadLost = () => {
+    if (!window.confirm(`Mark ${lead.lead_number} as lost?`)) return;
+    void run(
+      () =>
+        LeadApi.negotiation(lead.id, {
+          ...nego,
+          action: 'LOST',
+          notes: nego.notes || nego.customer_feedback || 'Marked as lost',
+        }),
+      'Unable to mark this lead as lost.',
+      'reject',
+    );
+  };
+
   const field = (
     label: string,
     value: string,
@@ -707,9 +735,9 @@ export default function LeadCyclePanels({ lead, currentUser, teams, users, assig
           )}
           <div className="flex flex-wrap gap-2">
             <button disabled={busy} onClick={() => run(() => LeadApi.negotiation(lead.id, { ...nego, action: 'UPDATE', revised_value: nego.revised_value || undefined }), undefined, undefined, bumpNegoGrowReset)} className="rounded-lg border border-slate-700 bg-slate-800 px-4 py-2 text-slate-200">Update Negotiation</button>
-            <button disabled={busy} onClick={() => run(() => LeadApi.negotiation(lead.id, { ...nego, action: 'REVISED_QUOTATION', revised_value: nego.revised_value || undefined }), undefined, undefined, bumpNegoGrowReset)} className="rounded-lg bg-cyan-600 px-4 py-2 font-bold text-white hover:bg-cyan-500">Send Revised Quotation</button>
-            <button disabled={busy} onClick={() => run(() => LeadApi.negotiation(lead.id, { ...nego, action: 'CONVERT' }))} className="rounded-lg bg-emerald-600 px-4 py-2 font-bold text-white hover:bg-emerald-500">Convert to Order</button>
-            <button disabled={busy} onClick={() => run(() => LeadApi.negotiation(lead.id, { ...nego, action: 'LOST' }))} className="rounded-lg bg-rose-700 px-4 py-2 font-bold text-white hover:bg-rose-600">Mark as Lost</button>
+            <button disabled={busy} onClick={sendRevisedQuotation} className="rounded-lg bg-cyan-600 px-4 py-2 font-bold text-white hover:bg-cyan-500">Send Revised Quotation</button>
+            <button disabled={busy} onClick={() => run(() => LeadApi.negotiation(lead.id, { ...nego, action: 'CONVERT' }), 'Unable to convert this lead to an order.', 'approve')} className="rounded-lg bg-emerald-600 px-4 py-2 font-bold text-white hover:bg-emerald-500">Convert to Order</button>
+            <button disabled={busy} onClick={markLeadLost} className="rounded-lg bg-rose-700 px-4 py-2 font-bold text-white hover:bg-rose-600">Mark as Lost</button>
           </div>
         </div>
       )}

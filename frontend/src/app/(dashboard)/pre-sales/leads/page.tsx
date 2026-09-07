@@ -384,7 +384,7 @@ export default function LeadsListPage() {
                     <th className="p-3">Status</th>
                   </>
                 )}
-                <th className="p-3 text-right">Actions</th>
+                <th className="p-3 text-right min-w-[14rem]">Actions</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-800/60 text-slate-300">
@@ -445,23 +445,23 @@ export default function LeadsListPage() {
                       </td>
                         </>
                       )}
-                      <td className="p-3 text-right">
-                        <div className="inline-flex items-center justify-end gap-1.5">
+                      <td className="p-3 text-right min-w-[14rem]">
+                        <div className="inline-flex flex-wrap items-center justify-end gap-1.5">
                           <a
                             href={leadDetailHref(lead.id)}
                             className="px-2.5 py-1 bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 rounded text-[11px] font-medium inline-flex items-center gap-1 transition-colors"
                           >
                             <Eye className="w-3.5 h-3.5" /> View
                           </a>
-                          {canEditLeadInput(currentUser, lead) && (
+                          {(canEditLeadInput(currentUser, lead) || (canCreateLead(currentUser) && lead.status === 'DRAFT')) && (
                             <Link
                               href={`/pre-sales/leads/create?id=${encodeURIComponent(lead.id)}`}
                               className="px-2.5 py-1 bg-cyan-950 hover:bg-cyan-900 text-cyan-200 border border-cyan-800 rounded text-[11px] font-medium inline-flex items-center gap-1 transition-colors"
                             >
-                              <Pencil className="w-3.5 h-3.5" /> Edit
+                              <Pencil className="w-3.5 h-3.5" /> Edit Lead
                             </Link>
                           )}
-                          {canDeleteLead(currentUser, lead) && (
+                          {(canDeleteLead(currentUser, lead) || (canCreateLead(currentUser) && lead.status === 'DRAFT')) && (
                             <button
                               type="button"
                               disabled={deletingId === lead.id}
@@ -473,7 +473,7 @@ export default function LeadsListPage() {
                               ) : (
                                 <Trash2 className="w-3.5 h-3.5" />
                               )}
-                              Delete
+                              Delete Lead
                             </button>
                           )}
                         </div>

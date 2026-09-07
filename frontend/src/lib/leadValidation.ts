@@ -1,5 +1,14 @@
 export type FieldError = { field: string; message: string };
 
+/** Accept any project-description field; use one value for all related API fields on submit. */
+export function resolveLeadDescriptionFields(form: Record<string, string>) {
+  const text =
+    (form.detailed_requirement || '').trim() ||
+    (form.project_description || '').trim() ||
+    (form.requirement_summary || '').trim();
+  return { detailed: text, summary: (form.requirement_summary || '').trim() || text };
+}
+
 const PHONE_RE = /^[6-9][0-9]{9}$/;
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[a-zA-Z]{2,}$/;
 const KEYBOARD_SMASH = new Set(['asdf', 'asdfg', 'asdfgh', 'qwer', 'qwerty', 'zxcv', 'dfgh', 'hjkl']);
@@ -78,12 +87,10 @@ export function validateLeadForm(
 
   if (options.submit) {
     for (const [field, label] of requiredNames) checkName(field, label, true);
-    if (!(form.requirement_summary || '').trim()) errors.requirement_summary = 'Requirement Summary is required.';
-    const detailedText =
-      (form.detailed_requirement || '').trim() ||
-      (form.project_description || '').trim();
-    if (!detailedText) {
-      errors.detailed_requirement = 'Project description / detailed requirement is required.';
+    const { detailed } = resolveLeadDescriptionFields(form);
+    if (!detailed) {
+      errors.detailed_requirement =
+        'Project description is required. Scroll to Section C or fill the project description field below contact details.';
     }
     if (!(form.business_vertical || '').trim()) errors.business_vertical = 'Business Vertical is required.';
     if (!(form.priority || '').trim() || !PRIORITIES.has(form.priority)) {

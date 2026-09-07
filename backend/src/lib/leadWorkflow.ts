@@ -391,8 +391,10 @@ export function canOwnLead(user: User, lead: Lead): boolean {
 
 export function canHandleLeadCommercial(user: User, lead: Lead): boolean {
   if (user.role_code === 'SYSTEM_ADMIN') return true;
-  if (!['BUSINESS_HEAD', 'ENG_DIRECTOR'].includes(user.role_code)) return false;
-  return lead.created_by_id === user.id;
+  if (!['BUSINESS_HEAD', 'ENG_DIRECTOR', 'SALES'].includes(user.role_code)) return false;
+  if (lead.created_by_id === user.id || lead.sales_owner_id === user.id) return true;
+  const owner = findQuotationOwner(lead);
+  return owner?.id === user.id;
 }
 
 export function canEditProjectInput(user: User, lead: Lead): boolean {

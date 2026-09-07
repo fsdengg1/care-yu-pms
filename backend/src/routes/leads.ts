@@ -167,7 +167,22 @@ function submitExistingLead(lead: Lead, user: User, body: Record<string, unknown
   if (PM_REVIEW_STATUSES.includes(lead.status)) {
     throw Object.assign(new Error('This lead has already been submitted to the Project Manager.'), { status: 409 });
   }
-  const merged = { ...lead, ...sanitizeLeadPatch(body) } as unknown as Record<string, unknown>;
+  const patched = sanitizeLeadPatch(body);
+  const descriptionText =
+    String(patched.detailed_requirement ?? '').trim() ||
+    String(patched.project_description ?? '').trim() ||
+    String(patched.requirement_summary ?? '').trim() ||
+    String(lead.detailed_requirement ?? '').trim() ||
+    String(lead.project_description ?? '').trim() ||
+    String(lead.requirement_summary ?? '').trim();
+  if (descriptionText) {
+    patched.detailed_requirement = descriptionText;
+    patched.project_description = descriptionText;
+    if (!String(patched.requirement_summary ?? '').trim()) {
+      patched.requirement_summary = descriptionText;
+    }
+  }
+  const merged = { ...lead, ...patched } as unknown as Record<string, unknown>;
   const validation = assertLeadValidForSubmit(merged);
   const next: LeadStatus = ['RETURNED_TO_SALES', 'ADDITIONAL_INFORMATION_REQUIRED'].includes(lead.status)
     ? 'RESUBMITTED_TO_PM'
@@ -175,7 +190,7 @@ function submitExistingLead(lead: Lead, user: User, body: Record<string, unknown
   const now = new Date().toISOString();
   const withFields = saveLead({
     ...lead,
-    ...sanitizeLeadPatch(body),
+    ...patched,
     id: lead.id,
     lead_number: lead.lead_number,
     created_by: lead.created_by,
@@ -1219,34 +1234,44 @@ router.post(
     const lead = findLead(paramId(req));
     if (!lead) return res.status(404).json({ message: 'Lead not found.' });
     if (!canHandleLeadCommercial(user, lead)) {
-      return forbidden(res);
+      return forbidden(res, 'You do not have permission to manage negotiation for this lead.');
     }
     if (lead.status !== 'NEGOTIATION' && lead.status !== 'QUOTATION') {
       return res.status(400).json({ message: 'Negotiation is available after a quotation is sent.' });
     }
-    const action = (req.body?.action || 'UPDATE') as 'UPDATE' | 'REVISED_QUOTATION' | 'CONVERT' | 'LOST';
-    if (action === 'CONVERT') {
-      const working =
-        lead.status === 'NEGOTIATION' ? lead : transitionLead(lead, 'NEGOTIATION', user, 'Moved to negotiation');
-      const withHistory = appendNegotiation(working, user, { ...req.body, action: 'CONVERT' });
-      const result = convertLeadToProject(withHistory, user);
-      notifyOrderConverted(user, result.lead, result.project);
-      audit(user, result.lead, 'ORDER_CONVERTED', `${user.name} converted ${lead.lead_number} to ${result.project.code}.`);
-      return res.json({ ...payloadFor(result.lead), project: result.project });
-    }
-    if (action === 'LOST') {
-      const withHistory = appendNegotiation(lead, user, { ...req.body, action: 'LOST' });
-      const updated = transitionLead(withHistory, 'LOST', user, req.body?.notes || 'Marked as lost');
-      audit(user, updated, 'LEAD_LOST', `${user.name} marked ${lead.lead_number} as lost.`);
+    try {
+      const action = (req.body?.action || 'UPDATE') as 'UPDATE' | 'REVISED_QUOTATION' | 'CONVERT' | 'LOST';
+      if (action === 'CONVERT') {
+        const working =
+          lead.status === 'NEGOTIATION' ? lead : transitionLead(lead, 'NEGOTIATION', user, 'Moved to negotiation');
+        const withHistory = appendNegotiation(working, user, { ...req.body, action: 'CONVERT' });
+        const result = convertLeadToProject(withHistory, user);
+        notifyOrderConverted(user, result.lead, result.project);
+        audit(user, result.lead, 'ORDER_CONVERTED', `${user.name} converted ${lead.lead_number} to ${result.project.code}.`);
+        return res.json({ ...payloadFor(result.lead), project: result.project });
+      }
+      if (action === 'LOST') {
+        const withHistory = appendNegotiation(lead, user, { ...req.body, action: 'LOST' });
+        const updated = transitionLead(withHistory, 'LOST', user, req.body?.notes || req.body?.customer_feedback || 'Marked as lost');
+        audit(user, updated, 'LEAD_LOST', `${user.name} marked ${lead.lead_number} as lost.`);
+        return res.json(payloadFor(updated));
+      }
+      if (action === 'REVISED_QUOTATION') {
+        const revised = parseMoney(req.body?.revised_value);
+        if (!revised || revised <= 0) {
+          return res.status(400).json({ message: 'Enter a revised quotation value greater than 0.' });
+        }
+      }
+      const working = lead.status === 'QUOTATION' ? transitionLead(lead, 'NEGOTIATION', user, 'Negotiation started') : lead;
+      const updated = appendNegotiation(working, user, {
+        ...req.body,
+        action,
+        revised_value: req.body?.revised_value != null ? parseMoney(req.body.revised_value) : undefined,
+      });
       return res.json(payloadFor(updated));
+    } catch (error) {
+      return workflowError(res, error);
     }
-    const working = lead.status === 'QUOTATION' ? transitionLead(lead, 'NEGOTIATION', user, 'Negotiation started') : lead;
-    const updated = appendNegotiation(working, user, {
-      ...req.body,
-      action,
-      revised_value: req.body?.revised_value != null ? parseMoney(req.body.revised_value) : undefined,
-    });
-    return res.json(payloadFor(updated));
   }
 );
 
