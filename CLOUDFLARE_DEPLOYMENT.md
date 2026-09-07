@@ -112,22 +112,48 @@ Wrangler will output your live worker URL (e.g., `https://careyu-backend-api.<yo
 
 ## 5. Frontend Deployment (Cloudflare Pages)
 
-### 1. Build Frontend
-Run the production Next.js build:
-```bash
-npm run build -w frontend
+### Build settings (Next.js → static Cloudflare output)
+
+| Setting | Value |
+|---------|--------|
+| **Root directory** | `frontend` |
+| **Build command** | `npm run build` |
+| **Build output directory** | `.cloudflare-out` |
+| **Node.js** | `20` |
+
+Do **not** use `frontend/.next` or `dist` — this project packages static HTML into `.cloudflare-out` via `scripts/build-cloudflare.mjs`.
+
+### Connect GitHub (automatic deploy on push)
+
+Full step-by-step: **[docs/GITHUB_CLOUDFLARE_SETUP.md](../docs/GITHUB_CLOUDFLARE_SETUP.md)**
+
+Repository: `https://github.com/fsdengg1/care-yu-project-hub`  
+Production branch: `main`
+
+**Cloudflare Dashboard:** Workers & Pages → `careyu-frontend` → Settings → Builds & deployments → **Connect to Git**
+
+**Production environment variables:**
+
+```env
+NEXT_PUBLIC_API_URL=
+CLOUDFLARE_API_ORIGIN=https://careyu-backend-api.aicareyuautomation.workers.dev
 ```
 
-### 2. Deploy Pages App
-Deploy the build output to Cloudflare Pages:
+### Manual deploy (CLI)
+
 ```bash
+npm run build -w frontend
 npm run deploy:frontend -w frontend
 ```
-Or create a Cloudflare Pages project linked to your GitHub repository:
-- **Framework Preset**: Next.js
-- **Build Command**: `npm run build -w frontend`
-- **Build Output Directory**: `frontend/.next`
-- **Environment Variable**: `NEXT_PUBLIC_API_URL=https://careyu-backend-api.<your-subdomain>.workers.dev`
+
+This uploads from your machine and updates `careyu-frontend.pages.dev` when it is the latest production deployment.
+
+### GitHub Actions (alternative)
+
+Workflow: `.github/workflows/deploy-frontend-cloudflare.yml`  
+Requires GitHub secret `CLOUDFLARE_API_TOKEN`. See `docs/GITHUB_CLOUDFLARE_SETUP.md`.
+
+Use **either** Dashboard Git **or** GitHub Actions — not both.
 
 ---
 

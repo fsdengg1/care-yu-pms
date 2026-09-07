@@ -79,8 +79,11 @@ export function validateLeadForm(
   if (options.submit) {
     for (const [field, label] of requiredNames) checkName(field, label, true);
     if (!(form.requirement_summary || '').trim()) errors.requirement_summary = 'Requirement Summary is required.';
-    if (!(form.detailed_requirement || '').trim() && !(form.project_description || '').trim()) {
-      errors.detailed_requirement = 'Detailed Requirement is required.';
+    const detailedText =
+      (form.detailed_requirement || '').trim() ||
+      (form.project_description || '').trim();
+    if (!detailedText) {
+      errors.detailed_requirement = 'Project description / detailed requirement is required.';
     }
     if (!(form.business_vertical || '').trim()) errors.business_vertical = 'Business Vertical is required.';
     if (!(form.priority || '').trim() || !PRIORITIES.has(form.priority)) {

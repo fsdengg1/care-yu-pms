@@ -213,6 +213,7 @@ function CreateLeadForm() {
   }, [currentUser, editId, router]);
 
   const payloadFromForm = (user: User, status: 'DRAFT' | 'SUBMITTED_TO_PM') => {
+    const detailedText = (formData.detailed_requirement || formData.project_description || '').trim();
     return {
       title: formData.title,
       customer_name: formData.customer_name,
@@ -233,9 +234,9 @@ function CreateLeadForm() {
       customer_phone: formData.customer_phone,
       customer_location: formData.customer_location,
       plant_location: formData.plant_location,
-      project_description: formData.project_description,
+      project_description: detailedText,
       requirement_summary: formData.requirement_summary,
-      detailed_requirement: formData.detailed_requirement,
+      detailed_requirement: detailedText,
       application: formData.application,
       industry_process: formData.industry_process,
       current_process: formData.current_process,
@@ -343,6 +344,7 @@ function CreateLeadForm() {
       setValidationError(result.list[0].message);
       const first = result.list[0].field;
       window.setTimeout(() => {
+        document.getElementById(`lead-field-${first}`)?.scrollIntoView({ behavior: 'smooth', block: 'center' });
         document.getElementsByName(first)[0]?.scrollIntoView({ behavior: 'smooth', block: 'center' });
       }, 50);
       return false;
@@ -611,12 +613,41 @@ function CreateLeadForm() {
 
         <FormSection title="Section C — Additional Project Information">
           <div>
-            <label className="mb-1 block font-medium text-slate-400">Project Description</label>
-            <textarea rows={3} value={formData.project_description || formData.detailed_requirement} onChange={(e) => setFormData({ ...formData, project_description: e.target.value, detailed_requirement: e.target.value })} placeholder="Describe the project scope and what the customer wants to achieve" className={fieldClass(missing.includes('project_description'))} />
+            <label className="mb-1 block font-semibold text-slate-300" htmlFor="lead-field-detailed_requirement">
+              Detailed Requirement / Project Description *
+            </label>
+            <textarea
+              id="lead-field-detailed_requirement"
+              name="detailed_requirement"
+              rows={3}
+              value={formData.project_description || formData.detailed_requirement}
+              onChange={(e) =>
+                setFormData({
+                  ...formData,
+                  project_description: e.target.value,
+                  detailed_requirement: e.target.value,
+                })
+              }
+              placeholder="Describe the project scope, technical needs, and what the customer wants to achieve"
+              className={fieldClass(
+                missing.includes('detailed_requirement') ||
+                  missing.includes('project_description') ||
+                  Boolean(fieldErrors.detailed_requirement)
+              )}
+            />
+            {fieldError('detailed_requirement')}
           </div>
           <div>
             <label className="mb-1 block font-semibold text-slate-300">Customer Requirement *</label>
-              <input type="text" value={formData.requirement_summary} onChange={(e) => setFormData({ ...formData, requirement_summary: e.target.value })} placeholder="High-level summary of the customer requirement" className={fieldClass(missing.includes('requirement_summary') || Boolean(fieldErrors.requirement_summary))} />
+              <input
+                type="text"
+                name="requirement_summary"
+                id="lead-field-requirement_summary"
+                value={formData.requirement_summary}
+                onChange={(e) => setFormData({ ...formData, requirement_summary: e.target.value })}
+                placeholder="High-level summary of the customer requirement"
+                className={fieldClass(missing.includes('requirement_summary') || Boolean(fieldErrors.requirement_summary))}
+              />
               {fieldError('requirement_summary')}
           </div>
           <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
