@@ -405,6 +405,27 @@ function DailyWorkUpdatesInner() {
             setRows(result.data.rows.map((item) => (item.id === id ? { ...item, sheetHidden: true } : item)));
             setNotice('Only that task was hidden. Open Hidden to restore it.');
           }}
+          onHideSelected={async (ids) => {
+            if (!ids.length) return;
+            setError(null);
+            const idSet = new Set(ids);
+            setRows((prev) => prev.map((item) => (idSet.has(item.id) ? { ...item, sheetHidden: true } : item)));
+            setSelectedIds([]);
+            for (const id of ids) {
+              const result = await DailyStatusApi.updateRow(id, { sheet_hidden: true, work_date: workDate });
+              if (!result.ok) {
+                setError(result.message || 'Unable to hide selected tasks.');
+                await loadSheet(workDate);
+                return;
+              }
+            }
+            setNotice(
+              ids.length === 1
+                ? 'Only that task was hidden. Open Hidden to restore it.'
+                : `${ids.length} tasks hidden. Open Hidden to restore them.`
+            );
+            await refreshSheet();
+          }}
           onRestoreRow={async (row) => {
             setError(null);
             const id = row.id;

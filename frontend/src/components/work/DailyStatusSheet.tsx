@@ -101,6 +101,7 @@ export default function DailyStatusSheet({
   onWorkDateChange,
   onEditUpdate,
   onHideRow,
+  onHideSelected,
   onRestoreRow,
   onDeleteRow,
   onAccept,
@@ -128,6 +129,7 @@ export default function DailyStatusSheet({
   onWorkDateChange: (date: string) => void;
   onEditUpdate?: (row: DailyStatusRow) => void;
   onHideRow?: (row: DailyStatusRow) => void;
+  onHideSelected?: (ids: string[]) => void | Promise<void>;
   onRestoreRow?: (row: DailyStatusRow) => void;
   onDeleteRow?: (row: DailyStatusRow) => void;
   onAccept?: (row: DailyStatusRow) => Promise<void>;
@@ -145,6 +147,8 @@ export default function DailyStatusSheet({
   const [query, setQuery] = useState('');
   const [chip, setChip] = useState<SheetChip>('all');
   const [expandedIds, setExpandedIds] = useState<string[]>([]);
+  const [lastSelectedIndex, setLastSelectedIndex] = useState<number | null>(null);
+  const selectAllRef = useRef<HTMLInputElement>(null);
   const today = workDate || todayIso();
 
   const toggleExpand = (id: string) => {
@@ -219,6 +223,25 @@ export default function DailyStatusSheet({
 
   const allSelected = visible.length > 0 && visible.every((row) => selectedIds.includes(row.id));
   const selectedVisible = selectedIds.filter((id) => visible.some((row) => row.id === id)).length;
+
+  const handleRowSelect = (rowId: string, rowIndex: number, checked: boolean, shiftKey: boolean) => {
+    if (shiftKey && lastSelectedIndex !== null) {
+      const start = Math.min(lastSelectedIndex, rowIndex);
+      const end = Math.max(lastSelectedIndex, rowIndex);
+      const rangeIds = visible.slice(start, end + 1).map((row) => row.id);
+      if (checked) {
+        onSelectedIds([...new Set([...selectedIds, ...rangeIds])]);
+      } else {
+        const rangeSet = new Set(rangeIds);
+        onSelectedIds(selectedIds.filter((id) => !rangeSet.has(id)));
+      }
+    } else if (checked) {
+      onSelectedIds(selectedIds.includes(rowId) ? selectedIds : [...selectedIds, rowId]);
+    } else {
+      onSelectedIds(selectedIds.filter((id) => id !== rowId));
+    }
+    setLastSelectedIndex(rowIndex);
+  };
   const canEditRow = (row: DailyStatusRow) => {
     if (readOnly) return false;
     if (row.rowKind === 'leave' || row.rowKind === 'permission') return false;
@@ -240,6 +263,11 @@ export default function DailyStatusSheet({
     }, 0);
     return () => window.clearTimeout(timer);
   }, [visible]);
+
+  useEffect(() => {
+    if (!selectAllRef.current) return;
+    selectAllRef.current.indeterminate = selectedVisible > 0 && !allSelected;
+  }, [selectedVisible, allSelected]);
 
   return (
     <section className={`daily-status-workspace min-w-0 overflow-hidden rounded-xl ${readOnly ? 'daily-status-workspace-readonly' : ''}`}>
@@ -289,16 +317,26 @@ export default function DailyStatusSheet({
           {!readOnly && selectedIds.length > 0 && (
             <span className="text-[11px] font-semibold text-[#0f172a]">{selectedIds.length} selected</span>
           )}
-          {!readOnly && onHideRow && (
+          {!readOnly && (onHideSelected || onHideRow) && (
             <button
               type="button"
-              disabled={selectedIds.length !== 1}
+              disabled={selectedIds.length === 0}
               onClick={() => {
-                const row = rows.find((item) => item.id === selectedIds[0]);
-                if (row) onHideRow(row);
+                if (onHideSelected) {
+                  void onHideSelected(selectedIds);
+                  return;
+                }
+                for (const id of selectedIds) {
+                  const row = rows.find((item) => item.id === id);
+                  if (row) onHideRow?.(row);
+                }
               }}
               className="inline-flex items-center gap-1 rounded-md border border-[#cbd5e1] px-2 py-1.5 text-[11px] font-bold text-[#0f172a] hover:border-[#0f172a] disabled:opacity-40"
-              title={selectedIds.length === 1 ? 'Hide the selected task only' : 'Select exactly one task to hide'}
+              title={
+                selectedIds.length === 0
+                  ? 'Select one or more tasks to hide'
+                  : `Hide ${selectedIds.length} selected task${selectedIds.length === 1 ? '' : 's'}`
+              }
             >
               <EyeOff className="h-3.5 w-3.5" /> Hide
             </button>
@@ -344,9 +382,13 @@ export default function DailyStatusSheet({
               {showSelect && (
                 <th>
                   <input
+                    ref={selectAllRef}
                     type="checkbox"
                     checked={allSelected}
-                    onChange={(event) => onSelectedIds(event.target.checked ? visible.map((row) => row.id) : [])}
+                    onChange={(event) => {
+                      onSelectedIds(event.target.checked ? visible.map((row) => row.id) : []);
+                      setLastSelectedIndex(null);
+                    }}
                     aria-label="Select all visible rows"
                   />
                 </th>
@@ -371,29 +413,28 @@ export default function DailyStatusSheet({
                 </td>
               </tr>
             )}
-            {groups.map((group) =>
-              group.rows.map((row, index) => {
-                const editable = canEditRow(row);
-                const tone = deadlineTone(row.status, row.deadlineIso || row.deadline, today);
-                const personAttendance = attendance.find((item) => item.personId === group.personId);
-                return (
-                  <tr key={row.id} className={row.isLeadTask ? 'lead-task' : undefined}>
-                    {showSelect && (
-                      <td>
-                        <input
-                          type="checkbox"
-                          checked={selectedIds.includes(row.id)}
-                          onChange={(event) =>
-                            onSelectedIds(
-                              event.target.checked
-                                ? [row.id]
-                                : selectedIds.filter((id) => id !== row.id)
-                            )
-                          }
-                          aria-label={`Select ${row.person} task`}
-                        />
-                      </td>
-                    )}
+            {(() => {
+              let flatIndex = 0;
+              return groups.map((group) =>
+                group.rows.map((row, index) => {
+                  const rowIndex = flatIndex++;
+                  const editable = canEditRow(row);
+                  const tone = deadlineTone(row.status, row.deadlineIso || row.deadline, today);
+                  const personAttendance = attendance.find((item) => item.personId === group.personId);
+                  return (
+                    <tr key={row.id} className={row.isLeadTask ? 'lead-task' : undefined}>
+                      {showSelect && (
+                        <td>
+                          <input
+                            type="checkbox"
+                            checked={selectedIds.includes(row.id)}
+                            onChange={(event) =>
+                              handleRowSelect(row.id, rowIndex, event.target.checked, event.nativeEvent.shiftKey)
+                            }
+                            aria-label={`Select ${row.person} task`}
+                          />
+                        </td>
+                      )}
                     {index === 0 && (
                       <td className="person-cell" rowSpan={group.rows.length}>
                         {canEditAll && !readOnly ? (
@@ -757,7 +798,8 @@ export default function DailyStatusSheet({
                   </tr>
                 );
               })
-            )}
+            );
+            })()}
           </tbody>
         </table>
       </div>
