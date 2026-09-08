@@ -1,10 +1,13 @@
 const RESERVED_LEAD_SEGMENTS = new Set(['create', 'detail']);
 
 /** Lead detail route using a query param fallback. */
+<<<<<<< HEAD
 export function leadEditHref(leadId: string): string {
   return `/pre-sales/leads/create?id=${encodeURIComponent(leadId)}`;
 }
 
+=======
+>>>>>>> 8fb3e8548f3dd2fdad77f3668e27544f4fae5d77
 export function leadDetailHref(leadId: string, extraQuery?: string): string {
   const base = `/pre-sales/leads/detail?id=${encodeURIComponent(leadId)}`;
   if (!extraQuery) return base;
