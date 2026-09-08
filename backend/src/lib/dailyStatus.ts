@@ -270,6 +270,16 @@ function sortUpdatesLatestFirst(items: DailyUpdate[]): DailyUpdate[] {
   );
 }
 
+function pickFromUpdatePool(pool: DailyUpdate[], employeeId?: string): DailyUpdate | undefined {
+  if (!pool.length) return undefined;
+  const ranked = sortUpdatesLatestFirst(pool);
+  if (employeeId) {
+    const owned = ranked.find((item) => item.user_id === employeeId);
+    if (owned) return owned;
+  }
+  return ranked[0];
+}
+
 function pickUpdateForDate(
   forTask: DailyUpdate[],
   workDate: string,
@@ -279,16 +289,20 @@ function pickUpdateForDate(
   if (!forTask.length) return undefined;
   const onDate = forTask.filter((item) => item.work_date === workDate);
   if (!onDate.length) return undefined;
-  const pool = period
-    ? onDate.filter((item) => periodOfUpdate(item) === period)
-    : onDate;
-  if (!pool.length) return undefined;
-  const ranked = sortUpdatesLatestFirst(pool);
-  if (employeeId) {
-    const owned = ranked.find((item) => item.user_id === employeeId);
-    if (owned) return owned;
+  if (!period) return pickFromUpdatePool(onDate, employeeId);
+
+  const periodPool = onDate.filter((item) => periodOfUpdate(item) === period);
+  const periodMatch = pickFromUpdatePool(periodPool, employeeId);
+  if (periodMatch) return periodMatch;
+
+  // Legacy rows saved before the morning/evening split had no period — surface them in evening view.
+  if (period === 'evening') {
+    const legacy = onDate.filter((item) => !periodOfUpdate(item));
+    const legacyMatch = pickFromUpdatePool(legacy, employeeId);
+    if (legacyMatch) return legacyMatch;
   }
-  return ranked[0];
+
+  return undefined;
 }
 
 function isHoursOnlyShell(update: DailyUpdate, masterText: string): boolean {
@@ -300,12 +314,25 @@ function isHoursOnlyShell(update: DailyUpdate, masterText: string): boolean {
   return norm(text) === norm(masterText || '');
 }
 
+function isExplicitEveningUpdate(update: DailyUpdate): boolean {
+  return periodOfUpdate(update) === 'evening' || update.update_type === 'EVENING';
+}
+
 function eveningNarrativeText(update: DailyUpdate | undefined, masterText: string): string | undefined {
   if (!update) return undefined;
   const text = (update.work_completed || '').trim();
   if (!text) return undefined;
+  if (isExplicitEveningUpdate(update)) {
+    if (isHoursOnlyShell(update, masterText)) return undefined;
+    return text;
+  }
   if (isHoursOnlyShell(update, masterText)) return undefined;
   return text;
+}
+
+/** Master task status is the source of truth for the sheet status column. */
+function taskSheetStatus(task: Task): DailySheetStatus {
+  return toSheetStatus(task.status === 'BLOCKED' ? 'WAITING' : task.status);
 }
 
 function masterTaskDescription(task: Task, morningRow?: DailyStatusRow | null): string {
@@ -408,9 +435,7 @@ export function buildDailyStatusRows(
       const masterDesc = (task.description || task.title || '').trim() || task.title;
       const eveningUpd = pickUpdateForDate(updatesForTask(task, updates), workDate, 'evening', task.assigned_to_id);
       const eveningText = eveningNarrativeText(eveningUpd, masterDesc);
-      const status = toSheetStatus(
-        (period === 'evening' && eveningUpd?.work_status) || (task.status === 'BLOCKED' ? 'WAITING' : task.status)
-      );
+      const status = taskSheetStatus(task);
       const delayUpdate = period === 'evening' ? eveningUpd || update : update;
       const children = (childrenByParent.get(task.id) || []).slice().sort((a, b) => a.title.localeCompare(b.title));
       const subtasks: DailyStatusSubtask[] = children.map((child) => ({
@@ -819,7 +844,9 @@ export function compareSnapshots(
       }
 
       const currentUpdateText = eveningText || 'No Evening Update Submitted';
-      const status = toSheetStatus(eveningUpd?.work_status || eveningSnapRow?.status || task?.status || morningRow.status);
+      const status = task
+        ? taskSheetStatus(task)
+        : toSheetStatus(eveningUpd?.work_status || eveningSnapRow?.status || morningRow.status);
       const hoursWorked = Math.max(0, Number(eveningUpd?.hours_worked) || Number(eveningSnapRow?.hoursWorked) || 0);
       const reasonForDelay = (
         eveningUpd?.blocker ||
@@ -876,7 +903,12 @@ function upsertDailyPeriodRecord(
   taskId: string,
   workDate: string,
   period: SnapshotPeriod,
-  patch: { work_completed?: string; hours_worked?: number; progress_percent?: number }
+  patch: {
+    work_completed?: string;
+    hours_worked?: number;
+    progress_percent?: number;
+    work_status?: DailyUpdate['work_status'];
+  }
 ): { ok: true; update: DailyUpdate } | { ok: false; error: string; status?: number } {
   const task = store.getTasks().find((item) => item.id === taskId);
   if (!task) return { ok: false, error: 'not_found', status: 404 };
@@ -933,6 +965,9 @@ function upsertDailyPeriodRecord(
       next.submission_status = 'SUBMITTED';
       next.submitted_at = next.submitted_at || now;
     }
+    if (patch.work_status !== undefined) {
+      next.work_status = patch.work_status;
+    }
     const index = updates.findIndex((item) => item.id === existing.id);
     updates[index] = next;
     store.saveDailyUpdates(updates);
@@ -967,7 +1002,7 @@ function upsertDailyPeriodRecord(
         ? Math.max(0, Math.min(100, Number(patch.progress_percent) || 0))
         : task.progress_percent ?? 0,
     hours_worked: hours,
-    work_status: workStatusFromTask(task),
+    work_status: patch.work_status ?? workStatusFromTask(task),
     next_plan: '—',
     attachments: [],
     submission_status: 'SUBMITTED',
@@ -1003,8 +1038,26 @@ export function upsertProgressForTask(
   workDate = todayIso(),
   period?: SnapshotPeriod
 ) {
+  const task = store.getTasks().find((item) => item.id === taskId);
   return upsertDailyPeriodRecord(actor, taskId, workDate, period || inferDefaultEmailPeriod(), {
     progress_percent: Math.max(0, Math.min(100, Number(progressPercent) || 0)),
+    work_status: task ? workStatusFromTask(task) : undefined,
+  });
+}
+
+/** Keep the morning/evening daily-update row aligned with the master task after sheet edits. */
+export function syncPeriodRecordFromTask(
+  actor: User,
+  taskId: string,
+  workDate: string,
+  period?: SnapshotPeriod,
+  task?: Task
+) {
+  const resolvedTask = task || store.getTasks().find((item) => item.id === taskId);
+  if (!resolvedTask) return { ok: false as const, error: 'not_found', status: 404 };
+  return upsertDailyPeriodRecord(actor, taskId, workDate, period || inferDefaultEmailPeriod(), {
+    work_status: workStatusFromTask(resolvedTask),
+    progress_percent: resolvedTask.progress_percent ?? 0,
   });
 }
 

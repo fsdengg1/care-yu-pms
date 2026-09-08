@@ -17,8 +17,8 @@ import {
   sendDailyStatusReport,
   SnapshotPeriod,
   upsertLoggedHoursForTask,
-  upsertProgressForTask,
   upsertEveningWorkCompleted,
+  syncPeriodRecordFromTask,
   visibleProjects,
 } from '../lib/dailyStatus.js';
 import { formatEmployeeDisplayName } from '../lib/people.js';
@@ -387,13 +387,21 @@ router.patch(
       });
     }
     if (body.progress_percent !== undefined || body.status !== undefined) {
-      upsertProgressForTask(
+      const syncResult = syncPeriodRecordFromTask(
         req.user!,
         String(req.params.id),
-        result.task.progress_percent ?? 0,
         date,
-        period
+        period,
+        result.task
       );
+      if (!syncResult.ok && syncResult.error !== 'forbidden') {
+        return res.status(syncResult.status || 400).json({
+          message:
+            syncResult.error === 'not_found'
+              ? 'Task not found.'
+              : syncResult.error,
+        });
+      }
     }
     return res.json({ task: result.task, rows: rebuildRows() });
   }
