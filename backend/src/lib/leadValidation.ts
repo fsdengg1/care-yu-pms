@@ -107,6 +107,32 @@ function asString(value: unknown): string {
   return String(value ?? '').trim();
 }
 
+/** Keep description fields aligned when any one of them is filled. */
+export function normalizeLeadDescriptionFields(
+  body: Record<string, unknown>,
+  existing?: Partial<Lead>
+): Pick<Lead, 'detailed_requirement' | 'project_description' | 'requirement_summary'> {
+  const project =
+    asString(body.project_description) ||
+    asString(existing?.project_description);
+  const summary =
+    asString(body.requirement_summary) ||
+    asString(existing?.requirement_summary);
+  const detailed =
+    asString(body.detailed_requirement) ||
+    asString(existing?.detailed_requirement);
+  const text =
+    detailed ||
+    [project, summary].filter(Boolean).join('\n\n') ||
+    project ||
+    summary;
+  return {
+    detailed_requirement: text,
+    project_description: project || text,
+    requirement_summary: summary || text,
+  };
+}
+
 function lettersOnly(value: string): string {
   return value.replace(/[^A-Za-z]/g, '').toLowerCase();
 }
@@ -260,12 +286,13 @@ export function validateLeadPayload(body: Record<string, unknown>, options: { su
     for (const item of NAME_FIELDS) {
       validateNameField(errors, String(item.field), item.label, body[String(item.field)], item.requiredOnSubmit);
     }
-    const descriptionText =
-      asString(body.detailed_requirement) ||
-      asString(body.project_description) ||
-      asString(body.requirement_summary);
+  const descriptionText =
+    asString(body.detailed_requirement) ||
+    [asString(body.project_description), asString(body.requirement_summary)].filter(Boolean).join('\n\n') ||
+    asString(body.project_description) ||
+    asString(body.requirement_summary);
     if (!descriptionText) {
-      push(errors, 'detailed_requirement', 'Project description or customer requirement is required.');
+      push(errors, 'detailed_requirement', 'Project Description / Customer Requirement is required.');
     }
     if (!asString(body.sales_owner_id) && !asString(body.sales_owner)) {
       push(errors, 'sales_owner', 'Sales Owner is required.');
@@ -393,33 +420,16 @@ export function validateLeadPayload(body: Record<string, unknown>, options: { su
   if (submit && visitRequirement && !['NONE', 'CUSTOMER_SITE', 'CAREYU_OFFICE'].includes(visitRequirement)) {
     push(errors, 'visit_requirement', 'Select a valid visit requirement.');
   }
-  if (submit && visitRequirement === 'CUSTOMER_SITE') {
-    for (const [field, label] of [
-      ['visit_site_name', 'Customer Site / Plant Name'],
-      ['visit_site_address', 'Customer Site Address'],
-      ['visit_city', 'City'],
-      ['visit_state', 'State'],
-      ['visit_country', 'Country'],
-      ['visit_contact_name', 'Site Contact Person Name'],
-    ] as const) {
-      if (!asString(body[field])) push(errors, field, `${label} is required.`);
-    }
-    if (!asString(body.visit_preferred_date)) push(errors, 'visit_preferred_date', 'Customer preferred visit date is required.');
-    const visitPhone = asString(body.visit_contact_phone);
-    if (!visitPhone) push(errors, 'visit_contact_phone', 'Site contact phone is required.');
-    else if (!isValidPhone(visitPhone)) push(errors, 'visit_contact_phone', 'Phone number must contain exactly 10 digits and start with 6, 7, 8, or 9.');
-    const visitEmail = asString(body.visit_contact_email);
-    if (!visitEmail) push(errors, 'visit_contact_email', 'Site contact email is required.');
-    else if (!isValidEmail(visitEmail)) push(errors, 'visit_contact_email', 'Enter a valid email address.');
+  const visitPhone = asString(body.visit_contact_phone);
+  if (visitPhone && !isValidPhone(visitPhone)) {
+    push(errors, 'visit_contact_phone', 'Phone number must contain exactly 10 digits and start with 6, 7, 8, or 9.');
   }
-  if (submit && visitRequirement === 'CAREYU_OFFICE') {
-    if (!asString(body.visit_visitor_name)) push(errors, 'visit_visitor_name', 'Visitor name is required.');
-    if (!asString(body.visit_visitor_designation)) push(errors, 'visit_visitor_designation', 'Visitor designation is required.');
-    if (!asString(body.visit_preferred_date)) push(errors, 'visit_preferred_date', 'Customer preferred visit date is required.');
-    if (!asString(body.visit_purpose)) push(errors, 'visit_purpose', 'Purpose of visit is required.');
-    const count = parseStrictNumber(body.visit_visitor_count, { min: 1, integer: true, allowEmpty: false });
-    if (!count.ok) push(errors, 'visit_visitor_count', 'Enter the number of visitors.');
+  const visitEmail = asString(body.visit_contact_email);
+  if (visitEmail && !isValidEmail(visitEmail)) {
+    push(errors, 'visit_contact_email', 'Enter a valid email address.');
   }
+  const visitorCount = parseStrictNumber(body.visit_visitor_count, { min: 1, integer: true, allowEmpty: true });
+  if (!visitorCount.ok) push(errors, 'visit_visitor_count', 'Enter the number of visitors.');
   const visitDate = asString(body.visit_preferred_date);
   if (visitDate && !isValidIsoDate(visitDate)) {
     push(errors, 'visit_preferred_date', 'Enter a valid preferred visit date.');

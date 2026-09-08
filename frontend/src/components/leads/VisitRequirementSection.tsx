@@ -53,7 +53,7 @@ export default function VisitRequirementSection({
   return (
     <div className="space-y-4">
       <div>
-        <label className="mb-1 block font-semibold text-slate-300">Visit Requirement *</label>
+        <label className="mb-1 block font-semibold text-slate-300">Visit Requirement</label>
         <select
           name="visit_requirement"
           value={requirement}
@@ -72,51 +72,51 @@ export default function VisitRequirementSection({
           <h3 className="font-semibold text-slate-200">Customer Site Details</h3>
           <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
             <div className="md:col-span-2">
-              <label className="mb-1 block font-semibold text-slate-300">Customer Site / Plant Name *</label>
+              <label className="mb-1 block font-medium text-slate-400">Customer Site / Plant Name</label>
               <input name="visit_site_name" value={formData.visit_site_name} onChange={(e) => onChange({ visit_site_name: e.target.value })} className={fieldClass(invalid('visit_site_name'))} />
               {fieldError('visit_site_name')}
             </div>
             <div>
-              <label className="mb-1 block font-semibold text-slate-300">Country *</label>
+              <label className="mb-1 block font-medium text-slate-400">Country</label>
               <input name="visit_country" value={formData.visit_country} onChange={(e) => onChange({ visit_country: e.target.value })} className={fieldClass(invalid('visit_country'))} />
               {fieldError('visit_country')}
             </div>
           </div>
           <div>
-            <label className="mb-1 block font-semibold text-slate-300">Customer Site Address *</label>
+            <label className="mb-1 block font-medium text-slate-400">Customer Site Address</label>
             <textarea name="visit_site_address" rows={2} value={formData.visit_site_address} onChange={(e) => onChange({ visit_site_address: e.target.value })} className={fieldClass(invalid('visit_site_address'))} />
             {fieldError('visit_site_address')}
           </div>
           <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
             <div>
-              <label className="mb-1 block font-semibold text-slate-300">City *</label>
+              <label className="mb-1 block font-medium text-slate-400">City</label>
               <input name="visit_city" value={formData.visit_city} onChange={(e) => onChange({ visit_city: e.target.value })} className={fieldClass(invalid('visit_city'))} />
               {fieldError('visit_city')}
             </div>
             <div>
-              <label className="mb-1 block font-semibold text-slate-300">State *</label>
+              <label className="mb-1 block font-medium text-slate-400">State</label>
               <input name="visit_state" value={formData.visit_state} onChange={(e) => onChange({ visit_state: e.target.value })} className={fieldClass(invalid('visit_state'))} />
               {fieldError('visit_state')}
             </div>
             <div>
-              <label className="mb-1 block font-semibold text-slate-300">Contact Person Name *</label>
+              <label className="mb-1 block font-medium text-slate-400">Contact Person Name</label>
               <input name="visit_contact_name" value={formData.visit_contact_name} onChange={(e) => onChange({ visit_contact_name: e.target.value })} className={fieldClass(invalid('visit_contact_name'))} />
               {fieldError('visit_contact_name')}
             </div>
           </div>
           <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
             <div>
-              <label className="mb-1 block font-semibold text-slate-300">Contact Person Phone *</label>
+              <label className="mb-1 block font-medium text-slate-400">Contact Person Phone</label>
               <input name="visit_contact_phone" inputMode="numeric" maxLength={10} value={formData.visit_contact_phone} onChange={(e) => onChange({ visit_contact_phone: e.target.value.replace(/\D/g, '').slice(0, 10) })} className={fieldClass(invalid('visit_contact_phone'))} />
               {fieldError('visit_contact_phone')}
             </div>
             <div>
-              <label className="mb-1 block font-semibold text-slate-300">Contact Person Email *</label>
+              <label className="mb-1 block font-medium text-slate-400">Contact Person Email</label>
               <input name="visit_contact_email" type="email" value={formData.visit_contact_email} onChange={(e) => onChange({ visit_contact_email: e.target.value })} className={fieldClass(invalid('visit_contact_email'))} />
               {fieldError('visit_contact_email')}
             </div>
             <div>
-              <label className="mb-1 block font-semibold text-slate-300">Customer Preferred Date *</label>
+              <label className="mb-1 block font-medium text-slate-400">Customer Preferred Date</label>
               <input name="visit_preferred_date" type="date" value={formData.visit_preferred_date} onChange={(e) => onChange({ visit_preferred_date: e.target.value })} className={fieldClass(invalid('visit_preferred_date'))} />
               {fieldError('visit_preferred_date')}
             </div>
@@ -147,24 +147,24 @@ export default function VisitRequirementSection({
               <input disabled value={customerName || ''} className="w-full cursor-not-allowed rounded border border-slate-800 bg-slate-950 p-2 text-slate-400" />
             </div>
             <div>
-              <label className="mb-1 block font-semibold text-slate-300">Visitor Name *</label>
+              <label className="mb-1 block font-medium text-slate-400">Visitor Name</label>
               <input name="visit_visitor_name" value={formData.visit_visitor_name} onChange={(e) => onChange({ visit_visitor_name: e.target.value })} className={fieldClass(invalid('visit_visitor_name'))} />
               {fieldError('visit_visitor_name')}
             </div>
             <div>
-              <label className="mb-1 block font-semibold text-slate-300">Visitor Designation *</label>
+              <label className="mb-1 block font-medium text-slate-400">Visitor Designation</label>
               <input name="visit_visitor_designation" value={formData.visit_visitor_designation} onChange={(e) => onChange({ visit_visitor_designation: e.target.value })} className={fieldClass(invalid('visit_visitor_designation'))} />
               {fieldError('visit_visitor_designation')}
             </div>
           </div>
           <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
             <div>
-              <label className="mb-1 block font-semibold text-slate-300">Number of Visitors *</label>
+              <label className="mb-1 block font-medium text-slate-400">Number of Visitors</label>
               <input name="visit_visitor_count" inputMode="numeric" value={formData.visit_visitor_count} onChange={(e) => onChange({ visit_visitor_count: e.target.value.replace(/\D/g, '') })} className={fieldClass(invalid('visit_visitor_count'))} />
               {fieldError('visit_visitor_count')}
             </div>
             <div>
-              <label className="mb-1 block font-semibold text-slate-300">Customer Preferred Visit Date *</label>
+              <label className="mb-1 block font-medium text-slate-400">Customer Preferred Visit Date</label>
               <input name="visit_preferred_date" type="date" value={formData.visit_preferred_date} onChange={(e) => onChange({ visit_preferred_date: e.target.value })} className={fieldClass(invalid('visit_preferred_date'))} />
               {fieldError('visit_preferred_date')}
             </div>
@@ -174,7 +174,7 @@ export default function VisitRequirementSection({
             </div>
           </div>
           <div>
-            <label className="mb-1 block font-semibold text-slate-300">Purpose of Visit *</label>
+            <label className="mb-1 block font-medium text-slate-400">Purpose of Visit</label>
             <textarea name="visit_purpose" rows={2} value={formData.visit_purpose} onChange={(e) => onChange({ visit_purpose: e.target.value })} className={fieldClass(invalid('visit_purpose'))} />
             {fieldError('visit_purpose')}
           </div>

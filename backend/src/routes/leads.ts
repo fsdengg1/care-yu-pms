@@ -50,6 +50,7 @@ import {
   LeadValidationError,
   LeadWorkflowError,
   leadOwnerId,
+  normalizeLeadDescriptionFields,
   PM_REVIEW_STATUSES,
   sanitizeLeadPatch,
   validateLeadPayload,
@@ -323,7 +324,9 @@ router.post('/', requireAuth, requirePermission('create:lead'), async (req: Auth
     return res.status(403).json({ message: 'Status cannot be set directly. Use the workflow actions.' });
   }
   const wantsSubmit = body.status === 'SUBMITTED_TO_PM';
-  const validation = validateLeadPayload(body, { submit: wantsSubmit });
+  const descriptionFields = normalizeLeadDescriptionFields(body);
+  const normalizedBody = { ...body, ...descriptionFields };
+  const validation = validateLeadPayload(normalizedBody, { submit: wantsSubmit });
   if (validation.errors.length) {
     return res.status(400).json({ message: validation.errors[0].message, errors: validation.errors, warnings: validation.warnings });
   }
@@ -356,8 +359,8 @@ router.post('/', requireAuth, requirePermission('create:lead'), async (req: Auth
     customer_phone: body.customer_phone,
     customer_location: body.customer_location,
     plant_location: body.plant_location,
-    requirement_summary: body.requirement_summary || '',
-    detailed_requirement: body.detailed_requirement || '',
+    requirement_summary: descriptionFields.requirement_summary,
+    detailed_requirement: descriptionFields.detailed_requirement,
     application: body.application || '',
     industry_process: body.industry_process,
     current_process: body.current_process,
@@ -393,7 +396,7 @@ router.post('/', requireAuth, requirePermission('create:lead'), async (req: Auth
     competitor_information: body.competitor_information,
     customer_challenge: body.customer_challenge,
     required_solution: body.required_solution,
-    project_description: body.project_description,
+    project_description: descriptionFields.project_description,
     custom_fields: Array.isArray(body.custom_fields) ? body.custom_fields : [],
     visit_requirement: body.visit_requirement || 'NONE',
     visit_status: body.visit_requirement && body.visit_requirement !== 'NONE' ? 'PENDING_PM_ASSIGNMENT' : 'NOT_REQUIRED',
@@ -465,7 +468,9 @@ router.patch('/:id', requireAuth, requirePermission('edit:lead', 'create:lead'),
   if (!lead) return res.status(404).json({ message: 'Lead not found.' });
   if (!canEditProjectInput(user, lead)) return forbidden(res, 'Only draft or returned leads can be edited by the owner.');
   const body = sanitizeLeadPatch((req.body ?? {}) as Record<string, unknown>);
-  const validation = validateLeadPayload({ ...lead, ...body } as Record<string, unknown>, { submit: false });
+  const descriptionFields = normalizeLeadDescriptionFields(body, lead);
+  const mergedBody = { ...body, ...descriptionFields };
+  const validation = validateLeadPayload({ ...lead, ...mergedBody } as Record<string, unknown>, { submit: false });
   if (validation.errors.length) {
     return res.status(400).json({ message: validation.errors[0].message, errors: validation.errors, warnings: validation.warnings });
   }
@@ -476,7 +481,7 @@ router.patch('/:id', requireAuth, requirePermission('edit:lead', 'create:lead'),
       : lead.expected_value);
   const updated = saveLead({
     ...lead,
-    ...body,
+    ...mergedBody,
     id: lead.id,
     lead_number: lead.lead_number,
     created_by: lead.created_by,
