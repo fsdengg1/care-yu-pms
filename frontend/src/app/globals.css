@@ -1,8 +1,51 @@
 @import "tailwindcss";
 
+@custom-variant dark (&:where(.dark, .dark *));
+
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-border: var(--border);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+  --color-destructive: var(--destructive);
+  --color-destructive-foreground: var(--destructive-foreground);
+}
+
 @layer base {
   :root {
     color-scheme: dark;
+    --background: #0b0f17;
+    --foreground: #f1f5f9;
+    --card: #131b2a;
+    --card-foreground: #f1f5f9;
+    --muted: #1e293b;
+    --muted-foreground: #94a3b8;
+    --border: #1e293b;
+    --primary: #0891b2;
+    --primary-foreground: #ffffff;
+    --secondary: #1e293b;
+    --secondary-foreground: #f1f5f9;
+    --accent: #1e293b;
+    --accent-foreground: #f1f5f9;
+    --popover: #131b2a;
+    --popover-foreground: #f1f5f9;
+    --input: #1e293b;
+    --ring: #0891b2;
+    --destructive: #be123c;
+    --destructive-foreground: #ffffff;
     --bg-main: #0B0F17;
     --card-bg: #131B2A;
     --border-color: #1E293B;
@@ -11,6 +54,9 @@
     --lead-task-badge-bg: rgba(139, 92, 246, 0.22);
     --lead-task-badge-fg: #ddd6fe;
     --lead-task-accent: #c4b5fd;
+    --surface-inverse-fg: #ffffff;
+    --surface-inverse-fg-muted: rgba(255, 255, 255, 0.88);
+    --surface-inverse-fg-subtle: rgba(255, 255, 255, 0.75);
   }
 
   html.dark {
@@ -19,10 +65,28 @@
 
   html.light {
     color-scheme: light;
+    --background: #f4f7fb;
+    --foreground: #0b1f3a;
+    --card: #ffffff;
+    --card-foreground: #0b1f3a;
+    --muted: #f1f5f9;
+    --muted-foreground: #64748b;
+    --border: #e2e8f0;
+    --primary: #0b1f3a;
+    --primary-foreground: #ffffff;
+    --secondary: #e2e8f0;
+    --secondary-foreground: #0b1f3a;
+    --accent: #e2e8f0;
+    --accent-foreground: #0b1f3a;
+    --popover: #ffffff;
+    --popover-foreground: #0b1f3a;
+    --input: #e2e8f0;
+    --ring: #0891b2;
+    --destructive: #be123c;
+    --destructive-foreground: #ffffff;
   }
 
-  /* Native date/time popups follow the input's color-scheme, not the page chrome.
-     Keep them dark in dark mode even when they sit on the light Excel-style sheet. */
+  /* Native date/time popups follow the input's color-scheme, not the page chrome. */
   html.dark :is(input[type="date"], input[type="datetime-local"], input[type="time"], input[type="month"], input[type="week"]) {
     color-scheme: dark;
   }
@@ -32,7 +96,19 @@
   }
 
   html.light .theme-app {
-    --bg-main: #F4F7FB;
+    --background: #f4f7fb;
+    --foreground: #0b1f3a;
+    --card: #ffffff;
+    --card-foreground: #0b1f3a;
+    --muted: #f1f5f9;
+    --muted-foreground: #64748b;
+    --border: #e2e8f0;
+    --bg-main: #f4f7fb;
+    --card-bg: #ffffff;
+    --border-color: #e2e8f0;
+  }
+
+  html.light .theme-app .theme-inverted {
     --card-bg: #FFFFFF;
     --border-color: #E2E8F0;
     --lead-task-bg: rgba(109, 40, 217, 0.06);
@@ -124,43 +200,282 @@
   }
 }
 
-/* Pale text tokens used on inverted dark-theme cards must stay dark in light mode. */
-html.light .theme-app :is(.text-cyan-100, .text-cyan-100\/80) {
+/*
+ * Light UI islands (org management, white cards) always use a light palette,
+ * regardless of global theme. Colored hierarchy cards use surface-inverse.
+ */
+.surface-light {
+  --background: #f4f7fb;
+  --foreground: #0b1f3a;
+  --card: #ffffff;
+  --card-foreground: #0b1f3a;
+  --muted: #f1f5f9;
+  --muted-foreground: #64748b;
+  --border: #e2e8f0;
+  --primary: #0b1f3a;
+  --primary-foreground: #ffffff;
+  --secondary: #e2e8f0;
+  --secondary-foreground: #0b1f3a;
+
+  --color-slate-50: #f8fafc;
+  --color-slate-100: #f1f5f9;
+  --color-slate-200: #e2e8f0;
+  --color-slate-300: #cbd5e1;
+  --color-slate-400: #94a3b8;
+  --color-slate-500: #64748b;
+  --color-slate-600: #475569;
+  --color-slate-700: #334155;
+  --color-slate-800: #1e293b;
+  --color-slate-900: #0f172a;
+  --color-slate-950: #020617;
+
+  --color-cyan-50: #ecfeff;
+  --color-cyan-100: #cffafe;
+  --color-cyan-200: #a5f3fc;
+  --color-cyan-300: #67e8f9;
+  --color-cyan-400: #22d3ee;
+  --color-cyan-500: #06b6d4;
+  --color-cyan-600: #0891b2;
+  --color-cyan-700: #0e7490;
+  --color-cyan-800: #155e75;
+  --color-cyan-900: #164e63;
+  --color-cyan-950: #083344;
+
+  --color-rose-200: #fecdd3;
+  --color-rose-300: #fda4af;
+  --color-rose-400: #fb7185;
+  --color-rose-800: #9f1239;
+  --color-rose-900: #881337;
+  --color-rose-950: #4c0519;
+
+  --color-amber-200: #fde68a;
+  --color-amber-300: #fcd34d;
+  --color-amber-400: #fbbf24;
+  --color-amber-800: #92400e;
+  --color-amber-900: #78350f;
+  --color-amber-950: #451a03;
+
+  --color-emerald-200: #a7f3d0;
+  --color-emerald-300: #6ee7b7;
+  --color-emerald-400: #34d399;
+  --color-emerald-500: #10b981;
+  --color-emerald-800: #065f46;
+  --color-emerald-900: #064e3b;
+  --color-emerald-950: #022c22;
+
+  --color-blue-200: #bfdbfe;
+  --color-blue-300: #93c5fd;
+  --color-blue-400: #60a5fa;
+  --color-blue-800: #1e40af;
+  --color-blue-900: #1e3a8a;
+  --color-blue-950: #172554;
+
+  --color-indigo-200: #c7d2fe;
+  --color-indigo-300: #a5b4fc;
+  --color-indigo-400: #818cf8;
+  --color-indigo-800: #3730a3;
+  --color-indigo-900: #312e81;
+  --color-indigo-950: #1e1b4b;
+
+  --color-orange-200: #fed7aa;
+  --color-orange-300: #fdba74;
+  --color-orange-400: #fb923c;
+  --color-orange-800: #9a3412;
+  --color-orange-900: #7c2d12;
+  --color-orange-950: #431407;
+
+  --color-violet-200: #ddd6fe;
+  --color-violet-300: #c4b5fd;
+  --color-violet-400: #a78bfa;
+  --color-violet-800: #5b21b6;
+  --color-violet-900: #4c1d95;
+  --color-violet-950: #2e1065;
+
+  --color-purple-200: #e9d5ff;
+  --color-purple-300: #d8b4fe;
+
+  --color-teal-100: #ccfbf1;
+  --color-teal-200: #99f6e4;
+
+  --color-sky-200: #bae6fd;
+  --color-sky-300: #7dd3fc;
+  --color-sky-400: #38bdf8;
+  --color-sky-800: #075985;
+  --color-sky-900: #0c4a6e;
+  --color-sky-950: #082f49;
+}
+
+/* Colored dark/brand cards on the inverted light theme need standard text palette tokens. */
+html.light .theme-app .theme-inverted .surface-inverse {
+  --color-slate-50: #f8fafc;
+  --color-slate-100: #f1f5f9;
+  --color-slate-200: #e2e8f0;
+  --color-slate-300: #cbd5e1;
+  --color-slate-400: #94a3b8;
+  --color-slate-500: #64748b;
+  --color-slate-600: #475569;
+  --color-slate-700: #334155;
+  --color-slate-800: #1e293b;
+  --color-slate-900: #0f172a;
+  --color-slate-950: #020617;
+
+  --color-cyan-50: #ecfeff;
+  --color-cyan-100: #cffafe;
+  --color-cyan-200: #a5f3fc;
+  --color-cyan-300: #67e8f9;
+  --color-cyan-400: #22d3ee;
+  --color-cyan-500: #06b6d4;
+  --color-cyan-600: #0891b2;
+  --color-cyan-700: #0e7490;
+  --color-cyan-800: #155e75;
+  --color-cyan-900: #164e63;
+  --color-cyan-950: #083344;
+
+  --color-rose-200: #fecdd3;
+  --color-rose-300: #fda4af;
+  --color-rose-400: #fb7185;
+  --color-rose-800: #9f1239;
+  --color-rose-900: #881337;
+  --color-rose-950: #4c0519;
+
+  --color-amber-200: #fde68a;
+  --color-amber-300: #fcd34d;
+  --color-amber-400: #fbbf24;
+  --color-amber-800: #92400e;
+  --color-amber-900: #78350f;
+  --color-amber-950: #451a03;
+
+  --color-emerald-200: #a7f3d0;
+  --color-emerald-300: #6ee7b7;
+  --color-emerald-400: #34d399;
+  --color-emerald-500: #10b981;
+  --color-emerald-800: #065f46;
+  --color-emerald-900: #064e3b;
+  --color-emerald-950: #022c22;
+
+  --color-blue-200: #bfdbfe;
+  --color-blue-300: #93c5fd;
+  --color-blue-400: #60a5fa;
+  --color-blue-800: #1e40af;
+  --color-blue-900: #1e3a8a;
+  --color-blue-950: #172554;
+
+  --color-indigo-200: #c7d2fe;
+  --color-indigo-300: #a5b4fc;
+  --color-indigo-400: #818cf8;
+  --color-indigo-800: #3730a3;
+  --color-indigo-900: #312e81;
+  --color-indigo-950: #1e1b4b;
+
+  --color-orange-200: #fed7aa;
+  --color-orange-300: #fdba74;
+  --color-orange-400: #fb923c;
+  --color-orange-800: #9a3412;
+  --color-orange-900: #7c2d12;
+  --color-orange-950: #431407;
+
+  --color-violet-200: #ddd6fe;
+  --color-violet-300: #c4b5fd;
+  --color-violet-400: #a78bfa;
+  --color-violet-800: #5b21b6;
+  --color-violet-900: #4c1d95;
+  --color-violet-950: #2e1065;
+
+  --color-purple-200: #e9d5ff;
+  --color-purple-300: #d8b4fe;
+
+  --color-teal-100: #ccfbf1;
+  --color-teal-200: #99f6e4;
+
+  --color-sky-200: #bae6fd;
+  --color-sky-300: #7dd3fc;
+  --color-sky-400: #38bdf8;
+  --color-sky-800: #075985;
+  --color-sky-900: #0c4a6e;
+  --color-sky-950: #082f49;
+}
+
+.surface-inverse {
+  color: var(--surface-inverse-fg);
+}
+
+.surface-inverse .text-role,
+.surface-inverse .text-on-brand-muted {
+  color: var(--surface-inverse-fg-muted);
+}
+
+.surface-inverse .text-on-brand-subtle {
+  color: var(--surface-inverse-fg-subtle);
+}
+
+.theme-app .app-chrome {
+  --color-slate-50: #f8fafc;
+  --color-slate-100: #f1f5f9;
+  --color-slate-200: #e2e8f0;
+  --color-slate-300: #cbd5e1;
+  --color-slate-400: #94a3b8;
+  --color-slate-500: #64748b;
+  --color-slate-600: #475569;
+  --color-slate-700: #334155;
+  --color-slate-800: #1e293b;
+  --color-slate-900: #0f172a;
+  --color-slate-950: #020617;
+  --color-cyan-300: #67e8f9;
+  --color-cyan-400: #22d3ee;
+  --color-cyan-950: #083344;
+}
+
+/* Modal/drawer scrims must stay dark in both themes (not palette-inverted). */
+.theme-app .modal-scrim {
+  background-color: rgba(15, 23, 42, 0.72);
+}
+
+.theme-app .modal-scrim-light {
+  background-color: rgba(15, 23, 42, 0.45);
+}
+
+/* Pale text on dark dashboard cards: darken in light mode unless on a colored surface. */
+html.light .theme-app .theme-inverted :is(.text-cyan-100, .text-cyan-100\/80):not(:is(.surface-inverse *)) {
   color: #155e75;
 }
-html.light .theme-app .text-emerald-100 {
+html.light .theme-app .theme-inverted .text-emerald-100:not(:is(.surface-inverse *)) {
   color: #047857;
 }
-html.light .theme-app .text-rose-100 {
+html.light .theme-app .theme-inverted .text-rose-100:not(:is(.surface-inverse *)) {
   color: #be123c;
 }
-html.light .theme-app .text-amber-100 {
+html.light .theme-app .theme-inverted .text-amber-100:not(:is(.surface-inverse *)) {
   color: #b45309;
 }
-html.light .theme-app .text-indigo-100 {
+html.light .theme-app .theme-inverted .text-indigo-100:not(:is(.surface-inverse *)) {
   color: #4338ca;
 }
-html.light .theme-app .text-blue-100 {
+html.light .theme-app .theme-inverted .text-blue-100:not(:is(.surface-inverse *)) {
   color: #1d4ed8;
 }
-html.light .theme-app .text-violet-100 {
+html.light .theme-app .theme-inverted .text-violet-100:not(:is(.surface-inverse *)) {
   color: #6d28d9;
 }
 
 /* Light-first success/error copy uses *-800 as text; keep it dark while borders stay tinted. */
-html.light .theme-app .text-emerald-800 {
+html.light .theme-app .surface-light .text-emerald-800,
+html.light .theme-app .theme-inverted :not(.surface-inverse) .text-emerald-800 {
   color: #065f46;
 }
-html.light .theme-app .text-rose-800 {
+html.light .theme-app .surface-light .text-rose-800,
+html.light .theme-app .theme-inverted :not(.surface-inverse) .text-rose-800 {
   color: #9f1239;
 }
-html.light .theme-app .text-amber-800 {
+html.light .theme-app .surface-light .text-amber-800,
+html.light .theme-app .theme-inverted :not(.surface-inverse) .text-amber-800 {
   color: #92400e;
 }
-html.light .theme-app .text-cyan-800 {
+html.light .theme-app .surface-light .text-cyan-800,
+html.light .theme-app .theme-inverted :not(.surface-inverse) .text-cyan-800 {
   color: #155e75;
 }
-html.light .theme-app .text-blue-800 {
+html.light .theme-app .surface-light .text-blue-800,
+html.light .theme-app .theme-inverted :not(.surface-inverse) .text-blue-800 {
   color: #1e40af;
 }
 

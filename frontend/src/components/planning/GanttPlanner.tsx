@@ -808,7 +808,7 @@ function IssueList({
 
 function Modal({ title, onClose, children }: { title: string; onClose: () => void; children: React.ReactNode }) {
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/70 p-4">
+    <div className="modal-scrim fixed inset-0 z-50 flex items-center justify-center p-4">
       <div className="max-h-[90vh] w-full max-w-xl overflow-y-auto rounded-xl border border-slate-800 bg-slate-900 p-5">
         <div className="mb-4 flex items-center justify-between">
           <h2 className="text-sm font-bold text-slate-100">{title}</h2>

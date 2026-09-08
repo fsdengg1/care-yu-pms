@@ -15,6 +15,9 @@ export interface DailyStatusSubtask {
   deadlineIso?: string;
   assignedTo: string;
   assignedToId?: string;
+  hoursWorked?: number;
+  loggedHours?: string;
+  startDate?: string;
   parentTaskId?: string;
 }
 
@@ -57,6 +60,12 @@ export interface DailyStatusRow {
   createdByName?: string;
   canEdit?: boolean;
   canAccept?: boolean;
+  eveningSubmitted?: boolean;
+  delayReasonRequired?: boolean;
+  rowKind?: 'task' | 'leave' | 'permission';
+  attendanceLabel?: string;
+  morningProgressPercent?: number;
+  eveningProgressPercent?: number;
 }
 
 export interface DailyStatusKpis {
@@ -215,15 +224,34 @@ export interface CompareItem {
   eveningUpdate?: string;
   morningStatus?: string;
   eveningStatus?: string;
+  morningProgressPercent?: number;
+  eveningProgressPercent?: number;
+  morningHours?: string;
+  eveningHours?: string;
+  eveningSubmitted?: boolean;
   morningDeadline?: string;
   eveningDeadline?: string;
   morningDependencies?: string;
   eveningDependencies?: string;
 }
 
+export const DELAY_REASON_OPTIONS = [
+  'Customer dependency',
+  'Internal dependency',
+  'Development issue',
+  'Testing issue',
+  'Waiting for approval',
+  'Waiting for customer input',
+  'Resource issue',
+  'Technical issue',
+  'Other',
+] as const;
+
 export function inferDefaultEmailPeriod(now = new Date()): SnapshotPeriod {
-  // Morning until 4:00 PM; Evening from 4:00 PM onward (local time).
-  return now.getHours() >= 16 ? 'evening' : 'morning';
+  const hour = Number(
+    new Intl.DateTimeFormat('en-GB', { timeZone: 'Asia/Kolkata', hour: '2-digit', hourCycle: 'h23' }).format(now)
+  );
+  return hour >= 11 ? 'evening' : 'morning';
 }
 
 /** Calendar date in Asia/Kolkata as YYYY-MM-DD. */

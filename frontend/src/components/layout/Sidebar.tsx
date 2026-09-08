@@ -28,6 +28,7 @@ import {
   Mail,
   Menu,
   BarChart3,
+  CalendarClock,
 } from 'lucide-react';
 
 interface SidebarProps {
@@ -53,6 +54,7 @@ const ICON_MAP: Record<string, React.ReactNode> = {
   Settings: <Settings className="h-4 w-4 shrink-0" />,
   Mail: <Mail className="h-4 w-4 shrink-0" />,
   BarChart3: <BarChart3 className="h-4 w-4 shrink-0" />,
+  CalendarClock: <CalendarClock className="h-4 w-4 shrink-0" />,
 };
 
 export default function Sidebar({ user }: SidebarProps) {
@@ -73,7 +75,7 @@ export default function Sidebar({ user }: SidebarProps) {
   return (
     <aside
       className={[
-        'app-sidebar sticky top-0 flex h-screen shrink-0 flex-col border-r border-slate-800 bg-slate-900',
+        'app-sidebar app-chrome sticky top-0 flex h-screen shrink-0 flex-col border-r border-slate-800 bg-slate-900',
         isDesktop && collapsed ? 'app-sidebar--collapsed' : 'app-sidebar--expanded',
         !isDesktop && mobileOpen ? 'app-sidebar--mobile-open' : '',
         !isDesktop ? 'app-sidebar--mobile' : '',
@@ -132,7 +134,11 @@ export default function Sidebar({ user }: SidebarProps) {
                 {cat.label}
               </div>
               {items.map((item) => {
-                const isActive = pathname === item.href || pathname.startsWith(`${item.href}/`);
+                const isActive =
+                  item.href === '/dashboard'
+                    ? pathname === '/dashboard' ||
+                      (pathname.startsWith('/dashboard/') && !pathname.startsWith('/dashboard/team'))
+                    : pathname === item.href || pathname.startsWith(`${item.href}/`);
                 return (
                   <Link
                     key={item.href}

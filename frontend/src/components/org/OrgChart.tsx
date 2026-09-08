@@ -106,9 +106,9 @@ export default function OrgChart({
   ];
 
   return (
-    <div className="rounded-2xl border border-slate-200 bg-white shadow-sm overflow-hidden">
+    <div className="surface-light overflow-hidden rounded-2xl border border-border bg-card shadow-sm">
       {/* 1. Header Banner */}
-      <div className="bg-[#0B1F3A] py-2.5 px-4 text-center text-xs sm:text-sm font-bold uppercase tracking-[0.14em] text-white">
+      <div className="surface-inverse bg-[#0B1F3A] py-2.5 px-4 text-center text-xs sm:text-sm font-bold uppercase tracking-[0.14em] text-white">
         1. ORGANIZATIONAL HIERARCHY & ACCESS SCOPE
       </div>
 
@@ -119,15 +119,15 @@ export default function OrgChart({
           <button
             type="button"
             onClick={() => ceoUser && onSelectPerson(ceoUser)}
-            className={`group relative z-10 flex w-56 flex-col items-center rounded-lg bg-[#0B1F3A] px-3 py-2.5 text-center text-white shadow-md transition hover:scale-[1.02] ${
+            className={`surface-inverse group relative z-10 flex w-56 flex-col items-center rounded-lg bg-[#0B1F3A] px-3 py-2.5 text-center text-white shadow-md transition hover:scale-[1.02] ${
               selectedId === ceoUser?.id ? 'ring-2 ring-amber-400 ring-offset-2' : ''
             }`}
           >
             <div className="text-xs sm:text-sm font-bold leading-tight">
               {ceoUser ? chartDisplayName(ceoUser) : 'Bernard Hamilton'}
             </div>
-            <div className="mt-0.5 text-[11px] font-semibold text-slate-200">CEO</div>
-            <div className="mt-0.5 text-[10px] font-medium text-slate-300">(Access: All Dashboards)</div>
+            <div className="text-on-brand-muted mt-0.5 text-[11px] font-semibold">CEO</div>
+            <div className="text-on-brand-subtle mt-0.5 text-[10px] font-medium">(Access: All Dashboards)</div>
           </button>
 
           {/* Stem down from CEO to Executive Row Connector */}
@@ -147,15 +147,15 @@ export default function OrgChart({
                 <button
                   type="button"
                   onClick={() => ctoUser && onSelectPerson(ctoUser)}
-                  className={`w-full rounded-lg bg-[#0D5C4D] px-2.5 py-2.5 text-center text-white shadow-md transition hover:scale-[1.02] ${
+                  className={`surface-inverse w-full rounded-lg bg-[#0D5C4D] px-2.5 py-2.5 text-center text-white shadow-md transition hover:scale-[1.02] ${
                     selectedId === ctoUser?.id ? 'ring-2 ring-amber-400 ring-offset-2' : ''
                   }`}
                 >
                   <div className="text-xs sm:text-sm font-bold leading-tight">
                     {ctoUser ? chartDisplayName(ctoUser) : 'Raja'}
                   </div>
-                  <div className="mt-0.5 text-[11px] font-semibold text-teal-100">CTO</div>
-                  <div className="mt-0.5 text-[10px] font-medium text-teal-100/90">
+                  <div className="text-on-brand-muted mt-0.5 text-[11px] font-semibold">CTO</div>
+                  <div className="text-on-brand-subtle mt-0.5 text-[10px] font-medium">
                     (Access: Software Team Only)
                   </div>
                 </button>
@@ -167,15 +167,15 @@ export default function OrgChart({
                 <button
                   type="button"
                   onClick={() => bhUser && onSelectPerson(bhUser)}
-                  className={`w-full rounded-lg bg-[#581C87] px-2.5 py-2.5 text-center text-white shadow-md transition hover:scale-[1.02] ${
+                  className={`surface-inverse w-full rounded-lg bg-[#581C87] px-2.5 py-2.5 text-center text-white shadow-md transition hover:scale-[1.02] ${
                     selectedId === bhUser?.id ? 'ring-2 ring-amber-400 ring-offset-2' : ''
                   }`}
                 >
                   <div className="text-xs sm:text-sm font-bold leading-tight">
                     {bhUser ? chartDisplayName(bhUser) : 'Sharadha Patil'}
                   </div>
-                  <div className="mt-0.5 text-[11px] font-semibold text-purple-200">Business Head</div>
-                  <div className="mt-0.5 text-[10px] font-medium text-purple-200/90">
+                  <div className="text-on-brand-muted mt-0.5 text-[11px] font-semibold">Business Head</div>
+                  <div className="text-on-brand-subtle mt-0.5 text-[10px] font-medium">
                     (Access: PM + 5 Teams)
                   </div>
                 </button>
@@ -187,17 +187,17 @@ export default function OrgChart({
                 <button
                   type="button"
                   onClick={() => edUser && onSelectPerson(edUser)}
-                  className={`w-full rounded-lg bg-[#1E3A8A] px-2.5 py-2.5 text-center text-white shadow-md transition hover:scale-[1.02] ${
+                  className={`surface-inverse w-full rounded-lg bg-[#1E3A8A] px-2.5 py-2.5 text-center text-white shadow-md transition hover:scale-[1.02] ${
                     selectedId === edUser?.id ? 'ring-2 ring-amber-400 ring-offset-2' : ''
                   }`}
                 >
                   <div className="text-xs sm:text-sm font-bold leading-tight">
                     {edUser ? chartDisplayName(edUser) : 'Sabarigiri'}
                   </div>
-                  <div className="mt-0.5 text-[11px] font-semibold text-blue-200">
+                  <div className="text-on-brand-muted mt-0.5 text-[11px] font-semibold">
                     Engineering Director
                   </div>
-                  <div className="mt-0.5 text-[10px] font-medium text-blue-200/90">
+                  <div className="text-on-brand-subtle mt-0.5 text-[10px] font-medium">
                     (Access: PM + 5 Teams)
                   </div>
                 </button>
@@ -211,15 +211,15 @@ export default function OrgChart({
             <button
               type="button"
               onClick={() => pmUser && onSelectPerson(pmUser)}
-              className={`w-56 rounded-lg bg-[#0B1F3A] px-3 py-2.5 text-center text-white shadow-md transition hover:scale-[1.02] ${
+              className={`surface-inverse w-56 rounded-lg bg-[#0B1F3A] px-3 py-2.5 text-center text-white shadow-md transition hover:scale-[1.02] ${
                 selectedId === pmUser?.id ? 'ring-2 ring-amber-400 ring-offset-2' : ''
               }`}
             >
               <div className="text-xs sm:text-sm font-bold leading-tight">
                 {pmUser ? chartDisplayName(pmUser) : 'Arivan'}
               </div>
-              <div className="mt-0.5 text-[11px] font-semibold text-slate-200">Project Manager</div>
-              <div className="mt-0.5 text-[10px] font-medium text-slate-300">(Access: 5 Teams)</div>
+              <div className="text-on-brand-muted mt-0.5 text-[11px] font-semibold">Project Manager</div>
+              <div className="text-on-brand-subtle mt-0.5 text-[10px] font-medium">(Access: 5 Teams)</div>
             </button>
           </div>
 
@@ -255,13 +255,13 @@ export default function OrgChart({
                   <button
                     type="button"
                     onClick={() => item.team && onSelectTeam(item.team)}
-                    className={`flex w-full flex-col overflow-hidden rounded-lg border border-slate-200 shadow-sm transition hover:scale-[1.02] hover:shadow-md ${
+                    className={`flex w-full flex-col overflow-hidden rounded-lg border border-border shadow-sm transition hover:scale-[1.02] hover:shadow-md ${
                       selectedId === item.team?.id ? 'ring-2 ring-amber-400 ring-offset-2' : ''
                     }`}
                   >
                     {/* Top Colored Part */}
                     <div
-                      className={`flex min-h-[82px] flex-col items-center justify-center p-2 text-white ${item.bgClass}`}
+                      className={`surface-inverse flex min-h-[82px] flex-col items-center justify-center p-2 text-white ${item.bgClass}`}
                     >
                       <div className="mb-1 flex h-7 w-7 items-center justify-center rounded-md bg-white/15">
                         {item.icon}
@@ -271,7 +271,7 @@ export default function OrgChart({
                       </div>
                     </div>
                     {/* White Footer Strip */}
-                    <div className="border-t border-slate-200 bg-white py-1.5 px-1 text-center">
+                    <div className="border-t border-border bg-card py-1.5 px-1 text-center">
                       <span className="text-[9px] sm:text-[10px] font-semibold text-slate-700">
                         Team Lead / Members
                       </span>
@@ -284,35 +284,35 @@ export default function OrgChart({
 
           {/* Bottom ACCESS SUMMARY Container */}
           <div className="mt-8 w-full max-w-[900px] rounded-lg border border-dashed border-slate-400 bg-slate-50/50 p-4 text-slate-800">
-            <div className="text-[11px] font-extrabold uppercase tracking-wider text-[#0B1F3A]">
+            <div className="text-[11px] font-extrabold uppercase tracking-wider text-foreground">
               ACCESS SUMMARY
             </div>
             <div className="mt-2.5 grid grid-cols-1 md:grid-cols-2 gap-x-8 gap-y-1.5 text-[11px] font-medium leading-snug text-slate-700">
               <div className="space-y-1.5">
                 <div className="flex items-start gap-2">
-                  <span className="font-bold text-slate-900">•</span>
+                  <span className="font-bold text-foreground">•</span>
                   <span>
-                    <strong className="font-bold text-slate-900">CEO</strong> - Monitor All Dashboards
+                    <strong className="font-bold text-foreground">CEO</strong> - Monitor All Dashboards
                   </span>
                 </div>
                 <div className="flex items-start gap-2">
-                  <span className="font-bold text-slate-900">•</span>
+                  <span className="font-bold text-foreground">•</span>
                   <span>
-                    <strong className="font-bold text-slate-900">CTO</strong> - Monitor Software Team Only
+                    <strong className="font-bold text-foreground">CTO</strong> - Monitor Software Team Only
                   </span>
                 </div>
               </div>
               <div className="space-y-1.5">
                 <div className="flex items-start gap-2">
-                  <span className="font-bold text-slate-900">•</span>
+                  <span className="font-bold text-foreground">•</span>
                   <span>
-                    <strong className="font-bold text-slate-900">Business Head &amp; Engineering Director</strong> - Monitor PM + 5 Teams
+                    <strong className="font-bold text-foreground">Business Head &amp; Engineering Director</strong> - Monitor PM + 5 Teams
                   </span>
                 </div>
                 <div className="flex items-start gap-2">
-                  <span className="font-bold text-slate-900">•</span>
+                  <span className="font-bold text-foreground">•</span>
                   <span>
-                    <strong className="font-bold text-slate-900">Project Manager</strong> - Monitor &amp; Manage 5 Teams
+                    <strong className="font-bold text-foreground">Project Manager</strong> - Monitor &amp; Manage 5 Teams
                   </span>
                 </div>
               </div>

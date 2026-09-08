@@ -2,7 +2,6 @@
 
 import React, { useMemo } from 'react';
 import { CompareItem, progressForSheetStatus, sheetStatusClass } from '@/lib/dailyStatus';
-import LoggedHoursProgressCell from './LoggedHoursProgressCell';
 
 function delayClass(value?: string) {
   const text = (value || '').toLowerCase();
@@ -73,13 +72,13 @@ export default function CompareView({
           <colgroup>
             <col style={{ width: '9%' }} />
             <col style={{ width: '11%' }} />
-            <col style={{ width: '24%' }} />
-            <col style={{ width: '24%' }} />
-            <col style={{ width: '8%' }} />
+            <col style={{ width: '22%' }} />
+            <col style={{ width: '10%' }} />
+            <col style={{ width: '10%' }} />
+            <col style={{ width: '9%' }} />
             <col style={{ width: '7%' }} />
             <col style={{ width: '7%' }} />
             <col style={{ width: '7%' }} />
-            <col style={{ width: '8%' }} />
             <col style={{ width: '8%' }} />
           </colgroup>
           <thead>
@@ -87,12 +86,13 @@ export default function CompareView({
               <th>Person</th>
               <th>Project</th>
               <th>Task Description</th>
-              <th>Current Updates</th>
-              <th>Status</th>
+              <th>Status (AM → PM)</th>
+              <th>Progress (AM → PM)</th>
+              <th>Hours (AM → PM)</th>
+              <th>Evening</th>
               <th>Start Date</th>
               <th>Task Deadline</th>
               <th>On Time / Delay</th>
-              <th>Logged Hours</th>
               <th>Reason For Delay</th>
             </tr>
           </thead>
@@ -101,7 +101,6 @@ export default function CompareView({
               group.rows.map((item, index) => {
                 const progress = progressForSheetStatus(item.status, item.progressPercent);
                 const taskDescText = item.taskDescription || '—';
-                const currentText = item.currentUpdate || 'No Evening Update Submitted';
                 return (
                   <tr key={item.id}>
                     {index === 0 && (
@@ -115,11 +114,27 @@ export default function CompareView({
                     <td className="task-desc-cell">
                       <span className="sheet-text sheet-task-field">{taskDescText}</span>
                     </td>
-                    <td className="task-desc-cell">
-                      <span className="sheet-text sheet-task-field text-[#0f172a] font-medium">{currentText}</span>
+                    <td className="status-cell">
+                      <div className="flex flex-col items-center gap-1">
+                        <StatusPill value={item.morningStatus || item.status} />
+                        <span className="text-[10px] text-[#94a3b8]">→</span>
+                        <StatusPill value={item.eveningStatus || item.status} />
+                      </div>
+                    </td>
+                    <td className="hours-cell">
+                      <div className="text-[11px] font-semibold text-[#0f172a]">
+                        {item.morningProgressPercent ?? '—'}% → {item.eveningProgressPercent ?? progress}%
+                      </div>
+                    </td>
+                    <td className="hours-cell">
+                      <div className="text-[11px] font-semibold text-[#0f172a]">
+                        {item.morningHours || '—'} → {item.eveningHours || item.loggedHours || '—'}
+                      </div>
                     </td>
                     <td className="status-cell">
-                      <StatusPill value={item.status} />
+                      <span className={`inline-flex rounded-md px-1.5 py-0.5 text-[10px] font-bold ${item.eveningSubmitted ? 'bg-emerald-100 text-emerald-800' : 'bg-slate-200 text-slate-700'}`}>
+                        {item.eveningSubmitted ? 'Submitted' : 'Not submitted'}
+                      </span>
                     </td>
                     <td className="status-cell">
                       <span className="sheet-text">{item.startDate || '—'}</span>
@@ -128,14 +143,6 @@ export default function CompareView({
                       <span className="sheet-text">{item.taskDeadline || '—'}</span>
                     </td>
                     <td className={`status-cell ${delayClass(item.onTimeDelay)}`}>{item.onTimeDelay || '—'}</td>
-                    <td className="hours-cell">
-                      <LoggedHoursProgressCell
-                        status={item.status}
-                        progressPercent={progress}
-                        hoursWorked={item.hoursWorked}
-                        loggedHours={item.loggedHours}
-                      />
-                    </td>
                     <td className="delay-cell">
                       <span className="sheet-text">{item.reasonForDelay || '—'}</span>
                     </td>

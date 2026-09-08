@@ -52,6 +52,15 @@ export const DailyStatusApi = {
       people: DailyStatusPerson[];
       projects: Array<{ id: string; name: string; code: string }>;
       date?: string;
+      period?: SnapshotPeriod;
+      phase?: { morningLocked: boolean; eveningOpen: boolean; timezone: string; lockHour: number };
+      attendance?: Array<{
+        personId: string;
+        person: string;
+        onLeave?: boolean;
+        halfDay?: string;
+        permission?: { fromTime?: string; toTime?: string; reason?: string };
+      }>;
     }>(`/api/daily-status/sheet${query}`);
     if (!result.ok) {
       return {

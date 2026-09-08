@@ -318,7 +318,7 @@ export default function UserManagementPage() {
       </div>
 
       {modal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/80 p-4 backdrop-blur-sm">
+        <div className="modal-scrim fixed inset-0 z-50 flex items-center justify-center p-4 backdrop-blur-sm">
           <div className="w-full max-w-lg space-y-4 rounded-xl border border-slate-800 bg-slate-900 p-6 shadow-2xl">
             <div className="flex items-center justify-between border-b border-slate-800 pb-3">
               <h3 className="flex items-center gap-2 text-base font-bold text-slate-100">
@@ -422,7 +422,7 @@ export default function UserManagementPage() {
       )}
 
       {deleting && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/80 p-4 backdrop-blur-sm">
+        <div className="modal-scrim fixed inset-0 z-50 flex items-center justify-center p-4 backdrop-blur-sm">
           <div className="w-full max-w-md space-y-4 rounded-xl border border-slate-800 bg-slate-900 p-6">
             <h3 className="text-base font-bold text-slate-100">Delete user</h3>
             <p className="text-slate-400">

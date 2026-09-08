@@ -7,6 +7,7 @@
     "build": "next build",
     "start": "next start",
     "lint": "eslint",
+    "check:theme": "node scripts/check-theme-contrast.mjs",
     "demo:record": "node scripts/record-demo.mjs"
   },
   "dependencies": {

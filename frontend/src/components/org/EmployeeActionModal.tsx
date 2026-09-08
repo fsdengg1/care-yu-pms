@@ -96,9 +96,9 @@ export default function EmployeeActionModal({
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-[#0B1F3A]/50 p-4 backdrop-blur-sm">
-      <div className="w-full max-w-lg rounded-2xl border border-slate-200 bg-white shadow-2xl">
-        <div className="flex items-center justify-between border-b border-slate-100 px-5 py-4">
-          <h3 className="flex items-center gap-2 text-base font-bold text-[#0B1F3A]">
+      <div className="surface-light w-full max-w-lg rounded-2xl border border-border bg-card shadow-2xl">
+        <div className="flex items-center justify-between border-b border-border px-5 py-4">
+          <h3 className="flex items-center gap-2 text-base font-bold text-card-foreground">
             {mode === 'add' ? <UserPlus className="h-4 w-4 text-blue-600" /> : <Pencil className="h-4 w-4 text-blue-600" />}
             {TITLES[mode]}
           </h3>

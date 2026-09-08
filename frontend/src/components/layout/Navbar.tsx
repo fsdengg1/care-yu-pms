@@ -46,7 +46,7 @@ export default function Navbar({ user }: NavbarProps) {
   }, []);
 
   return (
-    <header className="h-14 bg-slate-900/90 backdrop-blur-md border-b border-slate-800 px-4 sm:px-6 flex items-center justify-between sticky top-0 z-40">
+    <header className="app-chrome h-14 bg-slate-900/90 backdrop-blur-md border-b border-slate-800 px-4 sm:px-6 flex items-center justify-between sticky top-0 z-40">
       <div className="flex items-center gap-3">
         {!isDesktop && (
           <button

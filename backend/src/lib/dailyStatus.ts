@@ -1,10 +1,21 @@
 import { store } from '../store/db.js';
-import { env } from '../config/env.js';
 import { DailyUpdate, Project, Task, User } from '../types.js';
 import { canViewProject } from './dailyUpdates.js';
 import { canAcceptAssignedTask, canMutateWorkTask, isLeadBasedTask } from './workTasks.js';
 import { formatEmployeeDisplayName, dedupeByStableId, personGivenKey } from './people.js';
 import { sendEmail } from './email.js';
+import {
+  DELAY_REASON_OPTIONS,
+  clockInAppTimezone,
+  dateInAppTimezone,
+  delayReasonRequired,
+  isEveningPhaseOpen,
+  isMorningPhaseLocked,
+  isOverdueOnDate,
+  normalizeDelayReason,
+} from './workCalendar.js';
+export { dateInAppTimezone } from './workCalendar.js';
+import { attendanceForUsers, fullDayLeaveOnDate, leaveNonWorkingDays } from './leaveRequests.js';
 
 export type DailySheetStatus = 'Yet to Start' | 'In Progress' | 'Waiting' | 'Completed' | 'Hold';
 export type SnapshotPeriod = 'morning' | 'evening';
@@ -19,6 +30,9 @@ export interface DailyStatusSubtask {
   deadlineIso?: string;
   assignedTo: string;
   assignedToId?: string;
+  hoursWorked: number;
+  loggedHours?: string;
+  startDate?: string;
   parentTaskId?: string;
 }
 
@@ -65,6 +79,12 @@ export interface DailyStatusRow {
   createdByName?: string;
   canEdit?: boolean;
   canAccept?: boolean;
+  eveningSubmitted?: boolean;
+  delayReasonRequired?: boolean;
+  rowKind?: 'task' | 'leave' | 'permission';
+  attendanceLabel?: string;
+  morningProgressPercent?: number;
+  eveningProgressPercent?: number;
 }
 
 export interface DailyStatusKpis {
@@ -142,16 +162,6 @@ function periodRowsAvailable(date: string, period: SnapshotPeriod): boolean {
   return Boolean(rows && rows.length);
 }
 
-/** Calendar date in app timezone (default Asia/Kolkata) as YYYY-MM-DD. */
-export function dateInAppTimezone(when = new Date(), timezone = env.appTimezone || 'Asia/Kolkata'): string {
-  return new Intl.DateTimeFormat('en-CA', {
-    timeZone: timezone,
-    year: 'numeric',
-    month: '2-digit',
-    day: '2-digit',
-  }).format(when);
-}
-
 export type DeadlineTone = 'completed' | 'hold' | 'delay-1' | 'delay-2plus' | 'normal';
 
 function parseSheetDate(value?: string): string | null {
@@ -192,16 +202,26 @@ function deadlineInlineStyle(tone: DeadlineTone): string {
 }
 
 function isOverdue(task: Task, asOf = todayIso()): boolean {
-  if (!task.due_date) return false;
-  if (task.status === 'DONE' || task.status === ('HOLD' as Task['status'])) return false;
-  return task.due_date < asOf;
+  const leaveDays = task.assigned_to_id ? leaveNonWorkingDays(task.assigned_to_id, task.due_date || asOf, asOf) : new Set<string>();
+  return isOverdueOnDate(task.due_date, task.status, asOf, leaveDays);
 }
 
 function delayReason(task: Task, update?: DailyUpdate): string {
-  const blocker = update?.blocker || task.blocked_reason;
-  if (blocker?.trim()) return blocker.trim();
+  const stored = normalizeDelayReason(task.delay_reason) || normalizeDelayReason(update?.blocker) || normalizeDelayReason(task.blocked_reason);
+  if (stored) return stored;
   if (task.status === 'DONE' || !isOverdue(task)) return 'No delay';
-  return task.remarks?.trim() || 'No delay';
+  return normalizeDelayReason(task.remarks) || 'No delay';
+}
+
+function completedBeforeWorkDate(task: Task, workDate: string): boolean {
+  if (task.status !== 'DONE') return false;
+  const raw = task.completed_at || task.updated_at || task.last_update_at;
+  if (!raw) return false;
+  const doneOn = /^\d{4}-\d{2}-\d{2}$/.test(String(raw).slice(0, 10)) && String(raw).length <= 10
+    ? String(raw).slice(0, 10)
+    : dateInAppTimezone(new Date(raw));
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(doneOn)) return false;
+  return doneOn < workDate;
 }
 
 function dependencyIdsOf(task: Task): string[] {
@@ -490,10 +510,11 @@ export function visibleSheetRows(rows: DailyStatusRow[]) {
 
 export function buildDailyStatusRows(
   user: User,
-  options?: { date?: string; period?: SnapshotPeriod }
+  options?: { date?: string; period?: SnapshotPeriod; includeHistoricalCompleted?: boolean }
 ): DailyStatusRow[] {
   const workDate = options?.date && /^\d{4}-\d{2}-\d{2}$/.test(options.date) ? options.date : todayIso();
   const period = options?.period;
+  const morningLocked = isMorningPhaseLocked(workDate);
   const users = visibleUsers(user);
   const allUsers = store.getUsers();
   const projects = store.getProjects();
@@ -515,8 +536,10 @@ export function buildDailyStatusRows(
     childrenByParent.set(task.parent_task_id, list);
   }
 
-  return visibleTasks
+  const taskRows = visibleTasks
     .filter((task) => !task.parent_task_id)
+    .filter((task) => options?.includeHistoricalCompleted || !completedBeforeWorkDate(task, workDate))
+    .filter((task) => !fullDayLeaveOnDate(task.assigned_to_id, workDate))
     .map((task) => {
       const project = task.project_id ? projects.find((item) => item.id === task.project_id) : undefined;
       const assignee =
@@ -541,10 +564,18 @@ export function buildDailyStatusRows(
         period === 'evening'
           ? Math.max(hoursToday, parseHoursWorkedValue(resolvedEveningUpd?.hours_worked))
           : hoursToday;
-      const status =
+      const morningUpd = pickUpdateForDate(updatesForTask(task, updates), workDate, 'morning', task.assigned_to_id);
+      const eveningSubmitted = Boolean(
+        resolvedEveningUpd &&
+          (resolvedEveningUpd.submission_status === 'SUBMITTED' || Boolean(eveningNarrativeText(resolvedEveningUpd, masterDesc)))
+      );
+      let status =
         period === 'evening'
           ? eveningSheetStatus(task, resolvedEveningUpd, undefined, hoursWorkedValue)
           : taskSheetStatus(task);
+      if (period === 'morning' && morningLocked && morningUpd?.work_status) {
+        status = toSheetStatus(morningUpd.work_status);
+      }
       const delayUpdate = period === 'evening' ? resolvedEveningUpd || update : update;
       const children = (childrenByParent.get(task.id) || []).slice().sort((a, b) => a.title.localeCompare(b.title));
       const subtasks: DailyStatusSubtask[] = children.map((child) => ({
@@ -564,9 +595,15 @@ export function buildDailyStatusRows(
             child.assigned_to
         ),
         assignedToId: child.assigned_to_id,
+        hoursWorked: loggedHoursForDate(child, updates, workDate, period),
+        loggedHours: formatLoggedHours(loggedHoursForDate(child, updates, workDate, period)),
+        startDate: formatSheetDate(child.start_date),
         parentTaskId: child.parent_task_id || task.id,
       }));
       let progressPercent = task.progress_percent || 0;
+      if (period === 'morning' && morningLocked && morningUpd?.progress_percent != null) {
+        progressPercent = morningUpd.progress_percent;
+      }
       if (period === 'evening' && resolvedEveningUpd?.progress_percent != null) {
         progressPercent = resolvedEveningUpd.progress_percent;
       }
@@ -584,7 +621,9 @@ export function buildDailyStatusRows(
         ? [lead?.lead_number, task.lead_name || lead?.title].filter(Boolean).join(' • ')
         : '';
 
-      const sheetText = period === 'evening' ? eveningText || '' : masterDesc;
+      const sheetText = masterDesc;
+      const reason = delayReason(task, delayUpdate);
+      const overdue = isOverdue(task, workDate);
 
       return {
         id: task.id,
@@ -602,10 +641,10 @@ export function buildDailyStatusRows(
         startDateIso: task.start_date ? String(task.start_date).slice(0, 10) : undefined,
         deadline: formatSheetDate(task.due_date),
         deadlineIso: task.due_date ? String(task.due_date).slice(0, 10) : undefined,
-        reasonForDelay: delayReason(task, delayUpdate),
+        reasonForDelay: reason,
         isAdditional: Boolean(task.is_additional),
         blocked: task.status === 'BLOCKED' || task.status === ('WAITING' as Task['status']),
-        overdue: isOverdue(task, workDate),
+        overdue,
         progressPercent: progressForSheetStatus(status, progressPercent),
         hoursWorked: hoursWorkedValue,
         loggedHours: formatLoggedHours(hoursWorkedValue),
@@ -621,11 +660,59 @@ export function buildDailyStatusRows(
         acceptanceStatus: task.acceptance_status,
         createdById: task.created_by_id,
         createdByName: task.created_by || task.assigned_by,
-        canEdit: canMutateWorkTask(user, task),
+        canEdit: canMutateWorkTask(user, task) && (period !== 'morning' || !morningLocked),
         canAccept: canAcceptAssignedTask(user, task),
+        eveningSubmitted,
+        delayReasonRequired: delayReasonRequired(reason, overdue, status === 'Completed'),
+        rowKind: 'task',
+        morningStatus: morningUpd ? toSheetStatus(morningUpd.work_status) : taskSheetStatus(task),
+        eveningStatus: period === 'evening' ? status : eveningSheetStatus(task, resolvedEveningUpd, undefined, hoursWorkedValue),
+        morningProgressPercent: progressForSheetStatus(
+          morningUpd ? toSheetStatus(morningUpd.work_status) : taskSheetStatus(task),
+          morningUpd?.progress_percent ?? task.progress_percent
+        ),
+        eveningProgressPercent: progressForSheetStatus(status, progressPercent),
       } satisfies DailyStatusRow;
     })
     .sort((a, b) => a.person.localeCompare(b.person) || a.project.localeCompare(b.project));
+
+  const leavePeople = (canSeeAllDailyStatusRows(user) ? users : users.filter((item) => item.id === user.id)).filter((person) =>
+    fullDayLeaveOnDate(person.id, workDate)
+  );
+  const leaveRows: DailyStatusRow[] = attendanceForUsers(
+    leavePeople.map((person) => person.id),
+    workDate
+  )
+    .filter((item) => item.onLeave)
+    .map((item) => ({
+      id: `leave:${item.personId}:${workDate}`,
+      personId: item.personId,
+      person: item.person,
+      project: '—',
+      taskDescription: item.leaveType ? `Approved leave (${item.leaveType})` : 'Approved leave',
+      dependencyIds: [],
+      dependencies: '—',
+      status: 'Hold' as DailySheetStatus,
+      currentDate: formatSheetDate(workDate),
+      startDate: formatSheetDate(workDate),
+      deadline: '—',
+      reasonForDelay: 'No delay',
+      isAdditional: false,
+      overdue: false,
+      progressPercent: 0,
+      hoursWorked: 0,
+      loggedHours: formatLoggedHours(0),
+      workDate,
+      canEdit: false,
+      canAccept: false,
+      eveningSubmitted: true,
+      delayReasonRequired: false,
+      rowKind: 'leave' as const,
+      attendanceLabel: 'On Leave',
+      currentUpdate: item.leaveReason || '',
+    }));
+
+  return [...leaveRows, ...taskRows].sort((a, b) => a.person.localeCompare(b.person) || a.project.localeCompare(b.project));
 }
 
 export function buildDailyStatusKpis(user: User, rows = visibleSheetRows(buildDailyStatusRows(user))): DailyStatusKpis {
@@ -662,6 +749,18 @@ export function persistDailyStatusSnapshot(
 ) {
   const records = store.getSystemMeta();
   const id = snapshotId(date, period);
+  if (period === 'morning') {
+    const existing = records.find((item) => item.id === id);
+    const existingRows = (existing?.payload as { rows?: DailyStatusRow[] } | undefined)?.rows;
+    if (Array.isArray(existingRows) && existingRows.length) {
+      return {
+        date,
+        period,
+        rows: existingRows,
+        captured_at: String((existing?.payload as { captured_at?: string } | undefined)?.captured_at || ''),
+      };
+    }
+  }
   const next = records.filter((item) => item.id !== id);
   const captured_at = new Date().toISOString();
   next.push({
@@ -794,13 +893,15 @@ function eveningRowsFromDayUpdates(date: string, morningRows: DailyStatusRow[]):
           item.user_id === row.personId &&
           (item.project_id === row.projectId || item.project_name === row.project || item.task_title === row.taskDescription)
       );
-    if (!update) return { ...row };
+    if (!update) return { ...row, taskDescription: row.taskDescription };
     applied += 1;
     const status = toSheetStatus(update.work_status || row.status);
     const hours = Math.max(0, Number(update.hours_worked) || 0);
     return {
       ...row,
-      taskDescription: (update.work_completed || row.taskDescription || '').trim() || row.taskDescription,
+      taskDescription: row.taskDescription,
+      currentUpdate: (update.work_completed || '').trim() || row.currentUpdate,
+      eveningSubmitted: Boolean((update.work_completed || '').trim() || update.period === 'evening'),
       status,
       progressPercent: progressForSheetStatus(status, update.progress_percent ?? row.progressPercent),
       hoursWorked: hours || row.hoursWorked,
@@ -813,13 +914,38 @@ function eveningRowsFromDayUpdates(date: string, morningRows: DailyStatusRow[]):
   return applied > 0 ? rows : null;
 }
 
+export function ensureMorningSnapshot(user: User, date = todayIso()) {
+  if (!isMorningPhaseLocked(date)) return null;
+  const existing = loadDailyStatusSnapshot(date, 'morning');
+  if (existing?.length) return existing;
+  const rows = visibleSheetRows(buildDailyStatusRows(user, { date, period: 'morning' }));
+  return persistDailyStatusSnapshot(date, 'morning', rows, 'morning-lock').rows;
+}
+
+export function sheetPhase(date = todayIso()) {
+  const clock = clockInAppTimezone();
+  return {
+    date,
+    timezone: clock.timezone,
+    morningLocked: isMorningPhaseLocked(date),
+    eveningOpen: isEveningPhaseOpen(date),
+    lockHour: 11,
+    now: `${clock.date} ${String(clock.hour).padStart(2, '0')}:${String(clock.minute).padStart(2, '0')}`,
+    delayReasonOptions: DELAY_REASON_OPTIONS,
+  };
+}
+
 export function rowsForPeriod(user: User, period: SnapshotPeriod, date = todayIso()): {
   rows: DailyStatusRow[];
   source: 'snapshot' | 'live';
   available: boolean;
 } {
-  // One source of truth: the same Daily Work Updates builder used by the hub,
-  // for the selected calendar date (hidden tasks stay out of mail).
+  if (period === 'morning') {
+    const frozen = ensureMorningSnapshot(user, date);
+    if (frozen?.length && isMorningPhaseLocked(date)) {
+      return { rows: scopedDailyStatusRows(user, frozen), source: 'snapshot', available: true };
+    }
+  }
   return {
     rows: visibleSheetRows(buildDailyStatusRows(user, { date, period })),
     source: 'live',
@@ -857,6 +983,11 @@ export interface CompareItem {
   eveningUpdate?: string;
   morningStatus?: string;
   eveningStatus?: string;
+  morningProgressPercent?: number;
+  eveningProgressPercent?: number;
+  morningHours?: string;
+  eveningHours?: string;
+  eveningSubmitted?: boolean;
   morningDeadline?: string;
   eveningDeadline?: string;
   morningDependencies?: string;
@@ -902,6 +1033,7 @@ export function compareSnapshots(
   date?: string
 ): { items: CompareItem[]; available: boolean; date: string; message?: string } {
   const resolved = date && /^\d{4}-\d{2}-\d{2}$/.test(date) ? date : todayIso();
+  ensureMorningSnapshot(user, resolved);
 
   const allUpdates = store
     .getDailyUpdates()
@@ -921,7 +1053,7 @@ export function compareSnapshots(
     : morningList.filter((row) => row.personId === user.id || row.createdById === user.id);
 
   const items: CompareItem[] = scopedMorning
-    .filter((row) => row.id)
+    .filter((row) => row.id && row.rowKind !== 'leave' && !String(row.id).startsWith('leave:'))
     .map((morningRow) => {
       const task = store.getTasks().find((item) => item.id === morningRow.id);
       const employeeId = morningRow.personId || task?.assigned_to_id || '';
@@ -947,7 +1079,7 @@ export function compareSnapshots(
       const liveEveningRow = liveEvening.find((row) => row.id === morningRow.id);
       const dayOverlayRow = dayOverlayById.get(morningRow.id);
       const taskUpdates = task ? updatesForTask(task, allUpdates) : [];
-      const { text: eveningText, update: eveningUpd } = resolveEveningNarrative({
+      const { text: resolvedEveningText, update: eveningUpd } = resolveEveningNarrative({
         masterDesc,
         taskUpdates,
         workDate: resolved,
@@ -956,8 +1088,12 @@ export function compareSnapshots(
         liveEveningRow,
         dayOverlayRow,
       });
-
-      const currentUpdateText = eveningText || 'No Evening Update Submitted';
+      const eveningText = resolvedEveningText || '';
+      const eveningSubmitted = Boolean(
+        (eveningUpd && periodOfUpdate(eveningUpd) === 'evening') || Boolean(eveningText)
+      );
+      const currentUpdateText = eveningText;
+      const morningHours = parseHoursWorkedValue(morningRow.hoursWorked) || parseHoursWorkedValue(morningRow.loggedHours);
       const hoursWorked = Math.max(
         parseHoursWorkedValue(eveningUpd?.hours_worked),
         parseHoursWorkedValue(eveningSnapRow?.hoursWorked),
@@ -1004,7 +1140,22 @@ export function compareSnapshots(
         reasonForDelay,
         loggedHours: formatLoggedHours(hoursWorked),
         hoursWorked,
-        kinds: [],
+        kinds: compareKinds(morningRow, {
+          ...morningRow,
+          status,
+          progressPercent: progress,
+          hoursWorked,
+          taskDescription: masterDesc,
+        }),
+        morningStatus: morningRow.status,
+        eveningStatus: status,
+        morningProgressPercent: progressForSheetStatus(morningRow.status, morningRow.progressPercent),
+        eveningProgressPercent: progress,
+        morningHours: formatLoggedHours(morningHours),
+        eveningHours: formatLoggedHours(hoursWorked),
+        eveningSubmitted,
+        morningUpdate: masterDesc,
+        eveningUpdate: currentUpdateText,
       };
     })
     .sort((a, b) => a.person.localeCompare(b.person) || a.project.localeCompare(b.project));
@@ -1033,6 +1184,7 @@ function upsertDailyPeriodRecord(
     hours_worked?: number;
     progress_percent?: number;
     work_status?: DailyUpdate['work_status'];
+    blocker?: string;
   }
 ): { ok: true; update: DailyUpdate } | { ok: false; error: string; status?: number } {
   const task = store.getTasks().find((item) => item.id === taskId);
@@ -1093,6 +1245,9 @@ function upsertDailyPeriodRecord(
     if (patch.work_status !== undefined) {
       next.work_status = patch.work_status;
     }
+    if (patch.blocker !== undefined) {
+      next.blocker = patch.blocker;
+    }
     const index = updates.findIndex((item) => item.id === existing.id);
     updates[index] = next;
     store.saveDailyUpdates(updates);
@@ -1128,6 +1283,7 @@ function upsertDailyPeriodRecord(
         : task.progress_percent ?? 0,
     hours_worked: hours,
     work_status: patch.work_status ?? workStatusFromTask(task),
+    blocker: patch.blocker,
     next_plan: '—',
     attachments: [],
     submission_status: 'SUBMITTED',
@@ -1183,6 +1339,7 @@ export function syncPeriodRecordFromTask(
   return upsertDailyPeriodRecord(actor, taskId, workDate, period || inferDefaultEmailPeriod(), {
     work_status: workStatusFromTask(resolvedTask),
     progress_percent: resolvedTask.progress_percent ?? 0,
+    blocker: resolvedTask.delay_reason || undefined,
   });
 }
 
@@ -1235,8 +1392,7 @@ function emailPeriodCopy(period: SnapshotPeriod, reportLabel?: string) {
 }
 
 export function inferDefaultEmailPeriod(now = new Date()): SnapshotPeriod {
-  // Morning until 4:00 PM; Evening from 4:00 PM onward (local time).
-  return now.getHours() >= 16 ? 'evening' : 'morning';
+  return clockInAppTimezone(now).hour >= 11 ? 'evening' : 'morning';
 }
 
 export function renderDailyStatusEmailHtml(params: {
@@ -1570,6 +1726,13 @@ export function peopleForDailySheet(rows: DailyStatusRow[]): DirectoryPerson[] {
   }
 
   return people.sort((a, b) => a.displayName.localeCompare(b.displayName));
+}
+
+export function delayReasonMissingForTask(task: Task, workDate = todayIso(), incomingReason?: string) {
+  const completed = task.status === 'DONE';
+  const overdue = isOverdue(task, workDate);
+  const existing = normalizeDelayReason(incomingReason) || normalizeDelayReason(task.delay_reason);
+  return delayReasonRequired(existing, overdue, completed);
 }
 
 export function visibleProjects(user: User): Project[] {

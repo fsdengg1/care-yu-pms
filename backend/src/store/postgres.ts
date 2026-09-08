@@ -23,6 +23,7 @@ export type CollectionName =
   | 'notifications'
   | 'tasks'
   | 'dailyUpdates'
+  | 'leaveRequests'
   | 'leadDocuments'
   | 'leadComments'
   | 'leadActivities'
@@ -58,6 +59,7 @@ export const COLLECTION_NAMES: CollectionName[] = [
   'notifications',
   'tasks',
   'dailyUpdates',
+  'leaveRequests',
   'leadDocuments',
   'leadComments',
   'leadActivities',
@@ -196,6 +198,7 @@ export async function ensureSchema(): Promise<void> {
       ALTER TABLE audits ADD COLUMN IF NOT EXISTS assigned_to_name TEXT;
       ALTER TABLE daily_updates ADD COLUMN IF NOT EXISTS period TEXT;
       ALTER TABLE daily_updates ADD COLUMN IF NOT EXISTS update_type TEXT;
+      ALTER TABLE tasks ADD COLUMN IF NOT EXISTS delay_reason TEXT;
     `);
     const tables = await client.query<{ table_name: string }>(`
       SELECT table_name

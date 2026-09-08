@@ -7,9 +7,12 @@ import {
   canSeeAllDailyStatusRows,
   compareSnapshots,
   dateInAppTimezone,
+  delayReasonMissingForTask,
   peopleForDailySheet,
   fromSheetStatus,
   loadDailyStatusSnapshot,
+  ensureMorningSnapshot,
+  sheetPhase,
   renderDailyStatusEmailHtml,
   restoreDailyStatusReport,
   rowsForPeriod,
@@ -30,7 +33,10 @@ import {
   sendConfiguredEmailReport,
   EmailReportSlot,
 } from '../lib/emailReportSchedule.js';
+import { attendanceForUsers } from '../lib/leaveRequests.js';
+import { isEveningPhaseOpen, isMorningPhaseLocked, normalizeDelayReason } from '../lib/workCalendar.js';
 import { env } from '../config/env.js';
+import { store } from '../store/db.js';
 
 const router = Router();
 
@@ -60,11 +66,36 @@ router.get(
     const user = req.user!;
     const date = readIsoDate(req.query.date);
     const period = typeof req.query.period === 'string' && req.query.period ? readPeriod(req.query.period) : undefined;
-    const rows = buildDailyStatusRows(user, { date, period });
+    ensureMorningSnapshot(user, date);
+    const phase = sheetPhase(date);
+    let rows = buildDailyStatusRows(user, { date, period });
+    if (period === 'morning' && phase.morningLocked) {
+      const snap = loadDailyStatusSnapshot(date, 'morning');
+      if (snap?.length) {
+        const liveById = new Map(rows.map((row) => [row.id, row]));
+        rows = snap.map((row) => {
+          const live = liveById.get(row.id);
+          return live ? { ...row, canEdit: false, eveningSubmitted: live.eveningSubmitted } : { ...row, canEdit: false };
+        });
+        for (const row of rows) {
+          if (row.rowKind === 'leave' && !snap.some((item) => item.id === row.id)) {
+            /* keep */
+          }
+        }
+        const snapIds = new Set(rows.map((row) => row.id));
+        for (const row of buildDailyStatusRows(user, { date, period: 'morning' })) {
+          if (row.rowKind === 'leave' && !snapIds.has(row.id)) rows.unshift(row);
+        }
+      }
+    }
+    const personIds = [...new Set(rows.map((row) => row.personId).filter(Boolean))];
     return res.json({
       rows,
       date,
-      kpis: buildDailyStatusKpis(user, rows.filter((row) => !row.sheetHidden)),
+      period: period || (phase.eveningOpen ? 'evening' : 'morning'),
+      phase,
+      attendance: attendanceForUsers(personIds, date),
+      kpis: buildDailyStatusKpis(user, rows.filter((row) => !row.sheetHidden && row.rowKind !== 'leave')),
       people: peopleForDailySheet(rows),
       projects: visibleProjects(user).map((project) => ({
         id: project.id,
@@ -293,7 +324,52 @@ router.patch(
   (req: AuthedRequest, res) => {
     const date = readIsoDate(req.query.date || req.body?.work_date);
     const period = typeof req.body?.period === 'string' && req.body.period ? readPeriod(req.body.period) : undefined;
+    const taskId = String(req.params.id);
+    if (taskId.startsWith('leave:') || taskId.startsWith('permission:')) {
+      return res.status(400).json({ message: 'Leave and permission rows are not editable task records.' });
+    }
+    ensureMorningSnapshot(req.user!, date);
+    if (period === 'morning' && isMorningPhaseLocked(date)) {
+      return res.status(400).json({
+        message: 'Morning Status is locked for this date after 11:00 AM. Use Evening Status to continue updates.',
+      });
+    }
+    if (period === 'evening' && !isEveningPhaseOpen(date)) {
+      return res.status(400).json({
+        message: 'Evening Status opens at 11:00 AM in the configured timezone.',
+      });
+    }
     const body: Record<string, unknown> = { ...(req.body || {}) };
+    if (body.remarks !== undefined && body.delay_reason === undefined && body.reason_for_delay === undefined) {
+      body.delay_reason = body.remarks;
+    }
+    if (body.delay_reason !== undefined || body.reason_for_delay !== undefined) {
+      body.delay_reason = normalizeDelayReason(
+        String(body.delay_reason || body.reason_for_delay || ''),
+        String(body.delay_reason_other || '')
+      );
+    }
+    body.work_date = date;
+    const existingTask = store.getTasks().find((item) => item.id === taskId);
+    if (existingTask) {
+      const nextStatus =
+        typeof body.status === 'string'
+          ? ['TODO', 'IN_PROGRESS', 'DONE', 'BLOCKED', 'WAITING', 'HOLD'].includes(body.status)
+            ? body.status
+            : fromSheetStatus(body.status)
+          : existingTask.status;
+      const probe = {
+        ...existingTask,
+        status: nextStatus as typeof existingTask.status,
+        delay_reason: typeof body.delay_reason === 'string' ? body.delay_reason : existingTask.delay_reason,
+      };
+      if (delayReasonMissingForTask(probe, date, typeof body.delay_reason === 'string' ? body.delay_reason : undefined)) {
+        return res.status(400).json({
+          message: 'Reason for Delay is required because this task is overdue.',
+          delayReasonRequired: true,
+        });
+      }
+    }
     if (
       typeof body.status === 'string' &&
       !['TODO', 'IN_PROGRESS', 'DONE', 'BLOCKED', 'WAITING', 'HOLD'].includes(body.status)

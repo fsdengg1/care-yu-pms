@@ -55,6 +55,13 @@ export async function startEmailReportScheduler() {
   try {
     const cron = (await import('node-cron')).default;
     cron.schedule(
+      '0 11 * * *',
+      () => {
+        console.info('[scheduler] morning phase lock / snapshot window');
+      },
+      { timezone }
+    );
+    cron.schedule(
       '15 11 * * *',
       () => {
         void runSlot('noon');

@@ -15,7 +15,7 @@ function DashboardShell({ children }: { children: React.ReactNode }) {
 
   if (loading || !user) {
     return (
-      <div className="theme-app flex min-h-screen flex-col items-center justify-center gap-3 bg-slate-950 text-xs text-slate-400">
+      <div className="theme-app flex min-h-screen flex-col items-center justify-center gap-3 bg-background text-xs text-muted-foreground">
         <CareyuLogo />
         Loading Care Yu Automation Project Hub...
       </div>
@@ -23,12 +23,12 @@ function DashboardShell({ children }: { children: React.ReactNode }) {
   }
 
   return (
-    <div className="theme-app flex min-h-screen bg-slate-950 text-slate-100">
+    <div className="theme-app flex min-h-screen bg-background text-foreground">
       {!isDesktop && mobileOpen && (
         <button
           type="button"
           aria-label="Close navigation menu"
-          className="fixed inset-0 z-40 bg-slate-950/70 backdrop-blur-[1px] lg:hidden"
+          className="modal-scrim-light fixed inset-0 z-40 backdrop-blur-[1px] lg:hidden"
           onClick={closeMobile}
         />
       )}
@@ -37,7 +37,7 @@ function DashboardShell({ children }: { children: React.ReactNode }) {
         <NotificationProvider user={user}>
           <Navbar user={user} />
           <NotificationToastHost />
-          <main className="flex-1 overflow-y-auto overflow-x-hidden bg-slate-950 p-6">{children}</main>
+          <main className="theme-inverted flex-1 overflow-y-auto overflow-x-hidden bg-background p-6">{children}</main>
         </NotificationProvider>
       </div>
     </div>

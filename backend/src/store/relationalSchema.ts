@@ -18,6 +18,7 @@ export type RelationalCollection = Exclude<
   | 'notifications'
   | 'tasks'
   | 'dailyUpdates'
+  | 'leaveRequests'
   | 'leadDocuments'
   | 'leadComments'
   | 'leadActivities'
@@ -556,6 +557,7 @@ export const RELATIONAL_TABLES: TableDef[] = [
       f('pending_action', 'boolean'),
       f('progress_manual_override', 'boolean'),
       f('sheet_hidden', 'boolean'),
+      f('delay_reason', 'text'),
       f('reminder_count', 'integer'),
       f('comments', 'jsonb'),
       ...ts(
@@ -607,6 +609,32 @@ export const RELATIONAL_TABLES: TableDef[] = [
       f('update_type', 'text'),
       f('pm_comments', 'jsonb'),
       ...ts('submitted_at', 'created_at', 'updated_at'),
+    ],
+  },
+  {
+    collection: 'leaveRequests',
+    table: 'leave_requests',
+    fields: [
+      ...text(
+        'user_id',
+        'user_name',
+        'kind',
+        'leave_type',
+        'from_date',
+        'to_date',
+        'day_portion',
+        'from_time',
+        'to_time',
+        'reason',
+        'attachment_url',
+        'status',
+        'approver_id',
+        'approver_name',
+        'decided_by_id',
+        'decided_by_name',
+        'decision_comment'
+      ),
+      ...ts('decided_at', 'created_at', 'updated_at'),
     ],
   },
   {

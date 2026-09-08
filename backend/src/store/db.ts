@@ -20,6 +20,7 @@ import {
   LeadActivity,
   LeadComment,
   LeadDocument,
+  LeaveRequest,
   LeadStatusHistory,
   NotificationDelivery,
   NotificationItem,
@@ -58,6 +59,7 @@ interface DbShape {
   notifications: NotificationItem[];
   tasks: Task[];
   dailyUpdates: DailyUpdate[];
+  leaveRequests: LeaveRequest[];
   leadDocuments: LeadDocument[];
   leadComments: LeadComment[];
   leadActivities: LeadActivity[];
@@ -102,6 +104,7 @@ const OPERATIONAL_COLLECTION_KEYS = [
   'notifications',
   'tasks',
   'dailyUpdates',
+  'leaveRequests',
   'leadDocuments',
   'leadComments',
   'leadActivities',
@@ -488,6 +491,7 @@ function emptyDb(): DbShape {
     notifications: [],
     tasks: [],
     dailyUpdates: [],
+    leaveRequests: [],
     leadDocuments: [],
     leadComments: [],
     leadActivities: [],
@@ -596,6 +600,7 @@ function buildMergedDb(parsed: Partial<DbShape>): DbShape {
     notifications: [],
     tasks: parsed.tasks ?? [],
     dailyUpdates: parsed.dailyUpdates ?? [],
+    leaveRequests: parsed.leaveRequests ?? [],
     leadDocuments: parsed.leadDocuments ?? [],
     leadComments: parsed.leadComments ?? [],
     leadActivities: parsed.leadActivities ?? [],
@@ -823,6 +828,9 @@ export const store = {
   getDailyUpdates(): DailyUpdate[] {
     return loadDb().dailyUpdates;
   },
+  getLeaveRequests(): LeaveRequest[] {
+    return loadDb().leaveRequests ?? [];
+  },
   findUserByEmail(email: string): User | undefined {
     const normalized = email.trim().toLowerCase();
     return this.getUsers().find((user) => user.email.toLowerCase() === normalized);
@@ -904,6 +912,12 @@ export const store = {
     const db = loadDb();
     db.dailyUpdates = dailyUpdates;
     markDirty('dailyUpdates');
+    saveDb(db);
+  },
+  saveLeaveRequests(leaveRequests: LeaveRequest[]) {
+    const db = loadDb();
+    db.leaveRequests = leaveRequests;
+    markDirty('leaveRequests');
     saveDb(db);
   },
   getLeadDocuments(): LeadDocument[] {

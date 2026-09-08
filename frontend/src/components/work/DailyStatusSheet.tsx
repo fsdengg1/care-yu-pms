@@ -6,6 +6,7 @@ import {
   DailyStatusPerson,
   DailyStatusRow,
   DailyStatusSubtask,
+  DELAY_REASON_OPTIONS,
   deadlineCellClass,
   deadlineCellStyle,
   deadlineTone,
@@ -105,6 +106,8 @@ export default function DailyStatusSheet({
   onAccept,
   readOnly = false,
   period,
+  phase,
+  attendance = [],
 }: {
   rows: DailyStatusRow[];
   people: DailyStatusPerson[];
@@ -130,6 +133,14 @@ export default function DailyStatusSheet({
   onAccept?: (row: DailyStatusRow) => Promise<void>;
   readOnly?: boolean;
   period?: 'morning' | 'evening';
+  phase?: { morningLocked?: boolean; eveningOpen?: boolean; timezone?: string };
+  attendance?: Array<{
+    personId: string;
+    person: string;
+    onLeave?: boolean;
+    halfDay?: string;
+    permission?: { fromTime?: string; toTime?: string; reason?: string };
+  }>;
 }) {
   const [query, setQuery] = useState('');
   const [chip, setChip] = useState<SheetChip>('all');
@@ -210,6 +221,7 @@ export default function DailyStatusSheet({
   const selectedVisible = selectedIds.filter((id) => visible.some((row) => row.id === id)).length;
   const canEditRow = (row: DailyStatusRow) => {
     if (readOnly) return false;
+    if (row.rowKind === 'leave' || row.rowKind === 'permission') return false;
     if (row.canEdit !== undefined) return row.canEdit;
     const pending = row.acceptanceStatus === 'REQUESTED';
     const isCreator = row.createdById === userId;
@@ -233,6 +245,11 @@ export default function DailyStatusSheet({
     <section className={`daily-status-workspace min-w-0 overflow-hidden rounded-xl ${readOnly ? 'daily-status-workspace-readonly' : ''}`}>
       <div className="flex shrink-0 flex-wrap items-center gap-2 border-b border-[#e2e8f0] px-3 py-2">
         <SheetDateFilter value={workDate} onChange={onWorkDateChange} />
+        {phase?.morningLocked && period === 'morning' ? (
+          <span className="rounded-full border border-amber-300 bg-amber-50 px-2 py-0.5 text-[10px] font-bold text-amber-800">
+            Morning locked at 11:00
+          </span>
+        ) : null}
         <div className="relative min-w-[200px] flex-1">
           <Search className="absolute left-2.5 top-2 h-3.5 w-3.5 text-[#94a3b8]" />
           <input
@@ -336,7 +353,7 @@ export default function DailyStatusSheet({
               )}
               <th>Person</th>
               <th>Project</th>
-              <th>{period === 'evening' ? 'Current Update' : 'Task Description'}</th>
+              <th>Task Description</th>
               <th>Dependencies</th>
               <th>Status</th>
               <th>Start Date</th>
@@ -358,6 +375,7 @@ export default function DailyStatusSheet({
               group.rows.map((row, index) => {
                 const editable = canEditRow(row);
                 const tone = deadlineTone(row.status, row.deadlineIso || row.deadline, today);
+                const personAttendance = attendance.find((item) => item.personId === group.personId);
                 return (
                   <tr key={row.id} className={row.isLeadTask ? 'lead-task' : undefined}>
                     {showSelect && (
@@ -394,6 +412,19 @@ export default function DailyStatusSheet({
                         ) : (
                           group.person
                         )}
+                        {row.attendanceLabel || personAttendance?.onLeave ? (
+                          <div className="mt-1 rounded bg-amber-100 px-1.5 py-0.5 text-[10px] font-bold text-amber-800">
+                            {row.attendanceLabel || 'On Leave'}
+                          </div>
+                        ) : personAttendance?.halfDay ? (
+                          <div className="mt-1 rounded bg-sky-100 px-1.5 py-0.5 text-[10px] font-bold text-sky-800">
+                            Half day ({personAttendance.halfDay === 'SECOND_HALF' ? 'second' : 'first'})
+                          </div>
+                        ) : personAttendance?.permission ? (
+                          <div className="mt-1 rounded bg-slate-100 px-1.5 py-0.5 text-[10px] font-bold text-slate-700">
+                            Permission {personAttendance.permission.fromTime}–{personAttendance.permission.toTime}
+                          </div>
+                        ) : null}
                       </td>
                     )}
                     <td className="project-cell">
@@ -455,30 +486,47 @@ export default function DailyStatusSheet({
                         )}
                         <div className="flex items-start gap-1">
                           <div className="min-w-0 flex-1">
-                            {editable ? (
+                            {editable && period !== 'evening' ? (
                               <AutoResizeTextarea
-                                key={period === 'evening' ? `${row.id}-evening-${row.currentUpdate || ''}` : row.taskDescription}
-                                defaultValue={period === 'evening' ? row.currentUpdate || '' : row.taskDescription}
+                                key={row.taskDescription}
+                                defaultValue={row.taskDescription}
                                 className="sheet-textarea sheet-task-field"
-                                placeholder={period === 'evening' ? 'Enter evening update' : undefined}
                                 onBlur={(event) => {
                                   const value = event.target.value.trim();
-                                  if (period === 'evening') {
-                                    if (value !== (row.currentUpdate || '').trim()) {
-                                      void onPatch(row.id, { evening_update: value });
-                                    }
-                                    return;
-                                  }
                                   if (value && value !== row.taskDescription) {
                                     void onPatch(row.id, { description: value, title: value.slice(0, 120) });
                                   }
                                 }}
                               />
                             ) : (
-                              <span className="sheet-text sheet-task-field">
-                                {period === 'evening' ? row.currentUpdate || 'No Evening Update Submitted' : row.taskDescription}
-                              </span>
+                              <span className="sheet-text sheet-task-field">{row.taskDescription}</span>
                             )}
+                            {period === 'evening' ? (
+                              <div className="mt-1.5 space-y-1">
+                                <div className="text-[10px] font-bold uppercase tracking-wide text-[#64748b]">
+                                  Evening work completed
+                                  <span className={`ml-2 rounded px-1.5 py-0.5 ${row.eveningSubmitted ? 'bg-emerald-100 text-emerald-800' : 'bg-slate-200 text-slate-700'}`}>
+                                    {row.eveningSubmitted ? 'Submitted' : 'Not submitted'}
+                                  </span>
+                                </div>
+                                {editable ? (
+                                  <AutoResizeTextarea
+                                    key={`${row.id}-evening-${row.currentUpdate || ''}`}
+                                    defaultValue={row.currentUpdate || ''}
+                                    className="sheet-textarea sheet-task-field"
+                                    placeholder="Enter evening update"
+                                    onBlur={(event) => {
+                                      const value = event.target.value.trim();
+                                      if (value !== (row.currentUpdate || '').trim()) {
+                                        void onPatch(row.id, { evening_update: value });
+                                      }
+                                    }}
+                                  />
+                                ) : (
+                                  <span className="sheet-text sheet-task-field">{row.currentUpdate || '—'}</span>
+                                )}
+                              </div>
+                            ) : null}
                           </div>
                           {onAddSubtask && editable && (
                             <button
@@ -557,12 +605,18 @@ export default function DailyStatusSheet({
                     )}
                   </td>
                   <td className="status-cell">
-                    <StatusDropdown
-                      variant="sheet"
-                      value={row.status}
-                      disabled={!editable}
-                      onChange={(status) => void onPatch(row.id, { status })}
-                    />
+                    {row.rowKind === 'leave' ? (
+                      <span className="inline-flex rounded-md border border-amber-300 bg-amber-50 px-1.5 py-0.5 text-[10px] font-bold text-amber-800">
+                        On Leave
+                      </span>
+                    ) : (
+                      <StatusDropdown
+                        variant="sheet"
+                        value={row.status}
+                        disabled={!editable}
+                        onChange={(status) => void onPatch(row.id, { status })}
+                      />
+                    )}
                   </td>
                   <td className="date-cell">
                     {editable ? (
@@ -606,17 +660,51 @@ export default function DailyStatusSheet({
                     />
                   </td>
                   <td className="delay-cell">
-                    {editable ? (
-                      <AutoResizeTextarea
-                        key={row.reasonForDelay}
-                        defaultValue={row.reasonForDelay === '—' ? '' : row.reasonForDelay}
-                        className="sheet-textarea"
-                        placeholder="—"
-                        onBlur={(event) => {
-                          const value = event.target.value.trim() || 'No delay';
-                          if (value !== row.reasonForDelay) void onPatch(row.id, { remarks: value });
-                        }}
-                      />
+                    {row.rowKind === 'leave' ? (
+                      <span className="sheet-text">—</span>
+                    ) : editable ? (
+                      <div className="space-y-1">
+                        {row.delayReasonRequired ? (
+                          <div className="text-[10px] font-bold text-rose-700">Reason for Delay *</div>
+                        ) : null}
+                        <select
+                          className="sheet-input"
+                          value={
+                            DELAY_REASON_OPTIONS.includes(row.reasonForDelay as (typeof DELAY_REASON_OPTIONS)[number])
+                              ? row.reasonForDelay
+                              : row.reasonForDelay && row.reasonForDelay !== 'No delay' && row.reasonForDelay !== '—'
+                                ? row.reasonForDelay.startsWith('Other')
+                                  ? 'Other'
+                                  : row.reasonForDelay
+                                : ''
+                          }
+                          onChange={(event) => {
+                            const value = event.target.value;
+                            if (value === 'Other') return;
+                            void onPatch(row.id, { delay_reason: value });
+                          }}
+                        >
+                          <option value="">{row.delayReasonRequired ? 'Select reason' : 'No delay'}</option>
+                          {DELAY_REASON_OPTIONS.map((option) => (
+                            <option key={option} value={option}>
+                              {option}
+                            </option>
+                          ))}
+                        </select>
+                        {row.reasonForDelay?.startsWith('Other') || row.delayReasonRequired ? (
+                          <AutoResizeTextarea
+                            key={`${row.id}-delay-other`}
+                            defaultValue={row.reasonForDelay?.startsWith('Other') ? row.reasonForDelay.replace(/^Other:\s*/i, '') : ''}
+                            className="sheet-textarea"
+                            placeholder="Enter reason"
+                            onBlur={(event) => {
+                              const value = event.target.value.trim();
+                              if (!value) return;
+                              void onPatch(row.id, { delay_reason: 'Other', delay_reason_other: value });
+                            }}
+                          />
+                        ) : null}
+                      </div>
                     ) : (
                       <span className="sheet-text">{row.reasonForDelay}</span>
                     )}

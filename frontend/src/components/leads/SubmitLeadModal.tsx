@@ -16,7 +16,7 @@ export default function SubmitLeadModal({
 }) {
   if (!open) return null;
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/80 p-4 backdrop-blur-sm">
+    <div className="modal-scrim fixed inset-0 z-50 flex items-center justify-center p-4 backdrop-blur-sm">
       <div className="w-full max-w-md space-y-4 rounded-xl border border-slate-800 bg-slate-900 p-6">
         <div className="flex items-start justify-between">
           <h3 className="text-base font-bold text-slate-100">Submit Lead to Project Manager?</h3>

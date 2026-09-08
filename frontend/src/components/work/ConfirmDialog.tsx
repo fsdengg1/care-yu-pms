@@ -27,7 +27,7 @@ export default function ConfirmDialog({
   }, [onCancel]);
 
   return (
-    <div className="fixed inset-0 z-[90] flex items-center justify-center bg-slate-950/60 p-4" onClick={onCancel}>
+    <div className="modal-scrim fixed inset-0 z-[90] flex items-center justify-center p-4" onClick={onCancel}>
       <div
         className="w-full max-w-md rounded-2xl border border-slate-700 bg-slate-900 p-5 shadow-xl"
         onClick={(event) => event.stopPropagation()}

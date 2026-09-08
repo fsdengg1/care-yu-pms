@@ -2,6 +2,7 @@
 
 import React, { useEffect, useState } from 'react';
 import { TasksApi } from '@/lib/tasksApi';
+import { DailyStatusApi } from '@/lib/dailyStatusApi';
 import { DailyStatusPerson, DailyStatusRow, DailyStatusSubtask, parseSheetDate, toSheetStatus } from '@/lib/dailyStatus';
 import { Task } from '@/lib/types';
 
@@ -69,6 +70,8 @@ export default function AddSubtaskForm({
   const [description, setDescription] = useState(editing?.description || '');
   const [assignedToId, setAssignedToId] = useState(editing?.assignedToId || currentUserId);
   const [dueDate, setDueDate] = useState(editing?.dueDate || '');
+  const [startDate, setStartDate] = useState('');
+  const [hours, setHours] = useState('');
   const [status, setStatus] = useState<Task['status']>(editing?.status || 'TODO');
   const [progress, setProgress] = useState(clampProgress(editing?.progressPercent));
   const [busy, setBusy] = useState(false);
@@ -112,6 +115,7 @@ export default function AddSubtaskForm({
         title: title.trim(),
         description: description.trim() || title.trim(),
         due_date: dueDate || undefined,
+        start_date: startDate || undefined,
         status: nextStatus,
         progress_percent: progressPercent,
         assigned_to_id: canAssignOthers ? assignee : undefined,
@@ -134,6 +138,7 @@ export default function AddSubtaskForm({
       project_name: parent?.project === '—' ? undefined : parent?.project,
       assigned_to_id: assignee,
       due_date: dueDate || undefined,
+      start_date: startDate || undefined,
       status: nextStatus,
       progress_percent: progressPercent,
       parent_task_id: parentId,
@@ -143,11 +148,14 @@ export default function AddSubtaskForm({
       setError(result.message || 'Unable to create subtask.');
       return;
     }
+    if (hours) {
+      await DailyStatusApi.updateRow(result.data.task.id, { hours_worked: Number(hours) });
+    }
     onCreated('Subtask created under the selected parent task.');
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/70 p-4">
+    <div className="modal-scrim fixed inset-0 z-50 flex items-center justify-center p-4">
       <div className="w-full max-w-lg rounded-2xl border border-slate-800 bg-slate-900 p-5 shadow-xl">
         <h2 className="text-sm font-bold text-slate-100">{isEdit ? 'Edit Subtask' : 'Add Subtask'}</h2>
         <p className="mt-1 text-xs text-slate-400">
@@ -218,12 +226,32 @@ export default function AddSubtaskForm({
                 }}
                 className="mt-1 w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-slate-100"
               >
-                <option value="TODO">Pending</option>
+                <option value="TODO">Yet to Start</option>
                 <option value="IN_PROGRESS">In Progress</option>
                 <option value="DONE">Completed</option>
                 <option value="WAITING">Waiting</option>
                 <option value="HOLD">Hold</option>
               </select>
+            </label>
+            <label className="block text-slate-300">
+              Logged hours
+              <input
+                type="number"
+                min={0}
+                step={0.5}
+                value={hours}
+                onChange={(e) => setHours(e.target.value)}
+                className="mt-1 w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-slate-100"
+              />
+            </label>
+            <label className="block text-slate-300">
+              Start date
+              <input
+                type="date"
+                value={startDate}
+                onChange={(e) => setStartDate(e.target.value)}
+                className="mt-1 w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-slate-100"
+              />
             </label>
             <label className="block text-slate-300">
               Deadline

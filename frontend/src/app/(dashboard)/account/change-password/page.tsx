@@ -43,15 +43,15 @@ export default function ChangePasswordPage() {
   };
 
   return (
-    <div className="mx-auto max-w-xl space-y-6">
+    <div className="surface-light mx-auto max-w-xl space-y-6">
       <div>
-        <h1 className="text-2xl font-semibold tracking-tight text-slate-900 dark:text-slate-100">Change Password</h1>
-        <p className="mt-1 text-sm text-slate-500">Update your CareYu account password securely.</p>
+        <h1 className="text-2xl font-semibold tracking-tight text-foreground">Change Password</h1>
+        <p className="mt-1 text-sm text-muted-foreground">Update your CareYu account password securely.</p>
       </div>
 
-      <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm dark:border-slate-800 dark:bg-slate-900">
+      <div className="rounded-2xl border border-border bg-card p-6 shadow-sm">
         {error && (
-          <div className="mb-4 flex items-start gap-2 rounded-xl border border-red-200 bg-red-50 px-3 py-2.5 text-sm text-red-700">
+          <div className="mb-4 flex items-start gap-2 rounded-xl border border-rose-200 bg-rose-50 px-3 py-2.5 text-sm text-rose-800">
             <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" />
             <span>{error}</span>
           </div>
@@ -65,57 +65,57 @@ export default function ChangePasswordPage() {
 
         <form onSubmit={handleSubmit} className="space-y-4" noValidate>
           <div>
-            <label className="mb-1.5 block text-sm font-medium text-slate-700 dark:text-slate-300">Current Password</label>
+            <label className="mb-1.5 block text-sm font-medium text-card-foreground">Current Password</label>
             <div className="relative">
-              <Lock className="pointer-events-none absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
+              <Lock className="pointer-events-none absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
               <input
                 type={showPassword ? 'text' : 'password'}
                 value={currentPassword}
                 onChange={(e) => setCurrentPassword(e.target.value)}
-                className="w-full rounded-xl border border-slate-200 bg-slate-50 py-2.5 pl-10 pr-11 text-sm outline-none focus:border-cyan-500 focus:bg-white dark:border-slate-700 dark:bg-slate-950"
+                className="form-control w-full rounded-xl py-2.5 pl-10 pr-11 text-sm"
                 autoComplete="current-password"
               />
               <button
                 type="button"
                 onClick={() => setShowPassword((v) => !v)}
-                className="absolute right-3 top-1/2 -translate-y-1/2 p-1 text-slate-400"
+                className="absolute right-3 top-1/2 -translate-y-1/2 p-1 text-muted-foreground"
                 aria-label={showPassword ? 'Hide password' : 'Show password'}
               >
                 {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
               </button>
             </div>
-            {fieldErrors.currentPassword && <p className="mt-1.5 text-xs text-red-600">{fieldErrors.currentPassword}</p>}
+            {fieldErrors.currentPassword && <p className="mt-1.5 text-xs text-rose-700">{fieldErrors.currentPassword}</p>}
           </div>
 
           <div>
-            <label className="mb-1.5 block text-sm font-medium text-slate-700 dark:text-slate-300">New Password</label>
+            <label className="mb-1.5 block text-sm font-medium text-card-foreground">New Password</label>
             <div className="relative">
-              <Lock className="pointer-events-none absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
+              <Lock className="pointer-events-none absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
               <input
                 type={showPassword ? 'text' : 'password'}
                 value={newPassword}
                 onChange={(e) => setNewPassword(e.target.value)}
-                className="w-full rounded-xl border border-slate-200 bg-slate-50 py-2.5 pl-10 pr-3.5 text-sm outline-none focus:border-cyan-500 focus:bg-white dark:border-slate-700 dark:bg-slate-950"
+                className="form-control w-full rounded-xl py-2.5 pl-10 pr-3.5 text-sm"
                 autoComplete="new-password"
               />
             </div>
             <PasswordRequirements password={newPassword} />
-            {fieldErrors.newPassword && <p className="mt-1.5 text-xs text-red-600">{fieldErrors.newPassword}</p>}
+            {fieldErrors.newPassword && <p className="mt-1.5 text-xs text-rose-700">{fieldErrors.newPassword}</p>}
           </div>
 
           <div>
-            <label className="mb-1.5 block text-sm font-medium text-slate-700 dark:text-slate-300">Confirm New Password</label>
+            <label className="mb-1.5 block text-sm font-medium text-card-foreground">Confirm New Password</label>
             <div className="relative">
-              <Lock className="pointer-events-none absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
+              <Lock className="pointer-events-none absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
               <input
                 type={showPassword ? 'text' : 'password'}
                 value={confirmPassword}
                 onChange={(e) => setConfirmPassword(e.target.value)}
-                className="w-full rounded-xl border border-slate-200 bg-slate-50 py-2.5 pl-10 pr-3.5 text-sm outline-none focus:border-cyan-500 focus:bg-white dark:border-slate-700 dark:bg-slate-950"
+                className="form-control w-full rounded-xl py-2.5 pl-10 pr-3.5 text-sm"
                 autoComplete="new-password"
               />
             </div>
-            {fieldErrors.confirmPassword && <p className="mt-1.5 text-xs text-red-600">{fieldErrors.confirmPassword}</p>}
+            {fieldErrors.confirmPassword && <p className="mt-1.5 text-xs text-rose-700">{fieldErrors.confirmPassword}</p>}
           </div>
 
           <div className="flex flex-wrap gap-3 pt-2">
@@ -135,7 +135,7 @@ export default function ChangePasswordPage() {
             </button>
             <Link
               href="/dashboard"
-              className="inline-flex items-center rounded-xl border border-slate-300 px-4 py-2.5 text-sm font-medium text-slate-700 hover:bg-slate-50 dark:border-slate-700 dark:text-slate-200"
+              className="inline-flex items-center rounded-xl border border-border bg-card px-4 py-2.5 text-sm font-medium text-card-foreground hover:bg-muted"
             >
               Cancel
             </Link>

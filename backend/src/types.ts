@@ -960,6 +960,8 @@ export interface Task {
   progress_manual_override?: boolean;
   /** When true, the task is hidden from Daily Work Updates (all dashboards) but not deleted. */
   sheet_hidden?: boolean;
+  /** Persisted delay/overdue reason. Required after deadline while incomplete. */
+  delay_reason?: string;
   completed_at?: string;
   created_at: string;
   updated_at: string;
@@ -1125,6 +1127,34 @@ export interface Escalation {
   ceo_decision?: string;
   resolution?: string;
   resolved_at?: string;
+  created_at: string;
+  updated_at: string;
+}
+
+export type LeaveRequestKind = 'LEAVE' | 'PERMISSION';
+export type LeaveDayPortion = 'FULL' | 'FIRST_HALF' | 'SECOND_HALF' | 'PERMISSION';
+export type LeaveRequestStatus = 'PENDING' | 'APPROVED' | 'REJECTED' | 'CANCELLED';
+
+export interface LeaveRequest {
+  id: string;
+  user_id: string;
+  user_name: string;
+  kind: LeaveRequestKind;
+  leave_type: string;
+  from_date: string;
+  to_date: string;
+  day_portion: LeaveDayPortion;
+  from_time?: string;
+  to_time?: string;
+  reason: string;
+  attachment_url?: string;
+  status: LeaveRequestStatus;
+  approver_id?: string;
+  approver_name?: string;
+  decided_by_id?: string;
+  decided_by_name?: string;
+  decided_at?: string;
+  decision_comment?: string;
   created_at: string;
   updated_at: string;
 }

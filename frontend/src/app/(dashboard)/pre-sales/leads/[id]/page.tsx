@@ -1239,7 +1239,7 @@ export default function LeadDetailPage() {
 
       {/* PM Return Modal */}
       {showReturnModal && (
-        <div className="fixed inset-0 bg-slate-950/80 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+        <div className="modal-scrim fixed inset-0 backdrop-blur-sm z-50 flex items-center justify-center p-4">
           <div className="bg-slate-900 border border-slate-800 rounded-xl w-full max-w-lg shadow-2xl p-6 space-y-4">
             <div className="flex items-center justify-between border-b border-slate-800 pb-3">
               <h3 className="font-bold text-slate-100 text-sm flex items-center gap-2"><RotateCcw className="w-4 h-4 text-amber-400" /> Return Lead to Sales</h3>
@@ -1255,7 +1255,7 @@ export default function LeadDetailPage() {
       )}
 
       {showCancelModal && (
-        <div className="fixed inset-0 bg-slate-950/80 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+        <div className="modal-scrim fixed inset-0 backdrop-blur-sm z-50 flex items-center justify-center p-4">
           <div className="bg-slate-900 border border-slate-800 rounded-xl w-full max-w-lg shadow-2xl p-6 space-y-4">
             <div className="flex items-center justify-between border-b border-slate-800 pb-3">
               <h3 className="font-bold text-slate-100 text-sm">Cancel / Reject Lead</h3>
@@ -1271,7 +1271,7 @@ export default function LeadDetailPage() {
       )}
 
       {showForwardModal && (
-        <div className="fixed inset-0 bg-slate-950/80 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+        <div className="modal-scrim fixed inset-0 backdrop-blur-sm z-50 flex items-center justify-center p-4">
           <div className="bg-slate-900 border border-slate-800 rounded-xl w-full max-w-lg shadow-2xl p-6 space-y-4">
             <div className="flex items-center justify-between border-b border-slate-800 pb-3">
               <h3 className="font-bold text-slate-100 text-sm">Forward Lead</h3>
@@ -1316,7 +1316,7 @@ export default function LeadDetailPage() {
 
       {/* +ADD TEAM Modal */}
       {showAddTeamModal && (
-        <div className="fixed inset-0 bg-slate-950/85 backdrop-blur-sm z-50 flex items-center justify-center p-4 overflow-y-auto">
+        <div className="modal-scrim fixed inset-0 backdrop-blur-sm z-50 flex items-center justify-center p-4 overflow-y-auto">
           <div className="bg-slate-900 border border-slate-800 rounded-xl w-full max-w-2xl shadow-2xl p-6 space-y-5 my-4">
             <div className="flex items-center justify-between border-b border-slate-800 pb-3">
               <h3 className="font-bold text-slate-100 text-sm flex items-center gap-2"><Scan className="w-4 h-4 text-cyan-400" /> Add Team to {lead.lead_number} Feasibility</h3>
@@ -1440,7 +1440,7 @@ export default function LeadDetailPage() {
 
       {/* TL Allocate Modal */}
       {showTLAllocateModal && activeAssignment && (
-        <div className="fixed inset-0 bg-slate-950/80 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+        <div className="modal-scrim fixed inset-0 backdrop-blur-sm z-50 flex items-center justify-center p-4">
           <div className="bg-slate-900 border border-slate-800 rounded-xl w-full max-w-lg shadow-2xl p-6 space-y-4">
             <div className="flex items-center justify-between border-b border-slate-800 pb-3">
               <h3 className="font-bold text-slate-100 text-sm">Accept & Allocate — {activeAssignment.team_name}</h3>
@@ -1478,7 +1478,7 @@ export default function LeadDetailPage() {
 
       {/* TL Suggest Change Modal */}
       {showSuggestModal && activeAssignment && (
-        <div className="fixed inset-0 bg-slate-950/80 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+        <div className="modal-scrim fixed inset-0 backdrop-blur-sm z-50 flex items-center justify-center p-4">
           <div className="bg-slate-900 border border-slate-800 rounded-xl w-full max-w-lg shadow-2xl p-6 space-y-4">
             <div className="flex items-center justify-between border-b border-slate-800 pb-3">
               <h3 className="font-bold text-slate-100 text-sm">Suggest Change to PM</h3>
@@ -1500,7 +1500,7 @@ export default function LeadDetailPage() {
 
       {/* TL Clarification Modal */}
       {showClarifyModal && activeAssignment && (
-        <div className="fixed inset-0 bg-slate-950/80 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+        <div className="modal-scrim fixed inset-0 backdrop-blur-sm z-50 flex items-center justify-center p-4">
           <div className="bg-slate-900 border border-slate-800 rounded-xl w-full max-w-lg shadow-2xl p-6 space-y-4">
             <div className="flex items-center justify-between border-b border-slate-800 pb-3">
               <h3 className="font-bold text-slate-100 text-sm">Request Clarification from PM</h3>
@@ -1519,7 +1519,7 @@ export default function LeadDetailPage() {
 
       {/* Add Activity Modal */}
       {showActivityModal && (
-        <div className="fixed inset-0 bg-slate-950/80 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+        <div className="modal-scrim fixed inset-0 backdrop-blur-sm z-50 flex items-center justify-center p-4">
           <div className="bg-slate-900 border border-slate-800 rounded-xl w-full max-w-lg shadow-2xl p-6 space-y-4">
             <div className="flex items-center justify-between border-b border-slate-800 pb-3">
               <h3 className="font-bold text-slate-100 text-sm">Add Customer Activity Log</h3>
@@ -1542,7 +1542,7 @@ export default function LeadDetailPage() {
 
       {/* Upload Document Modal */}
       {showDocModal && (
-        <div className="fixed inset-0 bg-slate-950/80 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+        <div className="modal-scrim fixed inset-0 backdrop-blur-sm z-50 flex items-center justify-center p-4">
           <div className="bg-slate-900 border border-slate-800 rounded-xl w-full max-w-lg shadow-2xl p-6 space-y-4">
             <div className="flex items-center justify-between border-b border-slate-800 pb-3">
               <h3 className="font-bold text-slate-100 text-sm">Upload Document</h3>

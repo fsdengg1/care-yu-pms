@@ -14,9 +14,8 @@ const ROLE_PERMISSIONS: Record<string, string[]> = {
     'view:daily-updates',
     'decide:ceo_escalation',
     'create:announcement',
-    'view:executive-overview',
   ],
-  CTO: ['view:leads', 'edit:lead', 'view:projects', 'view:teams', 'view:audit', 'view:notifications', 'view:daily-updates', 'manage:users', 'create:announcement', 'view:executive-overview'],
+  CTO: ['view:leads', 'edit:lead', 'view:projects', 'view:teams', 'view:audit', 'view:notifications', 'view:daily-updates', 'manage:users', 'create:announcement'],
   BUSINESS_HEAD: [
     'create:lead',
     'edit:lead',
@@ -29,7 +28,6 @@ const ROLE_PERMISSIONS: Record<string, string[]> = {
     'view:escalations',
     'escalate:issue',
     'create:announcement',
-    'view:executive-overview',
   ],
   ENG_DIRECTOR: [
     'create:lead',
@@ -44,7 +42,6 @@ const ROLE_PERMISSIONS: Record<string, string[]> = {
     'convert:lead',
     'view:escalations',
     'escalate:issue',
-    'view:executive-overview',
   ],
   SALES: ['edit:lead', 'view:leads', 'view:notifications', 'create:quotation', 'convert:lead'],
   PROJECT_MANAGER: [
@@ -64,7 +61,6 @@ const ROLE_PERMISSIONS: Record<string, string[]> = {
     'escalate:issue',
     'manage:project',
     'manage:users',
-    'view:executive-overview',
   ],
   PROJECT_ENGINEER: ['view:leads', 'edit:lead', 'create:task', 'view:projects', 'view:notifications', 'submit:daily-update', 'view:daily-updates'],
   TEAM_LEAD: ['view:leads', 'edit:lead', 'create:task', 'assign:task', 'create:feasibility', 'view:notifications', 'submit:daily-update', 'view:daily-updates', 'view:projects', 'view:escalations', 'escalate:issue'],
@@ -80,30 +76,6 @@ export function hasPermission(user: User | undefined, permission: string): boole
   return granted.includes('*') || granted.includes(permission);
 }
 
-export const EXECUTIVE_OVERVIEW_ROLES = [
-  'CEO',
-  'BUSINESS_HEAD',
-  'ENG_DIRECTOR',
-  'CTO',
-  'PROJECT_MANAGER',
-  'SYSTEM_ADMIN',
-] as const;
-
-export function canAccessExecutiveOverview(user: User | undefined): boolean {
-  if (!user) return false;
-  return (EXECUTIVE_OVERVIEW_ROLES as readonly string[]).includes(user.role_code);
-}
-
-export function requireExecutiveOverview(req: AuthedRequest, res: Response, next: NextFunction) {
-  if (!canAccessExecutiveOverview(req.user)) {
-    return res.status(403).json({
-      message:
-        'Forbidden. Executive Overview is available only to CEO, Business Head, Engineering Director, CTO, and Project Manager.',
-    });
-  }
-  return next();
-}
-
 export function requirePermission(...permissions: string[]) {
   return (req: AuthedRequest, res: Response, next: NextFunction) => {
     const allowed = permissions.some((permission) => hasPermission(req.user, permission));
@@ -114,4 +86,27 @@ export function requirePermission(...permissions: string[]) {
     }
     return next();
   };
+}
+
+/** Role-gated Team Dashboard. SYSTEM_ADMIN wildcard does not grant this. */
+export const TEAM_DASHBOARD_ROLES = new Set([
+  'CEO',
+  'CTO',
+  'BUSINESS_HEAD',
+  'ENG_DIRECTOR',
+  'ENGG_DIRECTOR',
+  'PROJECT_MANAGER',
+]);
+
+export function canAccessTeamDashboard(user: User | undefined): boolean {
+  return Boolean(user && TEAM_DASHBOARD_ROLES.has(user.role_code));
+}
+
+export function requireTeamDashboardAccess(req: AuthedRequest, res: Response, next: NextFunction) {
+  if (!canAccessTeamDashboard(req.user)) {
+    return res.status(403).json({
+      message: 'Forbidden. Team Dashboard is not available for your role.',
+    });
+  }
+  return next();
 }

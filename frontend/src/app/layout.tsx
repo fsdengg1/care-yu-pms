@@ -22,7 +22,7 @@ export default function RootLayout({
       <head>
         <script dangerouslySetInnerHTML={{ __html: APPEARANCE_BOOTSTRAP }} />
       </head>
-      <body className={`${inter.className} bg-slate-950 text-slate-100 antialiased min-h-screen selection:bg-cyan-500 selection:text-white`}>
+      <body className={`${inter.className} bg-background text-foreground antialiased min-h-screen selection:bg-cyan-500 selection:text-white`}>
         <ThemeProvider>{children}</ThemeProvider>
       </body>
     </html>

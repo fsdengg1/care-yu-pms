@@ -80,5 +80,5 @@ export function workflowActionLabel(lead: WorkflowActionLead): string {
   if (status === 'LOST') return 'Lost';
   if (status === 'ON_HOLD') return 'On Hold';
 
-  return status.replace(/_/g, ' ');
+  return String(status).replace(/_/g, ' ');
 }

@@ -19,11 +19,11 @@ export const NAVIGATION_ITEMS: NavItem[] = [
     category: 'main'
   },
   {
-    name: 'Executive Overview',
-    href: '/executive-overview',
+    name: 'Team Dashboard',
+    href: '/dashboard/team',
     iconName: 'BarChart3',
     category: 'main',
-    allowedRoles: ['CEO', 'CTO', 'BUSINESS_HEAD', 'ENG_DIRECTOR', 'PROJECT_MANAGER', 'SYSTEM_ADMIN']
+    allowedRoles: ['CEO', 'CTO', 'BUSINESS_HEAD', 'ENG_DIRECTOR', 'ENGG_DIRECTOR', 'PROJECT_MANAGER']
   },
   {
     name: 'Leads & Pipeline',
@@ -80,6 +80,12 @@ export const NAVIGATION_ITEMS: NavItem[] = [
     name: 'Daily Work Updates',
     href: '/daily-updates',
     iconName: 'FileText',
+    category: 'team_work'
+  },
+  {
+    name: 'Leave & Permission',
+    href: '/leave',
+    iconName: 'CalendarClock',
     category: 'team_work'
   },
   {
@@ -154,9 +160,17 @@ export function isCeoViewOnly(user: User | null | undefined): boolean {
   return user?.role_code === 'CEO';
 }
 
-export function canAccessExecutiveOverview(user: User | null | undefined): boolean {
-  if (!user) return false;
-  return ['CEO', 'BUSINESS_HEAD', 'ENG_DIRECTOR', 'CTO', 'PROJECT_MANAGER', 'SYSTEM_ADMIN'].includes(user.role_code);
+const TEAM_DASHBOARD_ROLES = new Set([
+  'CEO',
+  'CTO',
+  'BUSINESS_HEAD',
+  'ENG_DIRECTOR',
+  'ENGG_DIRECTOR',
+  'PROJECT_MANAGER',
+]);
+
+export function canAccessTeamDashboard(user: User | null | undefined): boolean {
+  return Boolean(user && TEAM_DASHBOARD_ROLES.has(user.role_code));
 }
 
 export function canCreateLead(user: User | null | undefined): boolean {

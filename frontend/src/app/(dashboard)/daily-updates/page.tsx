@@ -69,6 +69,10 @@ function DailyWorkUpdatesInner() {
   const [deleteRow, setDeleteRow] = useState<DailyStatusRow | null>(null);
   const [workDate, setWorkDate] = useState(appTodayIso);
   const [period, setPeriod] = useState<'morning' | 'evening'>('morning');
+  const [phase, setPhase] = useState<{ morningLocked?: boolean; eveningOpen?: boolean; timezone?: string } | null>(null);
+  const [attendance, setAttendance] = useState<
+    Array<{ personId: string; person: string; onLeave?: boolean; halfDay?: string; permission?: { fromTime?: string; toTime?: string; reason?: string } }>
+  >([]);
   const [activePanel, setActivePanel] = useState<'hub' | 'morning-status'>('hub');
   const [reportRows, setReportRows] = useState<DailyStatusRow[]>([]);
   const [reportLoading, setReportLoading] = useState(false);
@@ -111,6 +115,8 @@ function DailyWorkUpdatesInner() {
     setRows(sheet.rows);
     setPeople(sheet.people);
     setSheetProjects(sheet.projects);
+    setPhase(sheet.phase || null);
+    setAttendance(sheet.attendance || []);
   };
 
   const loadMorningReport = async (date = workDate) => {
@@ -317,7 +323,7 @@ function DailyWorkUpdatesInner() {
                 </button>
                 <button
                   type="button"
-                  disabled={busy}
+                  disabled={busy || (phase?.eveningOpen === false && workDate === appTodayIso())}
                   onClick={async () => {
                     setPeriod('evening');
                     await loadSheet(workDate, 'evening');
@@ -372,6 +378,8 @@ function DailyWorkUpdatesInner() {
           onSelectedIds={setSelectedIds}
           workDate={workDate}
           period={period}
+          phase={phase || undefined}
+          attendance={attendance}
           onWorkDateChange={changeWorkDate}
           onAddSubtask={canAddTask ? openAddSubtask : undefined}
           onEditSubtask={canAddTask ? openEditSubtask : undefined}
@@ -437,7 +445,7 @@ function DailyWorkUpdatesInner() {
       )}
 
       {compareOpen && compare && (
-        <div className="fixed inset-0 z-[85] flex justify-end overflow-x-hidden bg-slate-950/60" onClick={() => setCompareOpen(false)}>
+        <div className="modal-scrim fixed inset-0 z-[85] flex justify-end overflow-x-hidden" onClick={() => setCompareOpen(false)}>
           <div
             className="flex h-full w-full max-w-none flex-col overflow-hidden border-l border-[#cbd5e1] bg-[#f8fafc] shadow-2xl sm:max-w-[min(100vw,1400px)]"
             onClick={(event) => event.stopPropagation()}
@@ -445,7 +453,7 @@ function DailyWorkUpdatesInner() {
             <div className="flex items-center justify-between gap-3 border-b border-[#e2e8f0] bg-white px-4 py-3">
               <div className="min-w-0">
                 <h2 className="text-sm font-bold text-[#0f172a]">Compare — Morning vs Evening</h2>
-                <p className="text-[11px] text-[#64748b]">Task Description from the morning master task · Current Updates from the Evening Daily Work Update</p>
+                <p className="text-[11px] text-[#64748b]">Same task record morning vs evening. Task description is never rewritten by the system.</p>
               </div>
               <div className="flex shrink-0 items-center gap-2">
                 <div className="inline-flex rounded-md border border-[#e2e8f0] bg-[#f8fafc] p-0.5 text-[11px] font-semibold">

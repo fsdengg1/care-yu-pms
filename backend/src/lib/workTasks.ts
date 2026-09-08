@@ -9,6 +9,8 @@ import { emitWorkflowEvent, WorkflowEventKey } from './workflowEngine.js';
 import { intakeStatusOf, markAcceptedInExecution, persistProject, stampProjectAction } from './projectWorkflow.js';
 import { persistComputedProgress } from './projectProgress.js';
 import { leadPipelineStageLabel } from './leadWorkflow.js';
+import { delayReasonRequired, isOverdueOnDate, normalizeDelayReason, dateInAppTimezone } from './workCalendar.js';
+import { leaveNonWorkingDays } from './leaveRequests.js';
 
 export function canCreateWorkTask(user: User) {
   return hasPermission(user, 'create:task') || hasPermission(user, 'assign:task');
@@ -635,6 +637,12 @@ export function updateWorkTask(user: User, id: string, body: Record<string, unkn
     next.progress_manual_override = Boolean(body.progress_manual_override);
   }
   if (body.blocked_reason !== undefined) next.blocked_reason = String(body.blocked_reason);
+  if (body.delay_reason !== undefined || body.reason_for_delay !== undefined) {
+    next.delay_reason = normalizeDelayReason(
+      String(body.delay_reason || body.reason_for_delay || ''),
+      String(body.delay_reason_other || '')
+    );
+  }
   if (canExecute && body.remarks !== undefined) next.remarks = String(body.remarks);
   if (next.status === 'IN_PROGRESS' && current.status === 'BLOCKED') {
     next.blocked_reason = undefined;
@@ -659,6 +667,14 @@ export function updateWorkTask(user: User, id: string, body: Record<string, unkn
   }
   if (next.status !== 'DONE' && (next.progress_percent || 0) >= 100) {
     next.progress_percent = 99;
+  }
+
+  const asOf = String(body.work_date || '').slice(0, 10);
+  const today = /^\d{4}-\d{2}-\d{2}$/.test(asOf) ? asOf : dateInAppTimezone();
+  const leaveDays = next.assigned_to_id ? leaveNonWorkingDays(next.assigned_to_id, next.due_date || today, today) : new Set<string>();
+  const overdue = isOverdueOnDate(next.due_date, next.status, today, leaveDays);
+  if (delayReasonRequired(next.delay_reason, overdue, next.status === 'DONE')) {
+    return { error: 'Reason for Delay is required because this task is overdue.', status: 400 as const };
   }
 
   if (next.status === 'BLOCKED' && current.status !== 'BLOCKED') {
@@ -799,11 +815,14 @@ export function deleteWorkTasks(user: User, ids: string[]) {
     };
   }
   const removedIds = new Set(selected.map((task) => task.id));
+  for (const task of tasks) {
+    if (task.parent_task_id && removedIds.has(task.parent_task_id)) removedIds.add(task.id);
+  }
+  const removedTasks = tasks.filter((task) => removedIds.has(task.id));
   const next = tasks
     .filter((task) => !removedIds.has(task.id))
     .map((task) => {
       let updated = task;
-      if (task.parent_task_id && removedIds.has(task.parent_task_id)) updated = { ...updated, parent_task_id: undefined };
       if (task.depends_on_id && removedIds.has(task.depends_on_id)) updated = { ...updated, depends_on_id: undefined };
       if (task.depends_on_ids?.some((id) => removedIds.has(id))) {
         updated = { ...updated, depends_on_ids: task.depends_on_ids.filter((id) => !removedIds.has(id)) };
@@ -811,9 +830,9 @@ export function deleteWorkTasks(user: User, ids: string[]) {
       return updated;
     });
   store.saveTasks(next);
-  const projectIds = [...new Set(selected.map((task) => task.project_id).filter(Boolean))] as string[];
+  const projectIds = [...new Set(removedTasks.map((task) => task.project_id).filter(Boolean))] as string[];
   for (const projectId of projectIds) persistComputedProgress(projectId);
-  for (const removed of selected) {
+  for (const removed of removedTasks) {
     store.appendAudit({
       user_id: user.id,
       user_name: user.name,
@@ -825,7 +844,7 @@ export function deleteWorkTasks(user: User, ids: string[]) {
       description: `${user.name} deleted task "${removed.title}".`,
     });
   }
-  return { deleted: selected.length, ids: [...removedIds] };
+  return { deleted: removedTasks.length, ids: [...removedIds] };
 }
 
 export function createDependencyRequest(

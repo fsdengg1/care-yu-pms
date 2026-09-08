@@ -958,6 +958,7 @@ export interface Task {
   requested_from_task_id?: string;
   progress_manual_override?: boolean;
   sheet_hidden?: boolean;
+  delay_reason?: string;
   completed_at?: string;
   created_at: string;
   updated_at: string;

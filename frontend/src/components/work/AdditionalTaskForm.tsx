@@ -72,7 +72,7 @@ export default function AdditionalTaskForm({
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/70 p-4">
+    <div className="modal-scrim fixed inset-0 z-50 flex items-center justify-center p-4">
       <div className="w-full max-w-lg rounded-2xl border border-slate-800 bg-slate-900 p-5 text-xs shadow-xl">
         <h3 className="text-sm font-bold text-slate-100">Additional Task</h3>
         <p className="mt-1 text-slate-400">

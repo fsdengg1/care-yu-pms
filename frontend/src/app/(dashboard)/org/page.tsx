@@ -247,15 +247,15 @@ export default function OrganizationManagementPage() {
   ).length;
 
   return (
-    <div className="-m-6 min-h-full bg-[#F4F7FB] p-4 text-slate-800">
+    <div className="surface-light -m-6 min-h-full bg-background p-4 text-foreground">
       <div className="mb-3 flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
         <div>
           <div className="flex items-center gap-2 text-[11px] font-semibold uppercase tracking-wider text-blue-700">
             <Building2 className="h-4 w-4" />
             Careyu Automation
           </div>
-          <h1 className="mt-0.5 text-xl font-bold text-[#0B1F3A]">Organization Management</h1>
-          <p className="mt-0.5 text-xs text-slate-500">
+          <h1 className="mt-0.5 text-xl font-bold text-foreground">Organization Management</h1>
+          <p className="mt-0.5 text-xs text-muted-foreground">
             Organizational hierarchy and role-based access. Functional delivery teams exclude executive and management roles.
           </p>
         </div>
@@ -285,17 +285,17 @@ export default function OrganizationManagementPage() {
         ].map((card) => {
           const Icon = card.icon;
           return (
-            <div key={card.label} className="rounded-xl border border-slate-200 bg-white p-3 shadow-sm">
+            <div key={card.label} className="rounded-xl border border-border bg-card p-3 shadow-sm">
               <div className="flex items-center justify-between">
-                <span className="text-[10px] font-semibold uppercase tracking-wide text-slate-500">{card.label}</span>
+                <span className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">{card.label}</span>
                 <Icon className="h-3.5 w-3.5 text-blue-600" />
               </div>
-              <div className="mt-1 text-xl font-bold text-[#0B1F3A]">{card.value}</div>
+              <div className="mt-1 text-xl font-bold text-card-foreground">{card.value}</div>
             </div>
           );
         })}
       </div>
-      <p className="-mt-1 mb-3 text-[11px] text-slate-500">
+      <p className="-mt-1 mb-3 text-[11px] text-muted-foreground">
         {functionalHeadcount} functional team members + {managementHeadcount} management roles = {functionalHeadcount + managementHeadcount} total employees.
       </p>
 

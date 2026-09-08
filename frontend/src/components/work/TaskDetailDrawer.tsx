@@ -37,7 +37,7 @@ export default function TaskDetailDrawer({
   ];
 
   return (
-    <div className="fixed inset-0 z-[80] flex justify-end bg-slate-950/50" onClick={onClose}>
+    <div className="modal-scrim fixed inset-0 z-[80] flex justify-end" onClick={onClose}>
       <aside
         className="flex h-full w-full max-w-md flex-col overflow-y-auto border-l border-slate-800 bg-slate-900 p-5 shadow-2xl"
         onClick={(event) => event.stopPropagation()}
