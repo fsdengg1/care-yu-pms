@@ -41,7 +41,7 @@ jobs:
         run: npm ci
 
       - name: Build frontend for Cloudflare Pages
-        run: npm run build -w frontend
+        run: npm run build:pages
         env:
           # Production: client auto-uses Worker API on *.pages.dev domains
           NEXT_PUBLIC_API_URL: ''

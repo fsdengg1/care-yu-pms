@@ -305,13 +305,29 @@ function pickUpdateForDate(
   return undefined;
 }
 
+function normalizeComparableText(value: string): string {
+  return value.trim().toLowerCase().replace(/\s+/g, ' ');
+}
+
+function parseHoursWorkedValue(value: unknown): number {
+  if (typeof value === 'number' && Number.isFinite(value)) return Math.max(0, value);
+  const raw = String(value ?? '').trim();
+  if (!raw) return 0;
+  const direct = Number(raw);
+  if (Number.isFinite(direct)) return Math.max(0, direct);
+  const match = raw.match(/^(\d+)\s*h(?:\s*(\d+)\s*m)?$/i);
+  if (!match) return 0;
+  const hours = Number(match[1]) || 0;
+  const mins = Number(match[2]) || 0;
+  return hours + mins / 60;
+}
+
 function isHoursOnlyShell(update: DailyUpdate, masterText: string): boolean {
   const text = (update.work_completed || '').trim();
   if (!text) return true;
   const summary = String(update.summary || '');
   if (!/via Daily Work Updates/i.test(summary)) return false;
-  const norm = (value: string) => value.trim().toLowerCase().replace(/\s+/g, ' ');
-  return norm(text) === norm(masterText || '');
+  return normalizeComparableText(text) === normalizeComparableText(masterText || '');
 }
 
 function isExplicitEveningUpdate(update: DailyUpdate): boolean {
@@ -328,6 +344,83 @@ function eveningNarrativeText(update: DailyUpdate | undefined, masterText: strin
   }
   if (isHoursOnlyShell(update, masterText)) return undefined;
   return text;
+}
+
+function eveningSheetStatus(
+  task: Task | undefined,
+  eveningUpd: DailyUpdate | undefined,
+  eveningSnapRow?: DailyStatusRow | null,
+  hoursWorked = 0
+): DailySheetStatus {
+  if (task) {
+    const fromTask = taskSheetStatus(task);
+    if (fromTask !== 'Yet to Start') return fromTask;
+  }
+  if (eveningUpd?.work_status) {
+    const fromUpdate = toSheetStatus(eveningUpd.work_status);
+    if (fromUpdate !== 'Yet to Start') return fromUpdate;
+  }
+  if (eveningSnapRow?.status) {
+    const fromSnap = toSheetStatus(eveningSnapRow.status);
+    if (fromSnap !== 'Yet to Start') return fromSnap;
+  }
+  if (hoursWorked > 0) return 'In Progress';
+  return task ? taskSheetStatus(task) : 'Yet to Start';
+}
+
+function resolveEveningNarrative(params: {
+  masterDesc: string;
+  taskUpdates: DailyUpdate[];
+  workDate: string;
+  employeeId?: string;
+  eveningSnapRow?: DailyStatusRow;
+  liveEveningRow?: DailyStatusRow;
+  dayOverlayRow?: DailyStatusRow;
+}): { text?: string; update?: DailyUpdate } {
+  const { masterDesc, taskUpdates, workDate, employeeId } = params;
+  const eveningUpd = pickUpdateForDate(taskUpdates, workDate, 'evening', employeeId);
+  const direct = eveningNarrativeText(eveningUpd, masterDesc);
+  if (direct) return { text: direct, update: eveningUpd };
+
+  const substantive = sortUpdatesLatestFirst(
+    taskUpdates.filter((item) => item.work_date === workDate && item.submission_status === 'SUBMITTED')
+  ).find((item) => {
+    const candidate = (item.work_completed || '').trim();
+    if (!candidate) return false;
+    if (isHoursOnlyShell(item, masterDesc)) return false;
+    if (normalizeComparableText(candidate) === normalizeComparableText(masterDesc) && !isExplicitEveningUpdate(item)) {
+      return false;
+    }
+    return true;
+  });
+  if (substantive) {
+    return { text: substantive.work_completed.trim(), update: substantive };
+  }
+
+  const snapCurrent = (params.eveningSnapRow?.currentUpdate || '').trim();
+  if (snapCurrent) return { text: snapCurrent, update: eveningUpd };
+
+  const snapDesc = (params.eveningSnapRow?.taskDescription || '').trim();
+  if (snapDesc && normalizeComparableText(snapDesc) !== normalizeComparableText(masterDesc)) {
+    return { text: snapDesc, update: eveningUpd };
+  }
+
+  const liveCurrent = (params.liveEveningRow?.currentUpdate || '').trim();
+  if (liveCurrent) return { text: liveCurrent, update: eveningUpd };
+
+  const liveDesc = (params.liveEveningRow?.taskDescription || '').trim();
+  if (liveDesc && normalizeComparableText(liveDesc) !== normalizeComparableText(masterDesc)) {
+    return { text: liveDesc, update: eveningUpd };
+  }
+
+  const overlayDesc = (params.dayOverlayRow?.taskDescription || '').trim();
+  if (overlayDesc && normalizeComparableText(overlayDesc) !== normalizeComparableText(masterDesc)) {
+    return { text: overlayDesc, update: eveningUpd };
+  }
+
+  if (snapDesc) return { text: snapDesc, update: eveningUpd };
+
+  return { text: undefined, update: eveningUpd };
 }
 
 /** Master task status is the source of truth for the sheet status column. */
@@ -430,13 +523,29 @@ export function buildDailyStatusRows(
         users.find((item) => item.id === task.assigned_to_id) ||
         allUsers.find((item) => item.id === task.assigned_to_id);
       const update = latestUpdateForTask(task, updates, workDate, period);
-      const hoursToday = loggedHoursForDate(task, updates, workDate, period);
       const deps = dependencyIdsOf(task);
       const masterDesc = (task.description || task.title || '').trim() || task.title;
       const eveningUpd = pickUpdateForDate(updatesForTask(task, updates), workDate, 'evening', task.assigned_to_id);
-      const eveningText = eveningNarrativeText(eveningUpd, masterDesc);
-      const status = taskSheetStatus(task);
-      const delayUpdate = period === 'evening' ? eveningUpd || update : update;
+      const eveningResolved = period === 'evening'
+        ? resolveEveningNarrative({
+            masterDesc,
+            taskUpdates: updatesForTask(task, updates),
+            workDate,
+            employeeId: task.assigned_to_id,
+          })
+        : { text: eveningNarrativeText(eveningUpd, masterDesc), update: eveningUpd };
+      const eveningText = eveningResolved.text;
+      const resolvedEveningUpd = eveningResolved.update || eveningUpd;
+      const hoursToday = loggedHoursForDate(task, updates, workDate, period);
+      const hoursWorkedValue =
+        period === 'evening'
+          ? Math.max(hoursToday, parseHoursWorkedValue(resolvedEveningUpd?.hours_worked))
+          : hoursToday;
+      const status =
+        period === 'evening'
+          ? eveningSheetStatus(task, resolvedEveningUpd, undefined, hoursWorkedValue)
+          : taskSheetStatus(task);
+      const delayUpdate = period === 'evening' ? resolvedEveningUpd || update : update;
       const children = (childrenByParent.get(task.id) || []).slice().sort((a, b) => a.title.localeCompare(b.title));
       const subtasks: DailyStatusSubtask[] = children.map((child) => ({
         id: child.id,
@@ -458,10 +567,10 @@ export function buildDailyStatusRows(
         parentTaskId: child.parent_task_id || task.id,
       }));
       let progressPercent = task.progress_percent || 0;
-      if (period === 'evening' && eveningUpd?.progress_percent != null) {
-        progressPercent = eveningUpd.progress_percent;
+      if (period === 'evening' && resolvedEveningUpd?.progress_percent != null) {
+        progressPercent = resolvedEveningUpd.progress_percent;
       }
-      if (children.length && !task.progress_manual_override && !(period === 'evening' && eveningUpd?.progress_percent != null)) {
+      if (children.length && !task.progress_manual_override && !(period === 'evening' && resolvedEveningUpd?.progress_percent != null)) {
         const doneWeight = children.reduce((sum, child) => {
           if (child.status === 'DONE') return sum + 1;
           if (child.status === 'IN_PROGRESS') return sum + 0.5;
@@ -498,8 +607,8 @@ export function buildDailyStatusRows(
         blocked: task.status === 'BLOCKED' || task.status === ('WAITING' as Task['status']),
         overdue: isOverdue(task, workDate),
         progressPercent: progressForSheetStatus(status, progressPercent),
-        hoursWorked: hoursToday,
-        loggedHours: formatLoggedHours(hoursToday),
+        hoursWorked: hoursWorkedValue,
+        loggedHours: formatLoggedHours(hoursWorkedValue),
         workDate: pickUpdateForDate(updatesForTask(task, updates), workDate, period, task.assigned_to_id)?.work_date || workDate,
         latestUpdateAt: update?.submitted_at || update?.updated_at || task.last_update_at,
         subtasks,
@@ -803,7 +912,10 @@ export function compareSnapshots(
   const eveningSnapRows = loadMailedOrSnapshotRows(resolved, 'evening') || [];
 
   const liveMorning = visibleSheetRows(buildDailyStatusRows(user, { date: resolved, period: 'morning' }));
+  const liveEvening = visibleSheetRows(buildDailyStatusRows(user, { date: resolved, period: 'evening' }));
   const morningList = morningSnapRows.length ? morningSnapRows : liveMorning;
+  const dayOverlayRows = eveningRowsFromDayUpdates(resolved, morningList) || [];
+  const dayOverlayById = new Map(dayOverlayRows.map((row) => [row.id, row]));
   const scopedMorning = canSeeAllDailyStatusRows(user)
     ? morningList
     : morningList.filter((row) => row.personId === user.id || row.createdById === user.id);
@@ -831,32 +943,45 @@ export function compareSnapshots(
         morningRow
       );
 
-      const eveningUpd = task
-        ? pickUpdateForDate(updatesForTask(task, allUpdates), resolved, 'evening', employeeId)
-        : undefined;
-      let eveningText = eveningNarrativeText(eveningUpd, masterDesc);
       const eveningSnapRow = eveningSnapRows.find((row) => row.id === morningRow.id);
-      if (!eveningText) {
-        const snapText = (eveningSnapRow?.taskDescription || '').trim();
-        const snapNorm = snapText.toLowerCase().replace(/\s+/g, ' ');
-        const masterNorm = masterDesc.toLowerCase().replace(/\s+/g, ' ');
-        if (snapText && snapNorm !== masterNorm) eveningText = snapText;
-      }
+      const liveEveningRow = liveEvening.find((row) => row.id === morningRow.id);
+      const dayOverlayRow = dayOverlayById.get(morningRow.id);
+      const taskUpdates = task ? updatesForTask(task, allUpdates) : [];
+      const { text: eveningText, update: eveningUpd } = resolveEveningNarrative({
+        masterDesc,
+        taskUpdates,
+        workDate: resolved,
+        employeeId,
+        eveningSnapRow,
+        liveEveningRow,
+        dayOverlayRow,
+      });
 
       const currentUpdateText = eveningText || 'No Evening Update Submitted';
+      const hoursWorked = Math.max(
+        parseHoursWorkedValue(eveningUpd?.hours_worked),
+        parseHoursWorkedValue(eveningSnapRow?.hoursWorked),
+        parseHoursWorkedValue(eveningSnapRow?.loggedHours),
+        parseHoursWorkedValue(liveEveningRow?.hoursWorked),
+        parseHoursWorkedValue(dayOverlayRow?.hoursWorked)
+      );
       const status = task
-        ? taskSheetStatus(task)
+        ? eveningSheetStatus(task, eveningUpd, eveningSnapRow || liveEveningRow || dayOverlayRow, hoursWorked)
         : toSheetStatus(eveningUpd?.work_status || eveningSnapRow?.status || morningRow.status);
-      const hoursWorked = Math.max(0, Number(eveningUpd?.hours_worked) || Number(eveningSnapRow?.hoursWorked) || 0);
       const reasonForDelay = (
         eveningUpd?.blocker ||
         eveningSnapRow?.reasonForDelay ||
+        liveEveningRow?.reasonForDelay ||
         (task ? delayReason(task, eveningUpd) : morningRow.reasonForDelay) ||
         'No delay'
       ).trim() || 'No delay';
       const progress = progressForSheetStatus(
         status,
-        eveningUpd?.progress_percent ?? eveningSnapRow?.progressPercent ?? task?.progress_percent ?? morningRow.progressPercent
+        eveningUpd?.progress_percent ??
+          eveningSnapRow?.progressPercent ??
+          liveEveningRow?.progressPercent ??
+          task?.progress_percent ??
+          morningRow.progressPercent
       );
       const onTimeDelay =
         status === 'Completed' ? 'On Time' : status === 'Hold' ? 'Hold' : task && isOverdue(task, resolved) ? 'Delay' : 'On Time';

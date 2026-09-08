@@ -16,6 +16,10 @@ coverage
 frontend/.next/
 frontend/out/
 
+# cloudflare pages build output & local wrangler cache (built in CI / on deploy)
+frontend/.cloudflare-out/
+frontend/.wrangler/
+
 # production
 build
 dist

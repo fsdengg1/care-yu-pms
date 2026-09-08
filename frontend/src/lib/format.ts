@@ -1,4 +1,4 @@
-import { workflowActionLabel, WorkflowActionLead, SUBMISSION_STAGE_LABELS } from './workflowActionLabel';
+import { workflowActionLabel, WorkflowActionLead } from './workflowActionLabel';
 
 export function formatInrCompact(value: number): string {
   if (!Number.isFinite(value) || value <= 0) return '₹ 0';
@@ -74,21 +74,21 @@ export const PIPELINE_STAGE_LABELS: Record<string, string> = {
 
 export const LEAD_STATUS_LABELS: Record<string, string> = {
   DRAFT: 'Draft',
-  SUBMITTED_TO_PM: SUBMISSION_STAGE_LABELS.PM,
-  UNDER_PM_REVIEW: SUBMISSION_STAGE_LABELS.PM,
+  SUBMITTED_TO_PM: 'Submitted to PM for Review',
+  UNDER_PM_REVIEW: 'Submitted to PM for Review',
   RETURNED_TO_SALES: 'Returned for Clarification',
   ADDITIONAL_INFORMATION_REQUIRED: 'Returned for Clarification',
-  RESUBMITTED_TO_PM: SUBMISSION_STAGE_LABELS.PM,
-  ACCEPTED_FOR_FEASIBILITY: SUBMISSION_STAGE_LABELS.PM,
-  FEASIBILITY_IN_PROGRESS: SUBMISSION_STAGE_LABELS.PM,
-  FEASIBILITY_SUBMITTED: SUBMISSION_STAGE_LABELS.PM,
+  RESUBMITTED_TO_PM: 'Submitted to PM for Review',
+  ACCEPTED_FOR_FEASIBILITY: 'Submitted to Feasibility Team',
+  FEASIBILITY_IN_PROGRESS: 'Submitted to Feasibility Team',
+  FEASIBILITY_SUBMITTED: 'Submitted to PM for Review',
   FEASIBILITY_RETURNED: 'Returned for Clarification',
   FEASIBILITY_REJECTED: 'Rejected',
   COSTING_IN_PROGRESS: 'Submitted to Procurement Review',
-  COSTING_SUBMITTED: SUBMISSION_STAGE_LABELS.PM,
+  COSTING_SUBMITTED: 'Submitted to PM for Review',
   COSTING_RETURNED: 'Returned for Clarification',
   COSTING_REJECTED: 'Rejected',
-  QUOTATION: SUBMISSION_STAGE_LABELS.BUSINESS_HEAD,
+  QUOTATION: 'Submitted to Business Head for Review',
   NEGOTIATION: 'Submitted to Customer',
   ORDER_CONVERTED: 'Approved',
   WON: 'Approved',

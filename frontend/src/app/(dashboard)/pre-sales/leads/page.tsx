@@ -5,11 +5,11 @@ import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { StorageService } from '@/lib/storage';
 import { Lead, LeadStatus, User } from '@/lib/types';
-import { canCreateLead, canDeleteLead, canEditLeadInput, isCeoViewOnly, userIsOnLeadTeam } from '@/lib/rbac';
+import { canCreateLead, isCeoViewOnly, userIsOnLeadTeam } from '@/lib/rbac';
 import { LeadApi } from '@/lib/leadApi';
 import { formatInrCompact, formatLongDate, PIPELINE_STAGE_LABELS } from '@/lib/format';
 import { leadDetailHref } from '@/lib/leadRoutes';
-import { workflowActionLabel, SUBMISSION_STAGE_LABELS } from '@/lib/workflowActionLabel';
+import { workflowActionLabel } from '@/lib/workflowActionLabel';
 import { 
   Building2, 
   Plus, 
@@ -21,29 +21,26 @@ import {
   CheckCircle2, 
   AlertTriangle, 
   ArrowRight,
-  FileText,
-  Pencil,
-  Trash2,
-  Loader2
+  FileText
 } from 'lucide-react';
 
 const STATUS_BADGES: Record<LeadStatus, { label: string; style: string }> = {
   DRAFT: { label: 'Draft', style: 'bg-slate-800 text-slate-300 border-slate-700' },
-  SUBMITTED_TO_PM: { label: SUBMISSION_STAGE_LABELS.PM, style: 'bg-cyan-950 text-cyan-300 border-cyan-700' },
-  UNDER_PM_REVIEW: { label: SUBMISSION_STAGE_LABELS.PM, style: 'bg-cyan-950 text-cyan-300 border-cyan-700' },
+  SUBMITTED_TO_PM: { label: 'Submitted to PM for Review', style: 'bg-cyan-950 text-cyan-300 border-cyan-700' },
+  UNDER_PM_REVIEW: { label: 'Submitted to PM for Review', style: 'bg-cyan-950 text-cyan-300 border-cyan-700' },
   RETURNED_TO_SALES: { label: 'Returned for Clarification', style: 'bg-amber-950 text-amber-300 border-amber-800' },
   ADDITIONAL_INFORMATION_REQUIRED: { label: 'Returned for Clarification', style: 'bg-amber-950 text-amber-300 border-amber-800' },
-  RESUBMITTED_TO_PM: { label: SUBMISSION_STAGE_LABELS.PM, style: 'bg-cyan-950 text-cyan-300 border-cyan-700' },
-  ACCEPTED_FOR_FEASIBILITY: { label: SUBMISSION_STAGE_LABELS.VISION_TEAM, style: 'bg-emerald-950 text-emerald-300 border-emerald-700' },
-  FEASIBILITY_IN_PROGRESS: { label: SUBMISSION_STAGE_LABELS.VISION_TEAM, style: 'bg-indigo-950 text-indigo-300 border-indigo-800' },
-  FEASIBILITY_SUBMITTED: { label: SUBMISSION_STAGE_LABELS.PM, style: 'bg-cyan-950 text-cyan-300 border-cyan-700' },
+  RESUBMITTED_TO_PM: { label: 'Submitted to PM for Review', style: 'bg-cyan-950 text-cyan-300 border-cyan-700' },
+  ACCEPTED_FOR_FEASIBILITY: { label: 'Submitted to Feasibility Team', style: 'bg-emerald-950 text-emerald-300 border-emerald-700' },
+  FEASIBILITY_IN_PROGRESS: { label: 'Submitted to Feasibility Team', style: 'bg-indigo-950 text-indigo-300 border-indigo-800' },
+  FEASIBILITY_SUBMITTED: { label: 'Submitted to PM for Review', style: 'bg-cyan-950 text-cyan-300 border-cyan-700' },
   FEASIBILITY_RETURNED: { label: 'Returned for Clarification', style: 'bg-amber-950 text-amber-300 border-amber-800' },
   FEASIBILITY_REJECTED: { label: 'Rejected', style: 'bg-rose-950 text-rose-300 border-rose-700' },
   COSTING_IN_PROGRESS: { label: 'Submitted to Procurement Review', style: 'bg-violet-950 text-violet-300 border-violet-800' },
-  COSTING_SUBMITTED: { label: SUBMISSION_STAGE_LABELS.PM, style: 'bg-cyan-950 text-cyan-300 border-cyan-700' },
+  COSTING_SUBMITTED: { label: 'Submitted to PM for Review', style: 'bg-cyan-950 text-cyan-300 border-cyan-700' },
   COSTING_RETURNED: { label: 'Returned for Clarification', style: 'bg-amber-950 text-amber-300 border-amber-800' },
   COSTING_REJECTED: { label: 'Rejected', style: 'bg-rose-950 text-rose-300 border-rose-700' },
-  QUOTATION: { label: SUBMISSION_STAGE_LABELS.BUSINESS_HEAD, style: 'bg-cyan-950 text-cyan-300 border-cyan-800' },
+  QUOTATION: { label: 'Submitted to Business Head for Review', style: 'bg-cyan-950 text-cyan-300 border-cyan-800' },
   NEGOTIATION: { label: 'Submitted to Customer', style: 'bg-orange-950 text-orange-300 border-orange-800' },
   ORDER_CONVERTED: { label: 'Approved', style: 'bg-emerald-950 text-emerald-300 border-emerald-800' },
   WON: { label: 'Approved', style: 'bg-emerald-950 text-emerald-300 border-emerald-800' },
@@ -61,32 +58,15 @@ export default function LeadsListPage() {
   const [verticalFilter, setVerticalFilter] = useState<string>('ALL');
   const [priorityFilter, setPriorityFilter] = useState<string>('ALL');
   const [stageFilter, setStageFilter] = useState<string>('ALL');
-  const [deletingId, setDeletingId] = useState<string | null>(null);
-  const [actionError, setActionError] = useState<string | null>(null);
-
-  const loadLeads = async () => {
-    const apiLeads = await LeadApi.list();
-    setLeads(apiLeads);
-  };
 
   useEffect(() => {
     const user = StorageService.getCurrentUser();
     setCurrentUser(user);
-    void loadLeads();
+    void (async () => {
+      const apiLeads = await LeadApi.list();
+      setLeads(apiLeads);
+    })();
   }, []);
-
-  const handleDeleteLead = async (lead: Lead) => {
-    if (!window.confirm(`Delete draft lead ${lead.lead_number}? This cannot be undone.`)) return;
-    setActionError(null);
-    setDeletingId(lead.id);
-    const result = await LeadApi.delete(lead.id);
-    setDeletingId(null);
-    if (!result.ok) {
-      setActionError(result.message || `Unable to delete ${lead.lead_number}.`);
-      return;
-    }
-    setLeads((current) => current.filter((item) => item.id !== lead.id));
-  };
 
   if (!currentUser) return null;
 
@@ -331,7 +311,7 @@ export default function LeadsListPage() {
           >
             <option value="ALL">All Statuses</option>
             <option value="DRAFT">Draft</option>
-            <option value="SUBMITTED_TO_PM">{SUBMISSION_STAGE_LABELS.PM}</option>
+            <option value="SUBMITTED_TO_PM">Submitted to PM for Review</option>
             <option value="RETURNED_TO_SALES">Returned for Clarification</option>
             <option value="ACCEPTED_FOR_FEASIBILITY">Approved</option>
             <option value="CANCELLED">Rejected</option>
@@ -354,11 +334,6 @@ export default function LeadsListPage() {
       </div>
 
       {/* Main Leads Table */}
-      {actionError && (
-        <div className="mb-3 rounded-lg border border-rose-800 bg-rose-950/40 px-3 py-2 text-xs text-rose-200">
-          {actionError}
-        </div>
-      )}
       <div className="bg-slate-900/90 rounded-xl border border-slate-800 overflow-hidden shadow-sm">
         <div className="overflow-x-auto">
           <table className="w-full text-left text-xs">
@@ -384,7 +359,7 @@ export default function LeadsListPage() {
                     <th className="p-3">Status</th>
                   </>
                 )}
-                <th className="p-3 text-right min-w-[14rem]">Actions</th>
+                <th className="p-3 text-right">Actions</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-800/60 text-slate-300">
@@ -445,38 +420,13 @@ export default function LeadsListPage() {
                       </td>
                         </>
                       )}
-                      <td className="p-3 text-right min-w-[14rem]">
-                        <div className="inline-flex flex-wrap items-center justify-end gap-1.5">
-                          <a
-                            href={leadDetailHref(lead.id)}
-                            className="px-2.5 py-1 bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 rounded text-[11px] font-medium inline-flex items-center gap-1 transition-colors"
-                          >
-                            <Eye className="w-3.5 h-3.5" /> View
-                          </a>
-                          {(canEditLeadInput(currentUser, lead) || (canCreateLead(currentUser) && lead.status === 'DRAFT')) && (
-                            <Link
-                              href={`/pre-sales/leads/create?id=${encodeURIComponent(lead.id)}`}
-                              className="px-2.5 py-1 bg-cyan-950 hover:bg-cyan-900 text-cyan-200 border border-cyan-800 rounded text-[11px] font-medium inline-flex items-center gap-1 transition-colors"
-                            >
-                              <Pencil className="w-3.5 h-3.5" /> Edit Lead
-                            </Link>
-                          )}
-                          {(canDeleteLead(currentUser, lead) || (canCreateLead(currentUser) && lead.status === 'DRAFT')) && (
-                            <button
-                              type="button"
-                              disabled={deletingId === lead.id}
-                              onClick={() => void handleDeleteLead(lead)}
-                              className="px-2.5 py-1 bg-rose-950 hover:bg-rose-900 text-rose-200 border border-rose-800 rounded text-[11px] font-medium inline-flex items-center gap-1 transition-colors disabled:cursor-not-allowed disabled:opacity-50"
-                            >
-                              {deletingId === lead.id ? (
-                                <Loader2 className="w-3.5 h-3.5 animate-spin" />
-                              ) : (
-                                <Trash2 className="w-3.5 h-3.5" />
-                              )}
-                              Delete Lead
-                            </button>
-                          )}
-                        </div>
+                      <td className="p-3 text-right">
+                        <a
+                          href={leadDetailHref(lead.id)}
+                          className="px-2.5 py-1 bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 rounded text-[11px] font-medium inline-flex items-center gap-1 transition-colors"
+                        >
+                          <Eye className="w-3.5 h-3.5" /> View
+                        </a>
                       </td>
                     </tr>
                   );

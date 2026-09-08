@@ -5,6 +5,7 @@
   "scripts": {
     "dev": "next dev",
     "build": "next build && node scripts/build-cloudflare.mjs",
+    "build:pages": "next build && node scripts/build-cloudflare.mjs",
     "start": "next start",
     "deploy:pages": "wrangler pages deploy .cloudflare-out --project-name=careyu-frontend",
     "lint": "eslint",

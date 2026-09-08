@@ -16,7 +16,7 @@ import { NotificationsApi } from '@/lib/notificationsApi';
 import { TasksApi } from '@/lib/tasksApi';
 import { formatInrCompact, WORKFLOW_ACTION_SUCCESS, workflowActionFromQuery, workflowStatusPresentation } from '@/lib/format';
 import { projectStageFlowSummary } from '@/lib/projectStageFlow';
-import { canCreateLead, canCreateLeadTask, canDeleteLead, canEditLeadInput } from '@/lib/rbac';
+import { canCreateLead, canCreateLeadTask } from '@/lib/rbac';
 import {
   Lead, LeadActivity, LeadComment, LeadDocument, LeadStatusHistory,
   FeasibilityTeamAssignment, FeasibilityEmployeeAllocation, Team, User, PriorityLevel, AssignmentType, AssignmentHistory, EntityDocument, Task
@@ -25,7 +25,7 @@ import { resolveLeadIdFromLocation, leadDetailHref } from '@/lib/leadRoutes';
 import {
     ArrowLeft, CheckCircle2, AlertTriangle, Send, Plus, X,
   Check, RotateCcw, Paperclip, Scan, ShieldAlert, Users, ChevronRight,
-  Info, Zap, Pencil, Trash2, Loader2
+  Info, Zap
 } from 'lucide-react';
 
 type TabKey = 'overview' | 'customer' | 'requirement' | 'technical' | 'commercial' | 'feasibility' | 'costing' | 'documents' | 'communication' | 'timeline' | 'review';
@@ -70,7 +70,6 @@ export default function LeadDetailPage() {
   const [pmReturnReason, setPmReturnReason] = useState('');
   const [showCancelModal, setShowCancelModal] = useState(false);
   const [cancelReason, setCancelReason] = useState('');
-  const [deletingLead, setDeletingLead] = useState(false);
 
   // +ADD TEAM Modal state
   const [showAddTeamModal, setShowAddTeamModal] = useState(false);
@@ -214,22 +213,7 @@ export default function LeadDetailPage() {
     || (currentUser.role_code === 'BUSINESS_HEAD' && lead.business_vertical === 'Business Head')
     || (currentUser.role_code === 'ENG_DIRECTOR' && lead.business_vertical === 'Engineering Director');
   const canEditLeadForm = canCreateLead(currentUser);
-  const canEditThisLead = canEditLeadInput(currentUser, lead) || (canCreateLead(currentUser) && lead.status === 'DRAFT');
-  const canDeleteThisLead = canDeleteLead(currentUser, lead) || (canCreateLead(currentUser) && lead.status === 'DRAFT');
   const canViewRestricted = isPM || isSalesOwner || isCEO || isAdmin || isBH;
-
-  const handleDeleteLead = async () => {
-    if (!window.confirm(`Delete draft lead ${lead.lead_number}? This cannot be undone.`)) return;
-    setActionError(null);
-    setDeletingLead(true);
-    const result = await LeadApi.delete(lead.id);
-    setDeletingLead(false);
-    if (!result.ok) {
-      setActionError(result.message || `Unable to delete ${lead.lead_number}.`);
-      return;
-    }
-    router.push('/pre-sales/leads');
-  };
 
   // TL can access this lead only if assigned
   const myTLAssignment = isTL
@@ -534,26 +518,7 @@ export default function LeadDetailPage() {
               <h1 className="text-xl font-bold text-slate-100 mt-0.5">{lead.title}</h1>
             </div>
           </div>
-          <div className="flex flex-wrap items-center gap-2">
-            {canEditThisLead && (
-              <Link
-                href={`/pre-sales/leads/create?id=${encodeURIComponent(lead.id)}`}
-                className="inline-flex items-center gap-1.5 rounded-lg border border-cyan-800 bg-cyan-950 px-3 py-1.5 text-xs font-semibold text-cyan-200 hover:bg-cyan-900"
-              >
-                <Pencil className="h-3.5 w-3.5" /> Edit Lead
-              </Link>
-            )}
-            {canDeleteThisLead && (
-              <button
-                type="button"
-                disabled={deletingLead}
-                onClick={() => void handleDeleteLead()}
-                className="inline-flex items-center gap-1.5 rounded-lg border border-rose-800 bg-rose-950 px-3 py-1.5 text-xs font-semibold text-rose-200 hover:bg-rose-900 disabled:cursor-not-allowed disabled:opacity-50"
-              >
-                {deletingLead ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Trash2 className="h-3.5 w-3.5" />}
-                Delete Lead
-              </button>
-            )}
+          <div className="flex items-center gap-2">
             {canForward && (
               <button
                 type="button"
@@ -670,7 +635,7 @@ export default function LeadDetailPage() {
             <div className="space-y-2 pt-1">
               <textarea rows={2} value={resubmitTechInput} onChange={e => setResubmitTechInput(e.target.value)} placeholder="Update requested technical inputs…" className="w-full p-2.5 bg-slate-950 border border-slate-800 rounded text-slate-100" />
               <div className="flex justify-end gap-2">
-                <Link href={`/pre-sales/leads/create?id=${lead.id}`} className="px-4 py-2 bg-slate-800 hover:bg-slate-700 text-slate-200 rounded-lg">Edit Lead</Link>
+                <Link href={`/pre-sales/leads/create?id=${lead.id}`} className="px-4 py-2 bg-slate-800 hover:bg-slate-700 text-slate-200 rounded-lg">Edit Draft</Link>
                 <button onClick={handleSalesResubmit} className="px-4 py-2 bg-amber-600 hover:bg-amber-500 text-slate-950 font-bold rounded-lg flex items-center gap-2">
                   <Send className="w-4 h-4" /> Resubmit to PM
                 </button>
@@ -687,7 +652,7 @@ export default function LeadDetailPage() {
             <p className="text-slate-400">Edit the Pre-Sales Lead Form, then submit to PM. It will leave draft status.</p>
           </div>
           <div className="flex gap-2">
-            <Link href={`/pre-sales/leads/create?id=${lead.id}`} className="px-4 py-2 bg-slate-800 hover:bg-slate-700 text-slate-200 rounded-lg">Edit Lead</Link>
+            <Link href={`/pre-sales/leads/create?id=${lead.id}`} className="px-4 py-2 bg-slate-800 hover:bg-slate-700 text-slate-200 rounded-lg">Edit Draft</Link>
             <button onClick={handleSalesResubmit} className="px-4 py-2 bg-cyan-600 hover:bg-cyan-500 text-white font-bold rounded-lg flex items-center gap-2">
               <Send className="w-4 h-4" /> Submit to PM
             </button>

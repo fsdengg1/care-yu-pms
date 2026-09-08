@@ -12,9 +12,9 @@ import FormSection from '@/components/leads/FormSection';
 import VisitRequirementSection from '@/components/leads/VisitRequirementSection';
 import EntityDocumentUpload from '@/components/documents/EntityDocumentUpload';
 import SubmitLeadModal from '@/components/leads/SubmitLeadModal';
-import { validateLeadForm, numericAmount, resolveLeadDescriptionFields } from '@/lib/leadValidation';
+import { validateLeadForm, numericAmount } from '@/lib/leadValidation';
 import { workflowStatusPresentation } from '@/lib/format';
-import { AlertCircle, ArrowLeft, Building2, CheckCircle2, Loader2, Plus, Save, Send, Trash2 } from 'lucide-react';
+import { AlertCircle, ArrowLeft, Building2, CheckCircle2, Loader2, Plus, Save, Send } from 'lucide-react';
 
 const SOLUTION_OPTIONS = [
   'Vision Inspection System',
@@ -140,8 +140,6 @@ function CreateLeadForm() {
         setLeadNumber(lead.lead_number);
         setLeadStatus(lead.status);
         setCustomFields(lead.custom_fields || []);
-        const descriptionText =
-          lead.detailed_requirement || lead.project_description || lead.requirement_summary || '';
         setFormData((prev) => ({
           ...prev,
           title: lead.title || '',
@@ -156,9 +154,9 @@ function CreateLeadForm() {
           customer_phone: lead.customer_phone || '',
           customer_location: lead.customer_location || '',
           plant_location: lead.plant_location || '',
-          project_description: descriptionText,
-          requirement_summary: lead.requirement_summary || descriptionText,
-          detailed_requirement: descriptionText,
+          project_description: lead.project_description || '',
+          requirement_summary: lead.requirement_summary || '',
+          detailed_requirement: lead.detailed_requirement || '',
           application: lead.application || '',
           industry_process: lead.industry_process || '',
           current_process: lead.current_process || '',
@@ -215,7 +213,7 @@ function CreateLeadForm() {
   }, [currentUser, editId, router]);
 
   const payloadFromForm = (user: User, status: 'DRAFT' | 'SUBMITTED_TO_PM') => {
-    const { detailed: detailedText, summary: summaryText } = resolveLeadDescriptionFields(formData);
+    const detailedText = (formData.detailed_requirement || formData.project_description || '').trim();
     return {
       title: formData.title,
       customer_name: formData.customer_name,
@@ -237,7 +235,7 @@ function CreateLeadForm() {
       customer_location: formData.customer_location,
       plant_location: formData.plant_location,
       project_description: detailedText,
-      requirement_summary: summaryText,
+      requirement_summary: formData.requirement_summary,
       detailed_requirement: detailedText,
       application: formData.application,
       industry_process: formData.industry_process,
@@ -343,8 +341,7 @@ function CreateLeadForm() {
     setFieldErrors(result.errors);
     setMissing(Object.keys(result.errors));
     if (result.list.length) {
-      const summary = result.list.map((item) => item.message).join(' ');
-      setValidationError(summary);
+      setValidationError(result.list[0].message);
       const first = result.list[0].field;
       window.setTimeout(() => {
         document.getElementById(`lead-field-${first}`)?.scrollIntoView({ behavior: 'smooth', block: 'center' });
@@ -407,15 +404,8 @@ function CreateLeadForm() {
     setBusy(true);
     setValidationError(null);
     try {
-      const existingId = leadIdRef.current;
-      if (existingId) {
-        const savedId = await persistDraft(currentUser);
-        if (!savedId) {
-          setBusy(false);
-          return;
-        }
-      }
       const payload = payloadFromForm(currentUser, 'SUBMITTED_TO_PM');
+      const existingId = leadIdRef.current;
       const submitted = existingId
         ? await LeadApi.submit(existingId, payload)
         : await LeadApi.create(payload);
@@ -424,15 +414,7 @@ function CreateLeadForm() {
         for (const item of submitted.errors || []) nextErrors[item.field] = item.message;
         setFieldErrors(nextErrors);
         setMissing(Object.keys(nextErrors));
-        const summary = (submitted.errors || []).map((item) => item.message).join(' ');
-        setValidationError(summary || submitted.message || 'Unable to submit this lead. The Project Manager assignment was not completed.');
-        const first = submitted.errors?.[0]?.field;
-        if (first) {
-          window.setTimeout(() => {
-            document.getElementById(`lead-field-${first}`)?.scrollIntoView({ behavior: 'smooth', block: 'center' });
-            document.getElementsByName(first)[0]?.scrollIntoView({ behavior: 'smooth', block: 'center' });
-          }, 50);
-        }
+        setValidationError(submitted.message || 'Unable to submit this lead. The Project Manager assignment was not completed.');
         return;
       }
       const id = submitted.payload.lead.id;
@@ -457,21 +439,6 @@ function CreateLeadForm() {
     } finally {
       setBusy(false);
     }
-  };
-
-  const handleDeleteLead = async () => {
-    const id = leadIdRef.current;
-    if (!id || leadStatus !== 'DRAFT') return;
-    if (!window.confirm(`Delete draft lead ${leadNumber}? This cannot be undone.`)) return;
-    setBusy(true);
-    setValidationError(null);
-    const result = await LeadApi.delete(id);
-    setBusy(false);
-    if (!result.ok) {
-      setValidationError(result.message || 'Unable to delete this lead.');
-      return;
-    }
-    router.push('/pre-sales/leads');
   };
 
   const fieldError = (field: string) =>
@@ -502,26 +469,12 @@ function CreateLeadForm() {
               <Building2 className="h-4 w-4" /> {isEdit ? 'Edit Customer Lead' : 'Create New Customer Lead'}
             </div>
             <h1 className="mt-0.5 text-xl font-bold text-slate-100">Pre-Sales Lead Form</h1>
-            {isEdit && leadNumber && (
-              <p className="mt-0.5 font-mono text-[11px] text-cyan-400">{leadNumber}</p>
-            )}
           </div>
         </div>
         <div className="flex flex-wrap items-center gap-3">
           <span className={`rounded-full border px-3 py-1 text-xs font-bold ${formStage.badgeClass}`}>
             Current stage: {formStage.label}
           </span>
-          {isEdit && leadStatus === 'DRAFT' && (
-            <button
-              type="button"
-              disabled={busy}
-              onClick={() => void handleDeleteLead()}
-              className="flex items-center gap-2 rounded-lg border border-rose-800 bg-rose-950 px-4 py-2 text-xs font-semibold text-rose-200 transition-colors hover:bg-rose-900 disabled:opacity-50"
-            >
-              {busy ? <Loader2 className="h-4 w-4 animate-spin" /> : <Trash2 className="h-4 w-4" />}
-              Delete Lead
-            </button>
-          )}
           <button
             type="button"
             disabled={busy || !canEdit}
@@ -545,32 +498,13 @@ function CreateLeadForm() {
       </div>
 
       {validationError && (
-        <div className="flex items-start gap-3 rounded-xl border border-rose-800/80 bg-rose-950/80 p-4 text-xs text-rose-300">
+        <div className="flex items-center gap-3 rounded-xl border border-rose-800/80 bg-rose-950/80 p-4 text-xs text-rose-300">
           <AlertCircle className="h-5 w-5 shrink-0 text-rose-400" />
           <div>
-            {missing.length > 0 ? (
-              <>
-                <div className="font-bold">Please complete all required fields before submitting the lead.</div>
-                <ul className="mt-2 list-disc space-y-1 pl-4">
-                  {Object.entries(fieldErrors).map(([field, message]) => (
-                    <li key={field}>
-                      <button
-                        type="button"
-                        className="text-left underline decoration-rose-500/60 underline-offset-2 hover:text-rose-100"
-                        onClick={() => {
-                          document.getElementById(`lead-field-${field}`)?.scrollIntoView({ behavior: 'smooth', block: 'center' });
-                          document.getElementsByName(field)[0]?.scrollIntoView({ behavior: 'smooth', block: 'center' });
-                        }}
-                      >
-                        {message}
-                      </button>
-                    </li>
-                  ))}
-                </ul>
-              </>
-            ) : (
-              <div className="font-bold">{validationError}</div>
+            {missing.length > 0 && (
+              <div className="font-bold">Please complete all required fields before submitting the lead.</div>
             )}
+            <div className={missing.length > 0 ? 'mt-0.5' : 'font-bold'}>{validationError}</div>
           </div>
         </div>
       )}
@@ -642,110 +576,6 @@ function CreateLeadForm() {
           </div>
         </FormSection>
 
-        <FormSection title="Section C — Project Requirements (Required for Submit)" hint="Required before submitting to PM">
-          <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
-            <div>
-              <label className="mb-1 block font-semibold text-slate-300" htmlFor="lead-field-project_description">
-                Project Description *
-              </label>
-              <textarea
-                id="lead-field-project_description"
-                name="project_description"
-                rows={3}
-                value={formData.project_description || formData.detailed_requirement}
-                onChange={(e) => {
-                  const project = e.target.value;
-                  const { detailed, summary } = resolveLeadDescriptionFields({
-                    ...formData,
-                    project_description: project,
-                  });
-                  setFormData({
-                    ...formData,
-                    project_description: project,
-                    detailed_requirement: detailed,
-                    requirement_summary: formData.requirement_summary || summary,
-                  });
-                }}
-                placeholder="Describe the project scope and what the customer wants to achieve"
-                className={fieldClass(
-                  missing.includes('detailed_requirement') ||
-                    missing.includes('project_description') ||
-                    missing.includes('requirement_summary') ||
-                    Boolean(fieldErrors.detailed_requirement) ||
-                    Boolean(fieldErrors.project_description) ||
-                    Boolean(fieldErrors.requirement_summary)
-                )}
-              />
-            </div>
-            <div>
-              <label className="mb-1 block font-semibold text-slate-300" htmlFor="lead-field-requirement_summary">
-                Customer Requirement *
-              </label>
-              <textarea
-                id="lead-field-requirement_summary"
-                name="requirement_summary"
-                rows={3}
-                value={formData.requirement_summary}
-                onChange={(e) => {
-                  const summary = e.target.value;
-                  const { detailed } = resolveLeadDescriptionFields({
-                    ...formData,
-                    requirement_summary: summary,
-                  });
-                  setFormData({
-                    ...formData,
-                    requirement_summary: summary,
-                    detailed_requirement: detailed,
-                    project_description: formData.project_description || detailed,
-                  });
-                }}
-                placeholder="High-level summary of the customer requirement"
-                className={fieldClass(
-                  missing.includes('requirement_summary') ||
-                    missing.includes('detailed_requirement') ||
-                    Boolean(fieldErrors.requirement_summary) ||
-                    Boolean(fieldErrors.detailed_requirement)
-                )}
-              />
-              {fieldError('requirement_summary')}
-              {fieldError('detailed_requirement')}
-            </div>
-          </div>
-          <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
-            <div>
-              <label className="mb-1 block font-semibold text-slate-300" htmlFor="lead-field-application">
-                Application / Use Case *
-              </label>
-              <input
-                type="text"
-                id="lead-field-application"
-                name="application"
-                value={formData.application}
-                onChange={(e) => setFormData({ ...formData, application: e.target.value })}
-                placeholder="e.g. Surface inspection"
-                className={fieldClass(missing.includes('application') || Boolean(fieldErrors.application))}
-              />
-              {fieldError('application')}
-            </div>
-            <div>
-              <label className="mb-1 block font-semibold text-slate-300" htmlFor="lead-field-production_quantity">
-                Production Quantity *
-              </label>
-              <input
-                type="text"
-                inputMode="decimal"
-                id="lead-field-production_quantity"
-                name="production_quantity"
-                value={formData.production_quantity}
-                onChange={(e) => setFormData({ ...formData, production_quantity: e.target.value })}
-                placeholder="1500"
-                className={fieldClass(missing.includes('production_quantity') || Boolean(fieldErrors.production_quantity))}
-              />
-              {fieldError('production_quantity')}
-            </div>
-          </div>
-        </FormSection>
-
         <FormSection title="Section B — Customer Contact Information">
           <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
             <div>
@@ -755,45 +585,19 @@ function CreateLeadForm() {
             </div>
             <div>
               <label className="mb-1 block font-semibold text-slate-300">Designation *</label>
-              <input
-                type="text"
-                name="customer_designation"
-                id="lead-field-customer_designation"
-                value={formData.customer_designation}
-                onChange={(e) => setFormData({ ...formData, customer_designation: e.target.value })}
-                placeholder="e.g. Plant Manager"
-                className={fieldClass(missing.includes('customer_designation') || Boolean(fieldErrors.customer_designation))}
-              />
+              <input type="text" value={formData.customer_designation} onChange={(e) => setFormData({ ...formData, customer_designation: e.target.value })} placeholder="e.g. Plant Manager" className={fieldClass(Boolean(fieldErrors.customer_designation))} />
               {fieldError('customer_designation')}
             </div>
             <div>
               <label className="mb-1 block font-semibold text-slate-300">Email Address *</label>
-              <input
-                type="email"
-                name="customer_email"
-                id="lead-field-customer_email"
-                value={formData.customer_email}
-                onChange={(e) => setFormData({ ...formData, customer_email: e.target.value })}
-                placeholder="name@company.com"
-                className={fieldClass(missing.includes('customer_email') || Boolean(fieldErrors.customer_email))}
-              />
+              <input type="email" value={formData.customer_email} onChange={(e) => setFormData({ ...formData, customer_email: e.target.value })} placeholder="name@company.com" className={fieldClass(Boolean(fieldErrors.customer_email))} />
               {fieldError('customer_email')}
             </div>
           </div>
           <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
             <div>
               <label className="mb-1 block font-semibold text-slate-300">Phone Number *</label>
-              <input
-                type="text"
-                inputMode="numeric"
-                maxLength={10}
-                name="customer_phone"
-                id="lead-field-customer_phone"
-                value={formData.customer_phone}
-                onChange={(e) => setFormData({ ...formData, customer_phone: e.target.value.replace(/\D/g, '').slice(0, 10) })}
-                placeholder="9876543210"
-                className={fieldClass(missing.includes('customer_phone') || Boolean(fieldErrors.customer_phone))}
-              />
+              <input type="text" inputMode="numeric" maxLength={10} value={formData.customer_phone} onChange={(e) => setFormData({ ...formData, customer_phone: e.target.value.replace(/\D/g, '').slice(0, 10) })} placeholder="9876543210" className={fieldClass(Boolean(fieldErrors.customer_phone))} />
               {fieldError('customer_phone')}
             </div>
             <div>
@@ -807,7 +611,57 @@ function CreateLeadForm() {
           </div>
         </FormSection>
 
-        <FormSection title="Section D — Additional Project Information">
+        <FormSection title="Section C — Additional Project Information">
+          <div>
+            <label className="mb-1 block font-semibold text-slate-300" htmlFor="lead-field-detailed_requirement">
+              Detailed Requirement / Project Description *
+            </label>
+            <textarea
+              id="lead-field-detailed_requirement"
+              name="detailed_requirement"
+              rows={3}
+              value={formData.project_description || formData.detailed_requirement}
+              onChange={(e) =>
+                setFormData({
+                  ...formData,
+                  project_description: e.target.value,
+                  detailed_requirement: e.target.value,
+                })
+              }
+              placeholder="Describe the project scope, technical needs, and what the customer wants to achieve"
+              className={fieldClass(
+                missing.includes('detailed_requirement') ||
+                  missing.includes('project_description') ||
+                  Boolean(fieldErrors.detailed_requirement)
+              )}
+            />
+            {fieldError('detailed_requirement')}
+          </div>
+          <div>
+            <label className="mb-1 block font-semibold text-slate-300">Customer Requirement *</label>
+              <input
+                type="text"
+                name="requirement_summary"
+                id="lead-field-requirement_summary"
+                value={formData.requirement_summary}
+                onChange={(e) => setFormData({ ...formData, requirement_summary: e.target.value })}
+                placeholder="High-level summary of the customer requirement"
+                className={fieldClass(missing.includes('requirement_summary') || Boolean(fieldErrors.requirement_summary))}
+              />
+              {fieldError('requirement_summary')}
+          </div>
+          <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+            <div>
+              <label className="mb-1 block font-semibold text-slate-300">Application / Use Case *</label>
+              <input type="text" value={formData.application} onChange={(e) => setFormData({ ...formData, application: e.target.value })} placeholder="e.g. Surface inspection" className={fieldClass(missing.includes('application') || Boolean(fieldErrors.application))} />
+              {fieldError('application')}
+            </div>
+            <div>
+              <label className="mb-1 block font-semibold text-slate-300">Production Quantity *</label>
+              <input type="text" inputMode="decimal" value={formData.production_quantity} onChange={(e) => setFormData({ ...formData, production_quantity: e.target.value })} placeholder="1500" className={fieldClass(Boolean(fieldErrors.production_quantity))} />
+              {fieldError('production_quantity')}
+            </div>
+          </div>
           <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
             <div>
               <label className="mb-1 block font-medium text-slate-400">Estimated Project Value</label>
@@ -979,7 +833,7 @@ function CreateLeadForm() {
           </details>
         </FormSection>
 
-        <FormSection title="Section E — Customer Requested Visit" hint="Optional — fill only if a visit is planned">
+        <FormSection title="Section D — Customer Requested Visit">
           <VisitRequirementSection
             formData={{
               visit_requirement: (formData.visit_requirement || 'NONE') as VisitRequirement,

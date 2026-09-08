@@ -11,6 +11,7 @@
     "dev:frontend": "npm run dev -w frontend",
     "dev:backend": "npm run dev -w backend",
     "build": "npm run build -w backend && npm run build -w frontend",
+    "build:pages": "npm run build -w frontend",
     "deploy:backend": "npm run deploy:worker -w backend",
     "deploy:frontend": "npm run deploy:pages -w frontend",
     "dry-run": "npm run dry-run:worker -w backend",

@@ -296,29 +296,6 @@ export class StorageService {
     return lead;
   }
 
-  static removeLead(id: string) {
-    if (!this.isBrowser) return;
-    const leads = this.getLeads().filter((item) => item.id !== id && item.lead_number !== id);
-    this.saveLeads(leads);
-    const filterByLead = <T extends { lead_id: string }>(items: T[]) => items.filter((item) => item.lead_id !== id);
-    const activities = localStorage.getItem(STORAGE_KEYS.LEAD_ACTIVITIES);
-    if (activities) {
-      localStorage.setItem(STORAGE_KEYS.LEAD_ACTIVITIES, JSON.stringify(filterByLead(JSON.parse(activities))));
-    }
-    const comments = localStorage.getItem(STORAGE_KEYS.LEAD_COMMENTS);
-    if (comments) {
-      localStorage.setItem(STORAGE_KEYS.LEAD_COMMENTS, JSON.stringify(filterByLead(JSON.parse(comments))));
-    }
-    const history = localStorage.getItem(STORAGE_KEYS.LEAD_STATUS_HISTORY);
-    if (history) {
-      localStorage.setItem(STORAGE_KEYS.LEAD_STATUS_HISTORY, JSON.stringify(filterByLead(JSON.parse(history))));
-    }
-    const documents = localStorage.getItem(STORAGE_KEYS.LEAD_DOCUMENTS);
-    if (documents) {
-      localStorage.setItem(STORAGE_KEYS.LEAD_DOCUMENTS, JSON.stringify(filterByLead(JSON.parse(documents))));
-    }
-  }
-
   static generateLeadNumber(): string {
     const leads = this.getLeads();
     const count = leads.length + 1;

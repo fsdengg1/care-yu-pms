@@ -1,30 +1,5 @@
 export type FieldError = { field: string; message: string };
 
-export const LEAD_SUBMIT_FIELD_LABELS: Record<string, string> = {
-  customer_name: 'Customer Name',
-  title: 'Lead Title',
-  customer_contact: 'Contact Person',
-  customer_designation: 'Designation',
-  detailed_requirement: 'Project Description / Customer Requirement',
-  project_description: 'Project Description / Customer Requirement',
-  requirement_summary: 'Project Description / Customer Requirement',
-  application: 'Application / Use Case',
-  production_quantity: 'Production Quantity',
-  business_vertical: 'Business Vertical',
-  priority: 'Priority Level',
-  customer_email: 'Email Address',
-  customer_phone: 'Phone Number',
-};
-
-/** Accept any project-description field; combine separate inputs into one API value. */
-export function resolveLeadDescriptionFields(form: Record<string, string>) {
-  const project = (form.project_description || '').trim();
-  const summary = (form.requirement_summary || '').trim();
-  const detailed = (form.detailed_requirement || '').trim();
-  const text = detailed || [project, summary].filter(Boolean).join('\n\n') || project || summary;
-  return { detailed: text, summary: summary || text };
-}
-
 const PHONE_RE = /^[6-9][0-9]{9}$/;
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[a-zA-Z]{2,}$/;
 const KEYBOARD_SMASH = new Set(['asdf', 'asdfg', 'asdfgh', 'qwer', 'qwerty', 'zxcv', 'dfgh', 'hjkl']);
@@ -103,9 +78,12 @@ export function validateLeadForm(
 
   if (options.submit) {
     for (const [field, label] of requiredNames) checkName(field, label, true);
-    const { detailed } = resolveLeadDescriptionFields(form);
-    if (!detailed) {
-      errors.detailed_requirement = `${LEAD_SUBMIT_FIELD_LABELS.detailed_requirement} is required.`;
+    if (!(form.requirement_summary || '').trim()) errors.requirement_summary = 'Requirement Summary is required.';
+    const detailedText =
+      (form.detailed_requirement || '').trim() ||
+      (form.project_description || '').trim();
+    if (!detailedText) {
+      errors.detailed_requirement = 'Project description / detailed requirement is required.';
     }
     if (!(form.business_vertical || '').trim()) errors.business_vertical = 'Business Vertical is required.';
     if (!(form.priority || '').trim() || !PRIORITIES.has(form.priority)) {
@@ -163,16 +141,29 @@ export function validateLeadForm(
     if (visit && !['NONE', 'CUSTOMER_SITE', 'CAREYU_OFFICE'].includes(visit)) {
       errors.visit_requirement = 'Select a valid visit requirement.';
     }
-    const visitPhone = (form.visit_contact_phone || '').trim();
-    if (visitPhone && !isValidPhone(visitPhone)) {
-      errors.visit_contact_phone = 'Phone number must contain exactly 10 digits and start with 6, 7, 8, or 9.';
+    if (visit === 'CUSTOMER_SITE') {
+      if (!(form.visit_site_name || '').trim()) errors.visit_site_name = 'Customer Site / Plant Name is required.';
+      if (!(form.visit_site_address || '').trim()) errors.visit_site_address = 'Customer Site Address is required.';
+      if (!(form.visit_city || '').trim()) errors.visit_city = 'City is required.';
+      if (!(form.visit_state || '').trim()) errors.visit_state = 'State is required.';
+      if (!(form.visit_country || '').trim()) errors.visit_country = 'Country is required.';
+      if (!(form.visit_contact_name || '').trim()) errors.visit_contact_name = 'Site contact person is required.';
+      if (!(form.visit_preferred_date || '').trim()) errors.visit_preferred_date = 'Customer preferred visit date is required.';
+      const visitPhone = (form.visit_contact_phone || '').trim();
+      if (!visitPhone) errors.visit_contact_phone = 'Site contact phone is required.';
+      else if (!isValidPhone(visitPhone)) errors.visit_contact_phone = 'Phone number must contain exactly 10 digits and start with 6, 7, 8, or 9.';
+      const visitEmail = (form.visit_contact_email || '').trim();
+      if (!visitEmail) errors.visit_contact_email = 'Site contact email is required.';
+      else if (!isValidEmail(visitEmail)) errors.visit_contact_email = 'Enter a valid email address.';
     }
-    const visitEmail = (form.visit_contact_email || '').trim();
-    if (visitEmail && !isValidEmail(visitEmail)) {
-      errors.visit_contact_email = 'Enter a valid email address.';
+    if (visit === 'CAREYU_OFFICE') {
+      if (!(form.visit_visitor_name || '').trim()) errors.visit_visitor_name = 'Visitor name is required.';
+      if (!(form.visit_visitor_designation || '').trim()) errors.visit_visitor_designation = 'Visitor designation is required.';
+      if (!(form.visit_preferred_date || '').trim()) errors.visit_preferred_date = 'Customer preferred visit date is required.';
+      if (!(form.visit_purpose || '').trim()) errors.visit_purpose = 'Purpose of visit is required.';
+      const count = parsePositiveNumber(form.visit_visitor_count || '', false);
+      if (count) errors.visit_visitor_count = 'Enter the number of visitors.';
     }
-    const count = parsePositiveNumber(form.visit_visitor_count || '', true);
-    if (count) errors.visit_visitor_count = count;
   }
 
   const po = (form.expected_po_date || '').trim();

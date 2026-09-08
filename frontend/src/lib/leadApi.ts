@@ -85,17 +85,6 @@ export const LeadApi = {
     return { ok: false as const, message: result.message, errors: result.errors, status: result.status };
   },
 
-  async delete(id: string) {
-    const result = await call<{ ok: boolean; lead_number?: string }>(`/api/leads/${id}`, {
-      method: 'DELETE',
-    });
-    if (result.ok) {
-      StorageService.removeLead(id);
-      return { ok: true as const, lead_number: result.data.lead_number };
-    }
-    return { ok: false as const, message: result.message, status: result.status };
-  },
-
   async submit(id: string, body: Partial<Lead> = {}) {
     const result = await call<LeadWorkflowPayload>(`/api/leads/${id}/submit`, {
       method: 'POST',
@@ -236,7 +225,7 @@ export const LeadApi = {
       body: JSON.stringify(body),
     });
     if (result.ok) return syncPayload(result.data);
-    return { ok: false as const, message: result.message };
+    return null;
   },
 
   async convert(id: string) {

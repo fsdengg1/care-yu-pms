@@ -116,10 +116,18 @@ Wrangler will output your live worker URL (e.g., `https://careyu-backend-api.<yo
 
 | Setting | Value |
 |---------|--------|
+| **Root directory** | *(repository root — leave empty)* |
+| **Build command** | `npm run build:pages` |
+| **Build output directory** | `frontend/.cloudflare-out` |
+| **Node.js** | `20` |
+
+Alternative (frontend-only root):
+
 | **Root directory** | `frontend` |
 | **Build command** | `npm run build` |
 | **Build output directory** | `.cloudflare-out` |
-| **Node.js** | `20` |
+
+The repo `.npmrc` sets `include=dev` so Tailwind/TypeScript install during Cloudflare production builds.
 
 Do **not** use `frontend/.next` or `dist` — this project packages static HTML into `.cloudflare-out` via `scripts/build-cloudflare.mjs`.
 

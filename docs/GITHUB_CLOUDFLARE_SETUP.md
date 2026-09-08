@@ -30,9 +30,20 @@ Use this if you want **Cloudflare to build automatically** when you push to `mai
 | **Production branch** | `main` |
 | **Root directory** | `frontend` |
 | **Framework preset** | None (or Next.js — build command below is what matters) |
+| **Build command** | `npm run build:pages` |
+| **Build output directory** | `frontend/.cloudflare-out` |
+| **Node.js version** | `20` |
+
+If the root directory is `frontend` instead, use:
+
+| Setting | Value |
+|---------|--------|
+| **Root directory** | `frontend` |
 | **Build command** | `npm run build` |
 | **Build output directory** | `.cloudflare-out` |
 | **Node.js version** | `20` |
+
+The repo includes `.npmrc` with `include=dev` so Cloudflare installs Tailwind/TypeScript devDependencies during production builds.
 
 ### Step 4 — Environment variables (Production)
 
