@@ -372,6 +372,20 @@ function eveningSheetStatus(
   eveningSnapRow?: DailyStatusRow | null,
   hoursWorked = 0
 ): DailySheetStatus {
+  const eveningSubmitted = Boolean(
+    eveningUpd &&
+      (eveningUpd.submission_status === 'SUBMITTED' ||
+        Boolean((eveningUpd.work_completed || '').trim()) ||
+        Number(eveningUpd.hours_worked) > 0)
+  );
+  if (eveningSubmitted && eveningUpd?.work_status) {
+    const fromUpdate = toSheetStatus(eveningUpd.work_status);
+    if (fromUpdate !== 'Yet to Start') return fromUpdate;
+  }
+  if (eveningSnapRow?.status) {
+    const fromSnap = toSheetStatus(eveningSnapRow.status);
+    if (fromSnap !== 'Yet to Start') return fromSnap;
+  }
   if (task) {
     const fromTask = taskSheetStatus(task);
     if (fromTask !== 'Yet to Start') return fromTask;
@@ -379,10 +393,6 @@ function eveningSheetStatus(
   if (eveningUpd?.work_status) {
     const fromUpdate = toSheetStatus(eveningUpd.work_status);
     if (fromUpdate !== 'Yet to Start') return fromUpdate;
-  }
-  if (eveningSnapRow?.status) {
-    const fromSnap = toSheetStatus(eveningSnapRow.status);
-    if (fromSnap !== 'Yet to Start') return fromSnap;
   }
   if (hoursWorked > 0) return 'In Progress';
   return task ? taskSheetStatus(task) : 'Yet to Start';
@@ -1391,6 +1401,23 @@ function emailPeriodCopy(period: SnapshotPeriod, reportLabel?: string) {
   };
 }
 
+/** Evening reports keep the master task description and append submitted evening work below it. */
+function emailTaskDescriptionText(row: DailyStatusRow, period: SnapshotPeriod): string {
+  const master = (row.taskDescription || '').trim() || '—';
+  if (period !== 'evening') return master;
+  const evening = (row.currentUpdate || '').trim();
+  if (!evening) return master;
+  return `${master}\n\nEvening Work Completed:\n${evening}`;
+}
+
+function emailTaskDescriptionHtml(row: DailyStatusRow, period: SnapshotPeriod): string {
+  const master = escapeHtml((row.taskDescription || '').trim() || '—');
+  if (period !== 'evening') return master;
+  const evening = (row.currentUpdate || '').trim();
+  if (!evening) return master;
+  return `${master}<div style="margin-top:8px;padding-top:8px;border-top:1px solid #e2e8f0;"><div style="font-size:10px;font-weight:800;text-transform:uppercase;letter-spacing:0.04em;color:#64748b;margin-bottom:4px;">Evening Work Completed</div><div>${escapeHtml(evening)}</div></div>`;
+}
+
 export function inferDefaultEmailPeriod(now = new Date()): SnapshotPeriod {
   return clockInAppTimezone(now).hour >= 11 ? 'evening' : 'morning';
 }
@@ -1456,7 +1483,7 @@ export function renderDailyStatusEmailHtml(params: {
           return `<tr>
         ${personTd}
         <td width="140" style="${cell}">${escapeHtml(row.project)}</td>
-        <td width="260" style="${cell}">${escapeHtml(row.taskDescription)}</td>
+        <td width="260" style="${cell}">${emailTaskDescriptionHtml(row, params.period)}</td>
         <td width="130" style="${depsCell}">${formatDepsHtml(row.dependencies)}</td>
         <td width="100" style="${statusCell}"><span style="display:inline-block;padding:4px 8px;border-radius:999px;background:${badge.bg};color:${badge.color};font-size:11px;font-weight:700;line-height:1.2;white-space:nowrap;">${statusLabel}</span></td>
         <td width="95" style="${dateCell}">${startDate}</td>
@@ -1533,7 +1560,7 @@ export function renderDailyStatusEmailHtml(params: {
     '',
     ...sorted.map(
       (row) =>
-        `${row.person} | ${row.project} | ${row.taskDescription} | ${row.dependencies} | ${row.status} | ${row.startDate || '—'} | ${row.deadline} | ${progressForSheetStatus(row.status, row.progressPercent)}% ${row.loggedHours || formatLoggedHours(row.hoursWorked)} | ${row.reasonForDelay}`
+        `${row.person} | ${row.project} | ${emailTaskDescriptionText(row, params.period)} | ${row.dependencies} | ${row.status} | ${row.startDate || '—'} | ${row.deadline} | ${progressForSheetStatus(row.status, row.progressPercent)}% ${row.loggedHours || formatLoggedHours(row.hoursWorked)} | ${row.reasonForDelay}`
     ),
     '',
     'Regards,',

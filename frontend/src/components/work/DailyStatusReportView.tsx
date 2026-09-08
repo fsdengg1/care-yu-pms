@@ -44,6 +44,7 @@ export default function DailyStatusReportView({
   intro,
   loading = false,
   onWorkDateChange,
+  period = 'morning',
 }: {
   rows: DailyStatusRow[];
   workDate: string;
@@ -51,6 +52,7 @@ export default function DailyStatusReportView({
   intro: string;
   loading?: boolean;
   onWorkDateChange: (date: string) => void;
+  period?: 'morning' | 'evening';
 }) {
   const visible = useMemo(
     () =>
@@ -144,6 +146,14 @@ export default function DailyStatusReportView({
                           </td>
                           <td className="task-desc-cell">
                             <span className="sheet-text sheet-task-field">{row.taskDescription || '—'}</span>
+                            {period === 'evening' && (row.currentUpdate || '').trim() ? (
+                              <div className="mt-2 border-t border-[#e2e8f0] pt-2">
+                                <div className="text-[10px] font-bold uppercase tracking-wide text-[#64748b]">
+                                  Evening Work Completed
+                                </div>
+                                <span className="sheet-text sheet-task-field">{row.currentUpdate}</span>
+                              </div>
+                            ) : null}
                           </td>
                           <td className="deps-cell">
                             {Array.isArray(deps) ? (
