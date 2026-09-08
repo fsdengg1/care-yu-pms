@@ -766,7 +766,12 @@ export async function initStore(options?: { forceImportLocal?: boolean }): Promi
   }
 
   cache = merged;
-  await persistDb(merged);
+  const workerWarmStart = process.env.CLOUDFLARE_WORKER === '1' && source === 'postgres' && postgresHasData;
+  if (!workerWarmStart) {
+    await persistDb(merged);
+  } else {
+    console.info('[store] Worker fast-path: loaded existing Postgres data without rewrite');
+  }
   initialized = true;
 
   return { source, counts: countRecords(loadDb()) };

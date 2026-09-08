@@ -1,0 +1,1 @@
+(globalThis.TURBOPACK||(globalThis.TURBOPACK=[])).push(["object"==typeof document?document.currentScript:void 0,87180,e=>{"use strict";var t=e.i(43476),s=e.i(71645),i=e.i(76641);e.s(["default",0,function(){return(0,t.jsx)(s.Suspense,{fallback:(0,t.jsx)("div",{className:"p-6 text-slate-400",children:"Loading project..."}),children:(0,t.jsx)(i.default,{})})}])}]);

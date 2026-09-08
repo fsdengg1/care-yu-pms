@@ -149,6 +149,8 @@ async function initializeBackend() {
   console.log(
     `Store ready (source=${storeInfo.source}, users=${storeInfo.counts.users}, pendingSignups=${storeInfo.counts.pendingSignups ?? 0}, leads=${storeInfo.counts.leads}, projects=${storeInfo.counts.projects})`
   );
+  const workerWarmStart =
+    process.env.CLOUDFLARE_WORKER === '1' && storeInfo.source === 'postgres' && (storeInfo.counts.users ?? 0) > 0;
   const leads = store.getLeads();
   const retired = leads.map((lead) => {
     if (String(lead.status) !== 'LIVE_CASE_DEMONSTRATION' && String(lead.pipeline_stage) !== 'LIVE_DEMO') return lead;
@@ -157,9 +159,13 @@ async function initializeBackend() {
   if (retired.some((lead, index) => lead !== leads[index])) {
     store.saveLeads(retired);
   }
-  await ensureLiveDirectory();
-  await ensureRobotLeadAccount();
-  ensureActionItemTasks();
+  if (!workerWarmStart) {
+    await ensureLiveDirectory();
+    await ensureRobotLeadAccount();
+    ensureActionItemTasks();
+  } else {
+    console.info('[store] Worker fast-path: skipping directory/robot seed on warm Postgres start');
+  }
   logEmailConfigOnStartup();
 }
 
