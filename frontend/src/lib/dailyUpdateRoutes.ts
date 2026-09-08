@@ -1,6 +1,6 @@
 const RESERVED_DAILY_UPDATE_SEGMENTS = new Set(['new', 'detail']);
 
-/** Static Cloudflare Pages route for daily update detail (query param fallback). */
+/** Daily update detail route using a query param fallback. */
 export function dailyUpdateDetailHref(updateId: string): string {
   return `/daily-updates/detail?id=${encodeURIComponent(updateId)}`;
 }

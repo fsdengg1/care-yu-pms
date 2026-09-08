@@ -41,7 +41,7 @@ function loadBackendEnv() {
       assignIfUnset(key, raw);
     }
   } catch {
-    // Ignore file system env loading errors in Cloudflare Worker environment
+    // Ignore file system env loading errors when the process cannot read .env files
   }
 }
 

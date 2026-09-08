@@ -136,34 +136,21 @@ export function validateLeadForm(
   const budget = parseAmount(form.customer_budget || '', true);
   if (budget) errors.customer_budget = budget;
 
-  if (options.submit) {
-    const visit = (form.visit_requirement || 'NONE').trim();
-    if (visit && !['NONE', 'CUSTOMER_SITE', 'CAREYU_OFFICE'].includes(visit)) {
-      errors.visit_requirement = 'Select a valid visit requirement.';
-    }
-    if (visit === 'CUSTOMER_SITE') {
-      if (!(form.visit_site_name || '').trim()) errors.visit_site_name = 'Customer Site / Plant Name is required.';
-      if (!(form.visit_site_address || '').trim()) errors.visit_site_address = 'Customer Site Address is required.';
-      if (!(form.visit_city || '').trim()) errors.visit_city = 'City is required.';
-      if (!(form.visit_state || '').trim()) errors.visit_state = 'State is required.';
-      if (!(form.visit_country || '').trim()) errors.visit_country = 'Country is required.';
-      if (!(form.visit_contact_name || '').trim()) errors.visit_contact_name = 'Site contact person is required.';
-      if (!(form.visit_preferred_date || '').trim()) errors.visit_preferred_date = 'Customer preferred visit date is required.';
-      const visitPhone = (form.visit_contact_phone || '').trim();
-      if (!visitPhone) errors.visit_contact_phone = 'Site contact phone is required.';
-      else if (!isValidPhone(visitPhone)) errors.visit_contact_phone = 'Phone number must contain exactly 10 digits and start with 6, 7, 8, or 9.';
-      const visitEmail = (form.visit_contact_email || '').trim();
-      if (!visitEmail) errors.visit_contact_email = 'Site contact email is required.';
-      else if (!isValidEmail(visitEmail)) errors.visit_contact_email = 'Enter a valid email address.';
-    }
-    if (visit === 'CAREYU_OFFICE') {
-      if (!(form.visit_visitor_name || '').trim()) errors.visit_visitor_name = 'Visitor name is required.';
-      if (!(form.visit_visitor_designation || '').trim()) errors.visit_visitor_designation = 'Visitor designation is required.';
-      if (!(form.visit_preferred_date || '').trim()) errors.visit_preferred_date = 'Customer preferred visit date is required.';
-      if (!(form.visit_purpose || '').trim()) errors.visit_purpose = 'Purpose of visit is required.';
-      const count = parsePositiveNumber(form.visit_visitor_count || '', false);
-      if (count) errors.visit_visitor_count = 'Enter the number of visitors.';
-    }
+  const visit = (form.visit_requirement || 'NONE').trim();
+  if (visit && !['NONE', 'CUSTOMER_SITE', 'CAREYU_OFFICE', ''].includes(visit)) {
+    errors.visit_requirement = 'Select a valid visit requirement.';
+  }
+  const visitPhone = (form.visit_contact_phone || '').trim();
+  if (visitPhone && !isValidPhone(visitPhone)) {
+    errors.visit_contact_phone = 'Phone number must contain exactly 10 digits and start with 6, 7, 8, or 9.';
+  }
+  const visitEmail = (form.visit_contact_email || '').trim();
+  if (visitEmail && !isValidEmail(visitEmail)) {
+    errors.visit_contact_email = 'Enter a valid email address.';
+  }
+  if ((form.visit_visitor_count || '').trim()) {
+    const count = parsePositiveNumber(form.visit_visitor_count || '', true);
+    if (count) errors.visit_visitor_count = 'Enter the number of visitors.';
   }
 
   const po = (form.expected_po_date || '').trim();

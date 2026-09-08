@@ -7,7 +7,7 @@ if (typeof dns?.setDefaultResultOrder === 'function') {
   dns.setDefaultResultOrder('ipv4first');
 }
 
-const { Pool, Client } = pg;
+const { Pool } = pg;
 
 let pool: pg.Pool | null = null;
 
@@ -82,42 +82,6 @@ export const COLLECTION_NAMES: CollectionName[] = [
   'systemMeta',
 ];
 
-function createWorkerClientPool(): pg.Pool {
-  const config: pg.ClientConfig = {
-    connectionString: env.databaseUrl,
-    ssl: false,
-  };
-
-  const fake = {
-    async query(text: string | { text: string; values?: unknown[] }, values?: unknown[]) {
-      const client = new Client(config);
-      await client.connect();
-      try {
-        if (typeof text === 'string') return await client.query(text, values);
-        return await client.query(text);
-      } finally {
-        await client.end().catch(() => undefined);
-      }
-    },
-    async connect() {
-      const client = new Client(config);
-      await client.connect();
-      (client as pg.PoolClient).release = (() => {
-        void client.end().catch(() => undefined);
-      }) as pg.PoolClient['release'];
-      return client;
-    },
-    async end() {
-      return;
-    },
-    on() {
-      return fake;
-    },
-  };
-
-  return fake as unknown as pg.Pool;
-}
-
 function connectionStringWithoutSslMode(url: string): string {
   try {
     const parsed = new URL(url);
@@ -131,24 +95,17 @@ function connectionStringWithoutSslMode(url: string): string {
 
 export function getPool(): pg.Pool {
   if (!pool) {
-    const worker = process.env.CLOUDFLARE_WORKER === '1';
-    const hyperdrive = process.env.HYPERDRIVE_ACTIVE === '1';
-    if (worker && hyperdrive) {
-      pool = createWorkerClientPool();
-    } else {
-      pool = new Pool({
-        connectionString: hyperdrive ? env.databaseUrl : connectionStringWithoutSslMode(env.databaseUrl),
-        ssl: hyperdrive ? false : env.databaseSsl ? { rejectUnauthorized: false } : false,
-        max: worker ? 1 : 3,
-        connectionTimeoutMillis: worker ? 15000 : 60000,
-        idleTimeoutMillis: worker ? 5000 : 30000,
-        allowExitOnIdle: Boolean(worker),
-      });
-      pool.on('error', (err) => {
-        console.warn('[pg-pool] Background client error, resetting pool:', err.message);
-        pool = null;
-      });
-    }
+    pool = new Pool({
+      connectionString: connectionStringWithoutSslMode(env.databaseUrl),
+      ssl: env.databaseSsl ? { rejectUnauthorized: false } : false,
+      max: 3,
+      connectionTimeoutMillis: 60000,
+      idleTimeoutMillis: 30000,
+    });
+    pool.on('error', (err) => {
+      console.warn('[pg-pool] Background client error, resetting pool:', err.message);
+      pool = null;
+    });
   }
   return pool;
 }
@@ -348,8 +305,5 @@ async function pingWithCurrentConfig(timeoutMs: number, attempts: number): Promi
 }
 
 export async function pingDatabase(): Promise<void> {
-  const worker = process.env.CLOUDFLARE_WORKER === '1';
-  const timeoutMs = worker ? 20000 : 20000;
-  const attempts = worker ? 2 : 3;
-  await pingWithCurrentConfig(timeoutMs, attempts);
+  await pingWithCurrentConfig(20000, 3);
 }

@@ -3,7 +3,7 @@
 import React, { Suspense, useEffect, useRef, useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { StorageService } from '@/lib/storage';
-import { canCreateLead } from '@/lib/rbac';
+import { canManageLeadRecord } from '@/lib/rbac';
 import { LeadApi } from '@/lib/leadApi';
 import { useAuth } from '@/components/auth/AuthProvider';
 import { BusinessVertical, CustomerType, LeadCustomField, PriorityLevel, User, VisitRequirement } from '@/lib/types';
@@ -120,9 +120,10 @@ function CreateLeadForm() {
 
   const isEdit = Boolean(leadId);
   const canEdit = ['DRAFT', 'RETURNED_TO_SALES', 'ADDITIONAL_INFORMATION_REQUIRED'].includes(leadStatus);
+  const isSubmittedToPm = !['DRAFT', 'RETURNED_TO_SALES', 'ADDITIONAL_INFORMATION_REQUIRED'].includes(leadStatus);
 
   useEffect(() => {
-    if (currentUser && !canCreateLead(currentUser)) {
+    if (currentUser && !canManageLeadRecord(currentUser)) {
       router.replace('/pre-sales/leads');
       return;
     }
@@ -354,7 +355,7 @@ function CreateLeadForm() {
   };
 
   const handleSaveDraft = async () => {
-    if (!currentUser || !canCreateLead(currentUser)) {
+    if (!currentUser || !canManageLeadRecord(currentUser)) {
       setValidationError('This action is not permitted for your role.');
       return;
     }
@@ -388,7 +389,7 @@ function CreateLeadForm() {
 
   const handleSubmit = async () => {
     if (busy) return;
-    if (!currentUser || !canCreateLead(currentUser)) {
+    if (!currentUser || !canManageLeadRecord(currentUser)) {
       setValidationError('This action is not permitted for your role.');
       return;
     }
@@ -432,7 +433,7 @@ function CreateLeadForm() {
       setSuccessMessage('Submitted Successfully');
       setLeadStatus(submitted.payload.lead.status);
       setConfirmSubmit(false);
-      router.push(`/pre-sales/leads/${id}?action=submitted`);
+      router.replace(`/pre-sales/leads/create?id=${id}`);
     } catch (error) {
       setValidationError(error instanceof Error ? error.message : 'Unable to submit the lead. Please try again.');
       setConfirmSubmit(false);
@@ -479,20 +480,22 @@ function CreateLeadForm() {
             type="button"
             disabled={busy || !canEdit}
             onClick={() => void handleSaveDraft()}
-            className="flex items-center gap-2 rounded-lg border border-slate-700 bg-slate-800 px-4 py-2 text-xs font-medium text-slate-200 transition-colors hover:bg-slate-700 disabled:opacity-50"
+            className="flex cursor-pointer items-center gap-2 rounded-lg border border-slate-700 bg-slate-800 px-4 py-2 text-xs font-medium text-slate-200 transition-colors hover:bg-slate-700 disabled:cursor-not-allowed disabled:opacity-50"
           >
             <Save className="h-4 w-4 text-slate-400" /> Save Draft
           </button>
           <button
             type="button"
-            disabled={busy || !canEdit}
+            disabled={busy || !canEdit || isSubmittedToPm}
             onClick={() => {
+              if (busy || !canEdit || isSubmittedToPm) return;
               if (validateForSubmit()) setConfirmSubmit(true);
             }}
-            className="flex items-center gap-2 rounded-lg bg-cyan-600 px-4 py-2 text-xs font-semibold text-white shadow-md transition-all hover:bg-cyan-500 disabled:opacity-50"
+            className="flex cursor-pointer items-center gap-2 rounded-lg bg-cyan-600 px-4 py-2 text-xs font-semibold text-white shadow-md transition-all hover:bg-cyan-500 disabled:cursor-not-allowed disabled:opacity-50"
             data-demo="submit-to-pm"
           >
-            {busy ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />} {busy ? 'Submitting…' : 'Submit to PM'}
+            {busy ? <Loader2 className="h-4 w-4 animate-spin" /> : isSubmittedToPm ? <CheckCircle2 className="h-4 w-4" /> : <Send className="h-4 w-4" />}{' '}
+            {busy ? 'Submitting…' : isSubmittedToPm ? 'Submitted' : 'Submit to PM'}
           </button>
         </div>
       </div>
@@ -864,31 +867,33 @@ function CreateLeadForm() {
         </fieldset>
       </form>
 
-      {canEdit && (
-        <div className="rounded-xl border border-slate-800 bg-slate-900 p-5">
+      <div className="rounded-xl border border-slate-800 bg-slate-900 p-5">
           <div className="flex flex-col items-center gap-3">
+            {canEdit && (
             <button
               type="button"
               disabled={busy || !canEdit}
               onClick={() => void handleSaveDraft()}
-              className="flex w-full max-w-xs items-center justify-center gap-2 rounded-lg border border-slate-700 bg-slate-800 px-4 py-2.5 text-xs font-medium text-slate-200 transition-colors hover:bg-slate-700 disabled:opacity-50"
+              className="flex w-full max-w-xs cursor-pointer items-center justify-center gap-2 rounded-lg border border-slate-700 bg-slate-800 px-4 py-2.5 text-xs font-medium text-slate-200 transition-colors hover:bg-slate-700 disabled:cursor-not-allowed disabled:opacity-50"
             >
               <Save className="h-4 w-4 text-slate-400" /> Save Draft
             </button>
+            )}
             <button
               type="button"
-              disabled={busy || !canEdit}
+              disabled={busy || !canEdit || isSubmittedToPm}
               onClick={() => {
+                if (busy || !canEdit || isSubmittedToPm) return;
                 if (validateForSubmit()) setConfirmSubmit(true);
               }}
-              className="flex w-full max-w-xs items-center justify-center gap-2 rounded-lg bg-cyan-600 px-4 py-2.5 text-sm font-semibold text-white shadow-md transition-all hover:bg-cyan-500 disabled:opacity-50"
+              className="flex w-full max-w-xs cursor-pointer items-center justify-center gap-2 rounded-lg bg-cyan-600 px-4 py-2.5 text-sm font-semibold text-white shadow-md transition-all hover:bg-cyan-500 disabled:cursor-not-allowed disabled:opacity-50"
               data-demo="submit-to-pm-bottom"
             >
-              {busy ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />} {busy ? 'Submitting…' : 'Submit to PM'}
+              {busy ? <Loader2 className="h-4 w-4 animate-spin" /> : isSubmittedToPm ? <CheckCircle2 className="h-4 w-4" /> : <Send className="h-4 w-4" />}{' '}
+              {busy ? 'Submitting…' : isSubmittedToPm ? 'Submitted' : 'Submit to PM'}
             </button>
           </div>
         </div>
-      )}
 
       <SubmitLeadModal open={confirmSubmit} busy={busy} onCancel={() => setConfirmSubmit(false)} onConfirm={() => void handleSubmit()} />
     </div>

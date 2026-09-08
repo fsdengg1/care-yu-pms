@@ -18,6 +18,7 @@ import {
   assignedTeamRecipientIds,
   audit,
   buildMyWork,
+  canDeleteLead,
   canEditProjectInput,
   canHandleLeadCommercial,
   canOwnLead,
@@ -448,10 +449,7 @@ router.delete('/:id', requireAuth, requirePermission('edit:lead', 'create:lead')
   const user = req.user!;
   const lead = findLead(paramId(req));
   if (!lead) return res.status(404).json({ message: 'Lead not found.' });
-  if (lead.status !== 'DRAFT') {
-    return res.status(400).json({ message: 'Only draft leads can be deleted.' });
-  }
-  if (!canEditProjectInput(user, lead)) {
+  if (!canDeleteLead(user, lead)) {
     return forbidden(res, 'You do not have permission to delete this lead.');
   }
   try {

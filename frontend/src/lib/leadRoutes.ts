@@ -1,6 +1,10 @@
 const RESERVED_LEAD_SEGMENTS = new Set(['create', 'detail']);
 
-/** Static Cloudflare Pages route for lead detail (query param). */
+/** Lead detail route using a query param fallback. */
+export function leadEditHref(leadId: string): string {
+  return `/pre-sales/leads/create?id=${encodeURIComponent(leadId)}`;
+}
+
 export function leadDetailHref(leadId: string, extraQuery?: string): string {
   const base = `/pre-sales/leads/detail?id=${encodeURIComponent(leadId)}`;
   if (!extraQuery) return base;

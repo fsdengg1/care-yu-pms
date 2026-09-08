@@ -46,10 +46,6 @@ function isAllowedOrigin(origin: string | undefined) {
   if (env.corsOrigins.includes(incoming)) return true;
   try {
     const url = new URL(incoming);
-    // Allow Cloudflare Pages production and preview deployments
-    if (url.hostname === 'careyu-frontend.pages.dev' || url.hostname.endsWith('.careyu-frontend.pages.dev')) {
-      return true;
-    }
     const swapped = new URL(incoming);
     if (url.hostname === 'localhost') swapped.hostname = '127.0.0.1';
     else if (url.hostname === '127.0.0.1') swapped.hostname = 'localhost';
@@ -151,10 +147,6 @@ async function initializeBackend() {
   console.log(
     `Store ready (source=${storeInfo.source}, users=${storeInfo.counts.users}, pendingSignups=${storeInfo.counts.pendingSignups ?? 0}, leads=${storeInfo.counts.leads}, projects=${storeInfo.counts.projects})`
   );
-  if (process.env.CLOUDFLARE_WORKER === '1') {
-    logEmailConfigOnStartup();
-    return;
-  }
   const leads = store.getLeads();
   const retired = leads.map((lead) => {
     if (String(lead.status) !== 'LIVE_CASE_DEMONSTRATION' && String(lead.pipeline_stage) !== 'LIVE_DEMO') return lead;

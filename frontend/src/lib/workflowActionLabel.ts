@@ -1,14 +1,13 @@
 import { Lead } from './types';
 
-function firstName(value?: string) {
-  const name = (value || '').trim();
-  if (!name) return '';
-  return name.split(/\s+/)[0];
-}
-
-function submittedTo(target: string, purpose = 'Review') {
-  return `Submitted to ${target} for ${purpose}`;
-}
+export const SUBMISSION_STAGE_LABELS = {
+  BUSINESS_HEAD: 'Submitted to Business Head',
+  PM: 'Submitted to PM',
+  VISION_TEAM: 'Submitted to Vision Team',
+  ROBOTICS_TEAM: 'Submitted to Robotics Team',
+  SOFTWARE_TEAM: 'Submitted to Software Team',
+  IP_TEAM: 'Submitted to IP Team',
+} as const;
 
 export type WorkflowActionLead = Pick<
   Lead,
@@ -27,9 +26,25 @@ export type WorkflowActionLead = Pick<
   | 'feasibility_study'
 >;
 
+function teamSubmissionLabel(lead: WorkflowActionLead): string | null {
+  const teams = [lead.assigned_team_name, ...(lead.assigned_team_names || [])].filter(Boolean) as string[];
+  for (const team of teams) {
+    const hay = team.toLowerCase();
+    if (hay.includes('vision')) return SUBMISSION_STAGE_LABELS.VISION_TEAM;
+    if (hay.includes('robot')) return SUBMISSION_STAGE_LABELS.ROBOTICS_TEAM;
+    if (hay.includes('software')) return SUBMISSION_STAGE_LABELS.SOFTWARE_TEAM;
+    if (hay.includes('ip') || hay.includes('procurement') || hay.includes('costing')) {
+      return SUBMISSION_STAGE_LABELS.IP_TEAM;
+    }
+  }
+  return teams.length ? 'Submitted to Feasibility Team' : null;
+}
+
+/**
+ * Workflow/stage labels only. Never interpolates employee names into Status.
+ * Assigned person belongs in Sales Owner / current owner fields.
+ */
 export function workflowActionLabel(lead: WorkflowActionLead): string {
-  const owner = firstName(lead.current_owner_name || lead.responsible_user_name);
-  const pm = firstName(lead.pm_name) || 'PM';
   const qStatus = lead.quotation?.workflow_status;
   const status = lead.status;
 
@@ -38,36 +53,32 @@ export function workflowActionLabel(lead: WorkflowActionLead): string {
   if (qStatus === 'SUBMITTED_TO_CUSTOMER' || qStatus === 'CUSTOMER_REVIEW' || status === 'NEGOTIATION') {
     return 'Submitted to Customer';
   }
+  if (status === 'DRAFT') return 'Draft';
   if (status === 'QUOTATION' || qStatus === 'PENDING_INTERNAL' || qStatus === 'DRAFT') {
-    const who = owner || firstName(lead.created_by) || firstName(lead.sales_owner) || 'Business Head';
-    return submittedTo(who);
+    return SUBMISSION_STAGE_LABELS.BUSINESS_HEAD;
   }
-
   if (status === 'SUBMITTED_TO_PM' || status === 'UNDER_PM_REVIEW' || status === 'RESUBMITTED_TO_PM') {
-    return submittedTo(lead.pm_name ? pm : 'PM');
+    return SUBMISSION_STAGE_LABELS.PM;
   }
   if (status === 'RETURNED_TO_SALES' || status === 'ADDITIONAL_INFORMATION_REQUIRED') {
     return 'Returned for Clarification';
   }
-  if (status === 'ACCEPTED_FOR_FEASIBILITY') {
-    if (lead.assigned_team_lead_name) return submittedTo(firstName(lead.assigned_team_lead_name) || 'Team Lead');
-    if (lead.assigned_team_name || (lead.assigned_team_names || []).length) return 'Submitted to Feasibility Team';
-    return 'Approved';
-  }
-  if (status === 'FEASIBILITY_IN_PROGRESS') {
-    return 'Submitted to Feasibility Team';
+  if (status === 'ACCEPTED_FOR_FEASIBILITY' || status === 'FEASIBILITY_IN_PROGRESS') {
+    return teamSubmissionLabel(lead) || (lead.assigned_team_lead_name ? 'Submitted to Feasibility Team' : 'Approved');
   }
   if (status === 'FEASIBILITY_SUBMITTED') {
     const clarification =
       lead.previous_status === 'FEASIBILITY_RETURNED' || Boolean(lead.feasibility_study?.pm_return_reason);
-    return clarification ? `Clarification Submitted to ${pm}` : submittedTo(lead.pm_name ? pm : 'PM');
+    return clarification ? 'Clarification Submitted' : SUBMISSION_STAGE_LABELS.PM;
   }
   if (status === 'FEASIBILITY_RETURNED') return 'Returned for Clarification';
-  if (status === 'COSTING_IN_PROGRESS') return 'Submitted to Procurement Review';
-  if (status === 'COSTING_SUBMITTED') return submittedTo(owner || (lead.pm_name ? pm : 'PM'));
+  if (status === 'COSTING_IN_PROGRESS') return SUBMISSION_STAGE_LABELS.IP_TEAM;
+  if (status === 'COSTING_SUBMITTED') return SUBMISSION_STAGE_LABELS.PM;
   if (status === 'COSTING_RETURNED') return 'Returned for Clarification';
   if (status === 'ORDER_CONVERTED' || status === 'WON') return 'Approved';
   if (status === 'FEASIBILITY_REJECTED' || status === 'COSTING_REJECTED' || status === 'CANCELLED') return 'Rejected';
+  if (status === 'LOST') return 'Lost';
+  if (status === 'ON_HOLD') return 'On Hold';
 
   return status.replace(/_/g, ' ');
 }

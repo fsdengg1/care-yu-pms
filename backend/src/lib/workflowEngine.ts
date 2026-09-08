@@ -9,6 +9,7 @@ export const SUBMISSION_STAGE_LABELS = {
   VISION_TEAM: 'Submitted to Vision Team',
   ROBOTICS_TEAM: 'Submitted to Robotics Team',
   SOFTWARE_TEAM: 'Submitted to Software Team',
+  IP_TEAM: 'Submitted to IP Team',
 } as const;
 
 function feasibilityTeamSubmissionLabel(lead: Lead): string | null {
@@ -18,8 +19,11 @@ function feasibilityTeamSubmissionLabel(lead: Lead): string | null {
     if (hay.includes('vision')) return SUBMISSION_STAGE_LABELS.VISION_TEAM;
     if (hay.includes('robot')) return SUBMISSION_STAGE_LABELS.ROBOTICS_TEAM;
     if (hay.includes('software')) return SUBMISSION_STAGE_LABELS.SOFTWARE_TEAM;
+    if (hay.includes('ip') || hay.includes('procurement') || hay.includes('costing')) {
+      return SUBMISSION_STAGE_LABELS.IP_TEAM;
+    }
   }
-  return null;
+  return teams.length ? 'Submitted to Feasibility Team' : null;
 }
 
 export function leadSubmissionStatusLabel(lead: Lead): string {
@@ -31,7 +35,8 @@ export function leadSubmissionStatusLabel(lead: Lead): string {
   if (qStatus === 'SUBMITTED_TO_CUSTOMER' || qStatus === 'CUSTOMER_REVIEW' || status === 'NEGOTIATION') {
     return 'Submitted to Customer';
   }
-  if (status === 'QUOTATION' || qStatus === 'PENDING_INTERNAL' || status === 'DRAFT') {
+  if (status === 'DRAFT') return 'Draft';
+  if (status === 'QUOTATION' || qStatus === 'PENDING_INTERNAL' || qStatus === 'DRAFT') {
     return SUBMISSION_STAGE_LABELS.BUSINESS_HEAD;
   }
   if (status === 'SUBMITTED_TO_PM' || status === 'UNDER_PM_REVIEW' || status === 'RESUBMITTED_TO_PM') {
@@ -41,7 +46,7 @@ export function leadSubmissionStatusLabel(lead: Lead): string {
     return 'Returned for Clarification';
   }
   if (status === 'ACCEPTED_FOR_FEASIBILITY' || status === 'FEASIBILITY_IN_PROGRESS') {
-    return feasibilityTeamSubmissionLabel(lead) || SUBMISSION_STAGE_LABELS.PM;
+    return feasibilityTeamSubmissionLabel(lead) || (lead.assigned_team_lead_name ? 'Submitted to Feasibility Team' : 'Approved');
   }
   if (status === 'FEASIBILITY_SUBMITTED') {
     const clarification =
@@ -49,11 +54,13 @@ export function leadSubmissionStatusLabel(lead: Lead): string {
     return clarification ? 'Clarification Submitted' : SUBMISSION_STAGE_LABELS.PM;
   }
   if (status === 'FEASIBILITY_RETURNED') return 'Returned for Clarification';
-  if (status === 'COSTING_IN_PROGRESS') return 'Submitted to Procurement Review';
+  if (status === 'COSTING_IN_PROGRESS') return SUBMISSION_STAGE_LABELS.IP_TEAM;
   if (status === 'COSTING_SUBMITTED') return SUBMISSION_STAGE_LABELS.PM;
   if (status === 'COSTING_RETURNED') return 'Returned for Clarification';
   if (status === 'ORDER_CONVERTED' || status === 'WON') return 'Approved';
   if (status === 'FEASIBILITY_REJECTED' || status === 'COSTING_REJECTED' || status === 'CANCELLED') return 'Rejected';
+  if (status === 'LOST') return 'Lost';
+  if (status === 'ON_HOLD') return 'On Hold';
 
   return workflowContextForStatus(status).status_label;
 }
@@ -191,7 +198,7 @@ const BY_STATUS: Record<LeadStatus, LeadWorkflowContext> = {
     owner_role: 'PROJECT_MANAGER',
   },
   COSTING_IN_PROGRESS: {
-    status_label: 'Submitted to Procurement Review',
+    status_label: SUBMISSION_STAGE_LABELS.IP_TEAM,
     action_required: 'Complete procurement and submit for PM review',
     previous_action: 'Feasibility approved',
     next_action: 'Submit procurement to PM',

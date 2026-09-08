@@ -5,11 +5,12 @@ import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { StorageService } from '@/lib/storage';
 import { Lead, LeadStatus, User } from '@/lib/types';
-import { canCreateLead, isCeoViewOnly, userIsOnLeadTeam } from '@/lib/rbac';
+import { canCreateLead, canManageLeadRecord, isCeoViewOnly, userIsOnLeadTeam } from '@/lib/rbac';
 import { LeadApi } from '@/lib/leadApi';
 import { formatInrCompact, formatLongDate, PIPELINE_STAGE_LABELS } from '@/lib/format';
-import { leadDetailHref } from '@/lib/leadRoutes';
+import { leadDetailHref, leadEditHref } from '@/lib/leadRoutes';
 import { workflowActionLabel } from '@/lib/workflowActionLabel';
+import ConfirmDialog from '@/components/work/ConfirmDialog';
 import { 
   Building2, 
   Plus, 
@@ -21,26 +22,27 @@ import {
   CheckCircle2, 
   AlertTriangle, 
   ArrowRight,
-  FileText
+  Pencil,
+  Trash2
 } from 'lucide-react';
 
 const STATUS_BADGES: Record<LeadStatus, { label: string; style: string }> = {
   DRAFT: { label: 'Draft', style: 'bg-slate-800 text-slate-300 border-slate-700' },
-  SUBMITTED_TO_PM: { label: 'Submitted to PM for Review', style: 'bg-cyan-950 text-cyan-300 border-cyan-700' },
-  UNDER_PM_REVIEW: { label: 'Submitted to PM for Review', style: 'bg-cyan-950 text-cyan-300 border-cyan-700' },
+  SUBMITTED_TO_PM: { label: 'Submitted to PM', style: 'bg-cyan-950 text-cyan-300 border-cyan-700' },
+  UNDER_PM_REVIEW: { label: 'Submitted to PM', style: 'bg-cyan-950 text-cyan-300 border-cyan-700' },
   RETURNED_TO_SALES: { label: 'Returned for Clarification', style: 'bg-amber-950 text-amber-300 border-amber-800' },
   ADDITIONAL_INFORMATION_REQUIRED: { label: 'Returned for Clarification', style: 'bg-amber-950 text-amber-300 border-amber-800' },
-  RESUBMITTED_TO_PM: { label: 'Submitted to PM for Review', style: 'bg-cyan-950 text-cyan-300 border-cyan-700' },
-  ACCEPTED_FOR_FEASIBILITY: { label: 'Submitted to Feasibility Team', style: 'bg-emerald-950 text-emerald-300 border-emerald-700' },
-  FEASIBILITY_IN_PROGRESS: { label: 'Submitted to Feasibility Team', style: 'bg-indigo-950 text-indigo-300 border-indigo-800' },
-  FEASIBILITY_SUBMITTED: { label: 'Submitted to PM for Review', style: 'bg-cyan-950 text-cyan-300 border-cyan-700' },
+  RESUBMITTED_TO_PM: { label: 'Submitted to PM', style: 'bg-cyan-950 text-cyan-300 border-cyan-700' },
+  ACCEPTED_FOR_FEASIBILITY: { label: 'Approved', style: 'bg-emerald-950 text-emerald-300 border-emerald-700' },
+  FEASIBILITY_IN_PROGRESS: { label: 'Submitted to Vision Team', style: 'bg-indigo-950 text-indigo-300 border-indigo-800' },
+  FEASIBILITY_SUBMITTED: { label: 'Submitted to PM', style: 'bg-cyan-950 text-cyan-300 border-cyan-700' },
   FEASIBILITY_RETURNED: { label: 'Returned for Clarification', style: 'bg-amber-950 text-amber-300 border-amber-800' },
   FEASIBILITY_REJECTED: { label: 'Rejected', style: 'bg-rose-950 text-rose-300 border-rose-700' },
-  COSTING_IN_PROGRESS: { label: 'Submitted to Procurement Review', style: 'bg-violet-950 text-violet-300 border-violet-800' },
-  COSTING_SUBMITTED: { label: 'Submitted to PM for Review', style: 'bg-cyan-950 text-cyan-300 border-cyan-700' },
+  COSTING_IN_PROGRESS: { label: 'Submitted to IP Team', style: 'bg-violet-950 text-violet-300 border-violet-800' },
+  COSTING_SUBMITTED: { label: 'Submitted to PM', style: 'bg-cyan-950 text-cyan-300 border-cyan-700' },
   COSTING_RETURNED: { label: 'Returned for Clarification', style: 'bg-amber-950 text-amber-300 border-amber-800' },
   COSTING_REJECTED: { label: 'Rejected', style: 'bg-rose-950 text-rose-300 border-rose-700' },
-  QUOTATION: { label: 'Submitted to Business Head for Review', style: 'bg-cyan-950 text-cyan-300 border-cyan-800' },
+  QUOTATION: { label: 'Submitted to Business Head', style: 'bg-cyan-950 text-cyan-300 border-cyan-800' },
   NEGOTIATION: { label: 'Submitted to Customer', style: 'bg-orange-950 text-orange-300 border-orange-800' },
   ORDER_CONVERTED: { label: 'Approved', style: 'bg-emerald-950 text-emerald-300 border-emerald-800' },
   WON: { label: 'Approved', style: 'bg-emerald-950 text-emerald-300 border-emerald-800' },
@@ -58,6 +60,9 @@ export default function LeadsListPage() {
   const [verticalFilter, setVerticalFilter] = useState<string>('ALL');
   const [priorityFilter, setPriorityFilter] = useState<string>('ALL');
   const [stageFilter, setStageFilter] = useState<string>('ALL');
+  const [toast, setToast] = useState<{ message: string; error?: boolean } | null>(null);
+  const [deleteTarget, setDeleteTarget] = useState<Lead | null>(null);
+  const [deleteBusy, setDeleteBusy] = useState(false);
 
   useEffect(() => {
     const user = StorageService.getCurrentUser();
@@ -126,6 +131,25 @@ export default function LeadsListPage() {
 
     return matchesSearch && matchesStatus && matchesVertical && matchesPriority && matchesStage;
   });
+
+  const showToast = (message: string, error = false) => {
+    setToast({ message, error });
+    window.setTimeout(() => setToast(null), 4000);
+  };
+
+  const confirmDeleteLead = async () => {
+    if (!deleteTarget || deleteBusy) return;
+    setDeleteBusy(true);
+    const result = await LeadApi.delete(deleteTarget.id);
+    setDeleteBusy(false);
+    if (!result.ok) {
+      showToast(result.message || 'Unable to delete this lead.', true);
+      return;
+    }
+    setLeads((current) => current.filter((item) => item.id !== deleteTarget.id));
+    setDeleteTarget(null);
+    showToast('Lead deleted successfully.');
+  };
 
   const ceoPipelineValue = visibleLeads
     .filter((lead) => lead.pipeline_stage !== 'CONVERTED' && lead.pipeline_stage !== 'REJECTED' && lead.status !== 'LOST')
@@ -311,7 +335,7 @@ export default function LeadsListPage() {
           >
             <option value="ALL">All Statuses</option>
             <option value="DRAFT">Draft</option>
-            <option value="SUBMITTED_TO_PM">Submitted to PM for Review</option>
+            <option value="SUBMITTED_TO_PM">Submitted to PM</option>
             <option value="RETURNED_TO_SALES">Returned for Clarification</option>
             <option value="ACCEPTED_FOR_FEASIBILITY">Approved</option>
             <option value="CANCELLED">Rejected</option>
@@ -421,12 +445,31 @@ export default function LeadsListPage() {
                         </>
                       )}
                       <td className="p-3 text-right">
-                        <a
-                          href={leadDetailHref(lead.id)}
-                          className="px-2.5 py-1 bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 rounded text-[11px] font-medium inline-flex items-center gap-1 transition-colors"
-                        >
-                          <Eye className="w-3.5 h-3.5" /> View
-                        </a>
+                        <div className="inline-flex items-center justify-end gap-1.5">
+                          <a
+                            href={leadDetailHref(lead.id)}
+                            className="px-2.5 py-1 bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 rounded text-[11px] font-medium inline-flex items-center gap-1 transition-colors"
+                          >
+                            <Eye className="w-3.5 h-3.5" /> View
+                          </a>
+                          {canManageLeadRecord(currentUser) && (
+                            <>
+                              <a
+                                href={leadEditHref(lead.id)}
+                                className="px-2.5 py-1 bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 rounded text-[11px] font-medium inline-flex items-center gap-1 transition-colors"
+                              >
+                                <Pencil className="w-3.5 h-3.5" /> Edit
+                              </a>
+                              <button
+                                type="button"
+                                onClick={() => setDeleteTarget(lead)}
+                                className="cursor-pointer px-2.5 py-1 bg-slate-800 hover:bg-rose-950/60 text-rose-300 border border-slate-700 hover:border-rose-800 rounded text-[11px] font-medium inline-flex items-center gap-1 transition-colors"
+                              >
+                                <Trash2 className="w-3.5 h-3.5" /> Delete
+                              </button>
+                            </>
+                          )}
+                        </div>
                       </td>
                     </tr>
                   );
@@ -436,6 +479,30 @@ export default function LeadsListPage() {
           </table>
         </div>
       </div>
+
+      {toast && (
+        <div className={`fixed bottom-6 right-6 z-[80] flex items-center gap-2 rounded-lg border px-4 py-2.5 text-xs font-semibold shadow-lg ${
+          toast.error
+            ? 'border-rose-800 bg-rose-950 text-rose-200'
+            : 'border-emerald-800 bg-emerald-950 text-emerald-200'
+        }`}>
+          <CheckCircle2 className="h-4 w-4" />
+          {toast.message}
+        </div>
+      )}
+
+      {deleteTarget && (
+        <ConfirmDialog
+          title="Delete lead"
+          body="Are you sure you want to delete this lead?"
+          confirmLabel={deleteBusy ? 'Deleting…' : 'Delete'}
+          busy={deleteBusy}
+          onCancel={() => {
+            if (!deleteBusy) setDeleteTarget(null);
+          }}
+          onConfirm={() => void confirmDeleteLead()}
+        />
+      )}
     </div>
   );
 }

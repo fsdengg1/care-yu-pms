@@ -1,6 +1,6 @@
 const RESERVED_PROJECT_SEGMENTS = new Set(['active', 'create', 'planning', 'detail', 'activity']);
 
-/** Static Cloudflare Pages route for project detail (query param fallback). */
+/** Project detail route using a query param fallback. */
 export function projectDetailHref(projectId: string, extraQuery?: string): string {
   const base = `/projects/detail?id=${encodeURIComponent(projectId)}`;
   if (!extraQuery) return base;

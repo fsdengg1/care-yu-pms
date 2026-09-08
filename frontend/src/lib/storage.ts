@@ -287,6 +287,11 @@ export class StorageService {
     if (this.isBrowser) localStorage.setItem(STORAGE_KEYS.LEADS, JSON.stringify(leads));
   }
 
+  static removeLead(id: string) {
+    this.saveLeads(this.getLeads().filter((item) => item.id !== id && item.lead_number !== id));
+    this.replaceLeadDocuments(id, []);
+  }
+
   static upsertLead(lead: Lead): Lead {
     const leads = this.getLeads();
     const index = leads.findIndex((item) => item.id === lead.id || item.lead_number === lead.lead_number);

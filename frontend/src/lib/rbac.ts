@@ -164,6 +164,11 @@ export function canCreateLead(user: User | null | undefined): boolean {
   return user.role_code === 'BUSINESS_HEAD' || user.role_code === 'ENG_DIRECTOR';
 }
 
+export function canManageLeadRecord(user: User | null | undefined): boolean {
+  if (!user) return false;
+  return user.role_code === 'BUSINESS_HEAD' || user.role_code === 'ENG_DIRECTOR' || user.role_code === 'SYSTEM_ADMIN';
+}
+
 export function canAccessGanttPlanning(user: User | null | undefined): boolean {
   if (!user) return false;
   return [

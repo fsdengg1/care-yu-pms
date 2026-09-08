@@ -76,6 +76,17 @@ export const LeadApi = {
     return { ok: false as const, message: result.message, errors: result.errors, status: result.status };
   },
 
+  async delete(id: string) {
+    const result = await call<{ ok: boolean; lead_number?: string }>(`/api/leads/${id}`, {
+      method: 'DELETE',
+    });
+    if (result.ok) {
+      StorageService.removeLead(id);
+      return { ok: true as const, lead_number: result.data.lead_number };
+    }
+    return { ok: false as const, message: result.message, status: result.status };
+  },
+
   async update(id: string, body: Partial<Lead>) {
     const result = await call<LeadWorkflowPayload>(`/api/leads/${id}`, {
       method: 'PATCH',

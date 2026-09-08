@@ -48,7 +48,6 @@ function ensureDefaultScheduleConfig() {
 
 export async function startEmailReportScheduler() {
   if (started || !env.schedulerEnabled) return;
-  if (process.env.CF_PAGES || process.env.CLOUDFLARE_WORKER || process.env.WORKER_ENV) return;
   started = true;
   const timezone = env.appTimezone || 'Asia/Kolkata';
   ensureDefaultScheduleConfig();

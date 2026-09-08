@@ -8,9 +8,6 @@
     "start": "node dist/server.js",
     "build": "tsc && node -e \"console.log('Backend compiled to dist/')\"",
     "typecheck": "tsc --noEmit",
-    "deploy:worker": "wrangler deploy",
-    "dev:worker": "wrangler dev",
-    "dry-run:worker": "wrangler deploy --dry-run",
     "db:ensure": "tsx scripts/ensure-database.ts",
     "db:schema": "tsx scripts/apply-pms-schema.ts",
     "db:prune-users": "tsx scripts/prune-users-keep-leadership.ts",
@@ -30,11 +27,9 @@
     "jsonwebtoken": "^9.0.2",
     "node-cron": "^4.2.1",
     "nodemailer": "^9.0.5",
-    "pg": "^8.23.0",
-    "serverless-http": "^4.0.0"
+    "pg": "^8.23.0"
   },
   "devDependencies": {
-    "@cloudflare/workers-types": "^5.20260907.1",
     "@types/bcrypt": "^6.0.0",
     "@types/bcryptjs": "^2.4.6",
     "@types/cors": "^2.8.19",
@@ -45,7 +40,6 @@
     "@types/nodemailer": "^8.0.1",
     "@types/pg": "^8.23.1",
     "tsx": "^4.20.5",
-    "typescript": "^5",
-    "wrangler": "^4.129.0"
+    "typescript": "^5"
   }
 }
