@@ -1,17 +1,7 @@
 import { StorageService } from './storage';
 
-const PRODUCTION_API_URL = 'https://careyu-backend-api.aicareyuautomation.workers.dev';
-
 function isLoopbackHost(hostname: string) {
   return hostname === 'localhost' || hostname === '127.0.0.1' || hostname === '::1';
-}
-
-function isCloudflareFrontendHost(hostname: string) {
-  return (
-    hostname === 'careyu-frontend.pages.dev' ||
-    hostname.endsWith('.careyu-frontend.pages.dev') ||
-    hostname === 'pms.careyu.ai'
-  );
 }
 
 function resolveApiBaseUrl() {
@@ -26,16 +16,10 @@ function resolveApiBaseUrl() {
       try {
         const apiUrl = new URL(configured);
         if (apiUrl.origin === origin) return '';
-        if (isLoopbackHost(apiUrl.hostname)) return PRODUCTION_API_URL;
         return configured;
       } catch {
-        return PRODUCTION_API_URL;
+        return configured;
       }
-    }
-    // Cloudflare Pages: call the Worker directly (CORS-enabled). Same-origin /api/* only
-    // when NEXT_PUBLIC_API_URL is explicitly set to the Pages origin.
-    if (isCloudflareFrontendHost(hostname)) {
-      return PRODUCTION_API_URL;
     }
     return '';
   }

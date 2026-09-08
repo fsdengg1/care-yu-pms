@@ -715,11 +715,7 @@ export async function initStore(options?: { forceImportLocal?: boolean }): Promi
   counts: Record<string, number>;
 }> {
   await pingDatabase();
-  if (process.env.CLOUDFLARE_WORKER === '1') {
-    console.info('[store] Skipping DDL ensureSchema on Cloudflare Worker HTTP isolate');
-  } else {
-    await ensureSchema();
-  }
+  await ensureSchema();
 
   const fromPostgres = await loadAllCollections();
   const postgresHasData = collectionsHaveData(fromPostgres);
@@ -765,12 +761,7 @@ export async function initStore(options?: { forceImportLocal?: boolean }): Promi
   }
 
   cache = merged;
-  const workerHttp = process.env.CLOUDFLARE_WORKER === '1';
-  if (!workerHttp || source !== 'postgres') {
-    await persistDb(merged);
-  } else {
-    console.info('[store] Skipping full persist on Cloudflare Worker cold start');
-  }
+  await persistDb(merged);
   initialized = true;
 
   return { source, counts: countRecords(loadDb()) };

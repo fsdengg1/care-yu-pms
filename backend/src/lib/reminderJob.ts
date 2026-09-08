@@ -221,7 +221,6 @@ export async function runDailyDigests() {
 
 export async function startNotificationScheduler() {
   if (started || !env.schedulerEnabled) return;
-  if (process.env.CF_PAGES || process.env.CLOUDFLARE_WORKER || process.env.WORKER_ENV) return;
   started = true;
   try {
     const cron = (await import('node-cron')).default;
