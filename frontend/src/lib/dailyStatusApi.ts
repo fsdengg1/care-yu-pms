@@ -53,7 +53,17 @@ export const DailyStatusApi = {
       projects: Array<{ id: string; name: string; code: string }>;
       date?: string;
       period?: SnapshotPeriod;
-      phase?: { morningLocked: boolean; eveningOpen: boolean; timezone: string; lockHour: number };
+      phase?: {
+        morningLocked: boolean;
+        eveningOpen: boolean;
+        timezone: string;
+        lockHour: number;
+        lockSource?: 'manual' | 'schedule' | null;
+        lockedAt?: string;
+        lockedByName?: string;
+        manuallyUnlocked?: boolean;
+        scheduledLocked?: boolean;
+      };
       attendance?: Array<{
         personId: string;
         person: string;
@@ -73,6 +83,26 @@ export const DailyStatusApi = {
       };
     }
     return { ok: true as const, ...result.data };
+  },
+
+  async morningLock(action: 'lock' | 'unlock', date?: string) {
+    return apiRequest<{
+      message: string;
+      date: string;
+      locked: boolean;
+      rows: DailyStatusRow[];
+      phase?: {
+        morningLocked: boolean;
+        eveningOpen: boolean;
+        lockSource?: 'manual' | 'schedule' | null;
+        lockedAt?: string;
+        lockedByName?: string;
+        manuallyUnlocked?: boolean;
+      };
+    }>('/api/daily-status/morning-lock', {
+      method: 'POST',
+      body: JSON.stringify({ action, date }),
+    });
   },
 
   async snapshot(period: SnapshotPeriod, date?: string) {

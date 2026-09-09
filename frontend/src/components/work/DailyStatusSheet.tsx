@@ -135,7 +135,15 @@ export default function DailyStatusSheet({
   onAccept?: (row: DailyStatusRow) => Promise<void>;
   readOnly?: boolean;
   period?: 'morning' | 'evening';
-  phase?: { morningLocked?: boolean; eveningOpen?: boolean; timezone?: string };
+  phase?: {
+    morningLocked?: boolean;
+    eveningOpen?: boolean;
+    timezone?: string;
+    lockSource?: 'manual' | 'schedule' | null;
+    lockedAt?: string;
+    lockedByName?: string;
+    manuallyUnlocked?: boolean;
+  };
   attendance?: Array<{
     personId: string;
     person: string;
@@ -273,11 +281,27 @@ export default function DailyStatusSheet({
     <section className={`daily-status-workspace min-w-0 overflow-hidden rounded-xl ${readOnly ? 'daily-status-workspace-readonly' : ''}`}>
       <div className="flex shrink-0 flex-wrap items-center gap-2 border-b border-[#e2e8f0] px-3 py-2">
         <SheetDateFilter value={workDate} onChange={onWorkDateChange} />
-        {phase?.morningLocked && period === 'morning' ? (
-          <span className="rounded-full border border-amber-300 bg-amber-50 px-2 py-0.5 text-[10px] font-bold text-amber-800">
-            Morning locked at 11:00
+        {period === 'morning' ? (
+          phase?.morningLocked ? (
+            <span className="rounded-full border border-amber-300 bg-amber-50 px-2 py-0.5 text-[10px] font-bold text-amber-800">
+              {phase.lockSource === 'manual'
+                ? `Morning locked${phase.lockedByName ? ` by ${phase.lockedByName}` : ''}`
+                : 'Morning locked at 11:00'}
+            </span>
+          ) : (
+            <span className="rounded-full border border-emerald-300 bg-emerald-50 px-2 py-0.5 text-[10px] font-bold text-emerald-800">
+              Morning unlocked — edits allowed
+            </span>
+          )
+        ) : phase?.morningLocked ? (
+          <span className="rounded-full border border-indigo-300 bg-indigo-50 px-2 py-0.5 text-[10px] font-bold text-indigo-800">
+            Evening updates open
           </span>
-        ) : null}
+        ) : (
+          <span className="rounded-full border border-slate-300 bg-slate-50 px-2 py-0.5 text-[10px] font-bold text-slate-700">
+            Lock morning status to enter evening updates
+          </span>
+        )}
         <div className="relative min-w-[200px] flex-1">
           <Search className="absolute left-2.5 top-2 h-3.5 w-3.5 text-[#94a3b8]" />
           <input

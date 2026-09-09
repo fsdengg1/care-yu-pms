@@ -110,10 +110,17 @@ export default function EmailReportsPage() {
       void loadPreview(period, workDate);
       void loadScheduleAndHistory();
     };
+    const onDailyUpdateSaved = (event: Event) => {
+      const detail = (event as CustomEvent<{ workDate?: string; period?: SnapshotPeriod }>).detail;
+      if (detail?.workDate && detail.workDate !== workDate) return;
+      void loadPreview(period, workDate);
+    };
     window.addEventListener('focus', refresh);
-    const timer = window.setInterval(refresh, 8000);
+    window.addEventListener('careyu-daily-update-saved', onDailyUpdateSaved as EventListener);
+    const timer = window.setInterval(refresh, 4000);
     return () => {
       window.removeEventListener('focus', refresh);
+      window.removeEventListener('careyu-daily-update-saved', onDailyUpdateSaved as EventListener);
       window.clearInterval(timer);
     };
   }, [period, workDate, loadPreview, loadScheduleAndHistory]);
@@ -159,7 +166,8 @@ export default function EmailReportsPage() {
         <h1 className="mt-1 text-xl font-bold text-slate-100">Daily Work Updates email</h1>
         <p className="mt-1 text-slate-400">
           Mail reports use the same Daily Work Updates sheet (Person, Project, Task Description, and related
-          columns). Titles switch automatically: Morning until 4:00 PM, Evening from 4:00 PM.
+          columns). Evening preview always reflects the latest saved evening updates from Daily Work Updates.
+          Morning locks at 11:00 AM or when a PM locks it manually; evening opens after morning is locked.
           Automatic sends run on the server at 11:15 AM and 7:15 PM ({schedule.timezone || 'Asia/Kolkata'}).
         </p>
 

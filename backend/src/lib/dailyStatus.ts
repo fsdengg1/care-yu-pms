@@ -9,7 +9,6 @@ import {
   clockInAppTimezone,
   dateInAppTimezone,
   delayReasonRequired,
-  isEveningPhaseOpen,
   isMorningPhaseLocked,
   isOverdueOnDate,
   normalizeDelayReason,
@@ -96,6 +95,92 @@ export interface DailyStatusKpis {
 }
 
 const SNAPSHOT_PREFIX = 'dss:';
+const MORNING_LOCK_META_PREFIX = 'morning-lock:';
+
+export type MorningLockSource = 'manual' | 'schedule';
+
+export type MorningLockState = {
+  locked: boolean;
+  lock_source?: MorningLockSource;
+  locked_at?: string;
+  locked_by?: string;
+  locked_by_name?: string;
+  unlocked_at?: string;
+  unlocked_by?: string;
+  unlocked_by_name?: string;
+};
+
+function morningLockMetaId(date: string) {
+  return `${MORNING_LOCK_META_PREFIX}${date}`;
+}
+
+export function loadMorningLockState(date: string): MorningLockState | null {
+  const record = store.getSystemMeta().find((item) => item.id === morningLockMetaId(date));
+  const payload = record?.payload as MorningLockState | undefined;
+  if (!payload || typeof payload.locked !== 'boolean') return null;
+  return payload;
+}
+
+function saveMorningLockState(date: string, state: MorningLockState) {
+  const id = morningLockMetaId(date);
+  const records = store.getSystemMeta().filter((item) => item.id !== id);
+  records.push({
+    id,
+    payloadType: 'MORNING_LOCK_STATE',
+    payload: state,
+  });
+  store.saveSystemMeta(records);
+}
+
+/** Morning is locked for past dates, manual lock, scheduled 11:00 lock, unless PM/Admin unlocked today. */
+export function isMorningStatusLocked(workDate: string, when = new Date()): boolean {
+  const clock = clockInAppTimezone(when);
+  if (workDate < clock.date) return true;
+  const state = loadMorningLockState(workDate);
+  if (state?.locked === false) return false;
+  if (state?.locked === true) return true;
+  return isMorningPhaseLocked(workDate, when);
+}
+
+/** Evening opens once morning status is locked for the selected work date. */
+export function isEveningStatusOpen(workDate: string, when = new Date()): boolean {
+  const clock = clockInAppTimezone(when);
+  if (workDate < clock.date) return true;
+  if (workDate > clock.date) return false;
+  return isMorningStatusLocked(workDate, when);
+}
+
+export function canManageMorningLock(user: User): boolean {
+  return user.role_code === 'PROJECT_MANAGER' || user.role_code === 'SYSTEM_ADMIN';
+}
+
+export function lockMorningStatus(user: User, date = todayIso()) {
+  const rows = visibleSheetRows(buildDailyStatusRows(user, { date, period: 'morning' }));
+  persistDailyStatusSnapshot(date, 'morning', rows, user.id, { force: true });
+  const now = new Date().toISOString();
+  saveMorningLockState(date, {
+    locked: true,
+    lock_source: 'manual',
+    locked_at: now,
+    locked_by: user.id,
+    locked_by_name: user.name,
+    unlocked_at: undefined,
+    unlocked_by: undefined,
+    unlocked_by_name: undefined,
+  });
+  return { date, locked: true, rows, phase: sheetPhase(date) };
+}
+
+export function unlockMorningStatus(user: User, date = todayIso()) {
+  const now = new Date().toISOString();
+  saveMorningLockState(date, {
+    locked: false,
+    unlocked_at: now,
+    unlocked_by: user.id,
+    unlocked_by_name: user.name,
+  });
+  return { date, locked: false, phase: sheetPhase(date) };
+}
 
 export function toSheetStatus(status?: string): DailySheetStatus {
   const value = (status || '').toUpperCase().replace(/\s+/g, '_');
@@ -524,7 +609,7 @@ export function buildDailyStatusRows(
 ): DailyStatusRow[] {
   const workDate = options?.date && /^\d{4}-\d{2}-\d{2}$/.test(options.date) ? options.date : todayIso();
   const period = options?.period;
-  const morningLocked = isMorningPhaseLocked(workDate);
+  const morningLocked = isMorningStatusLocked(workDate);
   const users = visibleUsers(user);
   const allUsers = store.getUsers();
   const projects = store.getProjects();
@@ -755,11 +840,12 @@ export function persistDailyStatusSnapshot(
   date: string,
   period: SnapshotPeriod,
   rows: DailyStatusRow[],
-  capturedBy = 'system'
+  capturedBy = 'system',
+  options?: { force?: boolean }
 ) {
   const records = store.getSystemMeta();
   const id = snapshotId(date, period);
-  if (period === 'morning') {
+  if (period === 'morning' && !options?.force) {
     const existing = records.find((item) => item.id === id);
     const existingRows = (existing?.payload as { rows?: DailyStatusRow[] } | undefined)?.rows;
     if (Array.isArray(existingRows) && existingRows.length) {
@@ -925,7 +1011,7 @@ function eveningRowsFromDayUpdates(date: string, morningRows: DailyStatusRow[]):
 }
 
 export function ensureMorningSnapshot(user: User, date = todayIso()) {
-  if (!isMorningPhaseLocked(date)) return null;
+  if (!isMorningStatusLocked(date)) return null;
   const existing = loadDailyStatusSnapshot(date, 'morning');
   if (existing?.length) return existing;
   const rows = visibleSheetRows(buildDailyStatusRows(user, { date, period: 'morning' }));
@@ -934,14 +1020,26 @@ export function ensureMorningSnapshot(user: User, date = todayIso()) {
 
 export function sheetPhase(date = todayIso()) {
   const clock = clockInAppTimezone();
+  const lockState = loadMorningLockState(date);
+  const morningLocked = isMorningStatusLocked(date);
+  const scheduledLocked = isMorningPhaseLocked(date);
+  let lockSource: MorningLockSource | null = null;
+  if (morningLocked) {
+    lockSource = lockState?.locked === true && lockState.lock_source === 'manual' ? 'manual' : 'schedule';
+  }
   return {
     date,
     timezone: clock.timezone,
-    morningLocked: isMorningPhaseLocked(date),
-    eveningOpen: isEveningPhaseOpen(date),
+    morningLocked,
+    eveningOpen: isEveningStatusOpen(date),
     lockHour: 11,
+    lockSource,
+    lockedAt: lockState?.locked_at,
+    lockedByName: lockState?.locked_by_name,
+    manuallyUnlocked: lockState?.locked === false,
     now: `${clock.date} ${String(clock.hour).padStart(2, '0')}:${String(clock.minute).padStart(2, '0')}`,
     delayReasonOptions: DELAY_REASON_OPTIONS,
+    scheduledLocked,
   };
 }
 
@@ -952,10 +1050,11 @@ export function rowsForPeriod(user: User, period: SnapshotPeriod, date = todayIs
 } {
   if (period === 'morning') {
     const frozen = ensureMorningSnapshot(user, date);
-    if (frozen?.length && isMorningPhaseLocked(date)) {
+    if (frozen?.length && isMorningStatusLocked(date)) {
       return { rows: scopedDailyStatusRows(user, frozen), source: 'snapshot', available: true };
     }
   }
+  // Evening reports always use live Daily Work Updates — never mailed/snapshot rows.
   return {
     rows: visibleSheetRows(buildDailyStatusRows(user, { date, period })),
     source: 'live',

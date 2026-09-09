@@ -4,6 +4,7 @@ import { requirePermission } from '../lib/rbac.js';
 import {
   buildDailyStatusKpis,
   buildDailyStatusRows,
+  canManageMorningLock,
   canSeeAllDailyStatusRows,
   compareSnapshots,
   dateInAppTimezone,
@@ -12,6 +13,7 @@ import {
   fromSheetStatus,
   loadDailyStatusSnapshot,
   ensureMorningSnapshot,
+  lockMorningStatus,
   sheetPhase,
   renderDailyStatusEmailHtml,
   restoreDailyStatusReport,
@@ -19,10 +21,13 @@ import {
   saveDailyStatusSnapshot,
   sendDailyStatusReport,
   SnapshotPeriod,
+  unlockMorningStatus,
   upsertLoggedHoursForTask,
   upsertEveningWorkCompleted,
   syncPeriodRecordFromTask,
   visibleProjects,
+  isEveningStatusOpen,
+  isMorningStatusLocked,
 } from '../lib/dailyStatus.js';
 import { formatEmployeeDisplayName } from '../lib/people.js';
 import { updateWorkTask, setTaskSheetHidden } from '../lib/workTasks.js';
@@ -34,7 +39,7 @@ import {
   EmailReportSlot,
 } from '../lib/emailReportSchedule.js';
 import { attendanceForUsers } from '../lib/leaveRequests.js';
-import { isEveningPhaseOpen, isMorningPhaseLocked, normalizeDelayReason } from '../lib/workCalendar.js';
+import { normalizeDelayReason } from '../lib/workCalendar.js';
 import { env } from '../config/env.js';
 import { store } from '../store/db.js';
 
@@ -107,6 +112,28 @@ router.get(
 );
 
 router.post(
+  '/morning-lock',
+  requirePermission('view:daily-updates', 'submit:daily-update'),
+  (req: AuthedRequest, res) => {
+    const user = req.user!;
+    if (!canManageMorningLock(user)) {
+      return res.status(403).json({ message: 'Only a Project Manager or System Admin can lock or unlock Morning Status.' });
+    }
+    const date = readIsoDate(req.body?.date);
+    const action = String(req.body?.action || 'lock').toLowerCase() === 'unlock' ? 'unlock' : 'lock';
+    const result = action === 'unlock' ? unlockMorningStatus(user, date) : lockMorningStatus(user, date);
+    return res.json({
+      message:
+        action === 'unlock'
+          ? 'Morning Status unlocked. Team members can edit morning task details again.'
+          : 'Morning Status locked. Evening updates are now open for the same tasks.',
+      ...result,
+      rows: buildDailyStatusRows(user, { date, period: action === 'unlock' ? 'morning' : 'evening' }),
+    });
+  }
+);
+
+router.post(
   '/snapshot',
   requirePermission('view:daily-updates', 'submit:daily-update'),
   (req: AuthedRequest, res) => {
@@ -172,6 +199,7 @@ router.get(
       rows: packed.rows,
       recipientName: formatEmployeeDisplayName(req.user!),
     });
+    res.setHeader('Cache-Control', 'no-store');
     return res.json({
       available: true,
       source: packed.source,
@@ -329,14 +357,15 @@ router.patch(
       return res.status(400).json({ message: 'Leave and permission rows are not editable task records.' });
     }
     ensureMorningSnapshot(req.user!, date);
-    if (period === 'morning' && isMorningPhaseLocked(date)) {
+    if (period === 'morning' && isMorningStatusLocked(date)) {
       return res.status(400).json({
-        message: 'Morning Status is locked for this date after 11:00 AM. Use Evening Status to continue updates.',
+        message:
+          'Morning Status is locked for this date. Switch to Evening Status to continue updates, or ask a Project Manager to unlock morning.',
       });
     }
-    if (period === 'evening' && !isEveningPhaseOpen(date)) {
+    if (period === 'evening' && !isEveningStatusOpen(date)) {
       return res.status(400).json({
-        message: 'Evening Status opens at 11:00 AM in the configured timezone.',
+        message: 'Evening Status opens after Morning Status is locked for this date.',
       });
     }
     const body: Record<string, unknown> = { ...(req.body || {}) };

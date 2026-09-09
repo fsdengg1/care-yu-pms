@@ -2,11 +2,11 @@
 
 import { useRouter } from '@/lib/navigation';
 import React, { Suspense, useEffect, useState } from 'react';
-import { FileText, GitCompare, ListPlus, Moon, Plus, RefreshCw, Sun, X } from 'lucide-react';
+import { FileText, GitCompare, ListPlus, Lock, LockOpen, Moon, Plus, RefreshCw, Sun, X } from 'lucide-react';
 import { StorageService } from '@/lib/storage';
 import { DailyStatusApi } from '@/lib/dailyStatusApi';
 import { TasksApi } from '@/lib/tasksApi';
-import { canAddDailyWorkTask, canCreateWorkTask, canEditDailySheet } from '@/lib/rbac';
+import { canAddDailyWorkTask, canCreateWorkTask, canEditDailySheet, canPerformPmOperations } from '@/lib/rbac';
 import { CompareItem, DailyStatusPerson, DailyStatusRow, DailyStatusSubtask, appTodayIso, readStoredWorkDate, writeStoredWorkDate } from '@/lib/dailyStatus';
 import { User } from '@/lib/types';
 import ConfirmDialog from '@/components/work/ConfirmDialog';
@@ -69,7 +69,15 @@ function DailyWorkUpdatesInner() {
   const [deleteRow, setDeleteRow] = useState<DailyStatusRow | null>(null);
   const [workDate, setWorkDate] = useState(appTodayIso);
   const [period, setPeriod] = useState<'morning' | 'evening'>('morning');
-  const [phase, setPhase] = useState<{ morningLocked?: boolean; eveningOpen?: boolean; timezone?: string } | null>(null);
+  const [phase, setPhase] = useState<{
+    morningLocked?: boolean;
+    eveningOpen?: boolean;
+    timezone?: string;
+    lockSource?: 'manual' | 'schedule' | null;
+    lockedAt?: string;
+    lockedByName?: string;
+    manuallyUnlocked?: boolean;
+  } | null>(null);
   const [attendance, setAttendance] = useState<
     Array<{ personId: string; person: string; onLeave?: boolean; halfDay?: string; permission?: { fromTime?: string; toTime?: string; reason?: string } }>
   >([]);
@@ -80,6 +88,7 @@ function DailyWorkUpdatesInner() {
   const canManageTasks = canCreateWorkTask(user);
   const canEditSheet = canEditDailySheet(user);
   const canAddTask = canAddDailyWorkTask(user);
+  const canManageMorningLock = canPerformPmOperations(user);
 
   const changeWorkDate = (date: string) => {
     const next = date || appTodayIso();
@@ -170,6 +179,31 @@ function DailyWorkUpdatesInner() {
   const flashSaved = () => {
     setSaved(true);
     window.setTimeout(() => setSaved(false), 2500);
+  };
+
+  const notifyDailyUpdateSaved = () => {
+    window.dispatchEvent(new CustomEvent('careyu-daily-update-saved', { detail: { workDate, period } }));
+  };
+
+  const toggleMorningLock = async (action: 'lock' | 'unlock') => {
+    setBusy(true);
+    setError(null);
+    try {
+      const result = await DailyStatusApi.morningLock(action, workDate);
+      if (!result.ok) {
+        setError(result.message || 'Unable to update Morning Status lock.');
+        return;
+      }
+      setPhase(result.data.phase || null);
+      setRows(result.data.rows);
+      if (action === 'lock' && period === 'morning') {
+        setPeriod('evening');
+      }
+      setNotice(result.data.message);
+      await loadSheet(workDate, action === 'lock' ? 'evening' : period);
+    } finally {
+      setBusy(false);
+    }
   };
 
   const openAddSubtask = (parentId?: string) => {
@@ -304,6 +338,26 @@ function DailyWorkUpdatesInner() {
                 <Plus className="h-3.5 w-3.5" /> Additional Task
               </button>
             )}
+            {activePanel === 'hub' && canManageMorningLock && (
+              <button
+                type="button"
+                disabled={busy}
+                onClick={() => void toggleMorningLock(phase?.morningLocked ? 'unlock' : 'lock')}
+                className={`inline-flex items-center gap-1 rounded-md px-2.5 py-1.5 font-bold transition-colors ${
+                  phase?.morningLocked
+                    ? 'border border-amber-400 bg-amber-950/40 text-amber-200 hover:border-amber-300'
+                    : 'border border-emerald-700 bg-emerald-950/30 text-emerald-200 hover:border-emerald-500'
+                }`}
+                title={
+                  phase?.morningLocked
+                    ? 'Unlock morning task details for editing'
+                    : 'Lock morning task details and open evening updates'
+                }
+              >
+                {phase?.morningLocked ? <LockOpen className="h-3.5 w-3.5" /> : <Lock className="h-3.5 w-3.5" />}
+                {phase?.morningLocked ? 'Unlock Morning Status' : 'Lock Morning Status'}
+              </button>
+            )}
             {activePanel === 'hub' && (
               <>
                 <button
@@ -323,7 +377,8 @@ function DailyWorkUpdatesInner() {
                 </button>
                 <button
                   type="button"
-                  disabled={busy || (phase?.eveningOpen === false && workDate === appTodayIso())}
+                  disabled={busy || !phase?.morningLocked}
+                  title={!phase?.morningLocked ? 'Evening updates open after Morning Status is locked' : undefined}
                   onClick={async () => {
                     setPeriod('evening');
                     await loadSheet(workDate, 'evening');
@@ -459,6 +514,7 @@ function DailyWorkUpdatesInner() {
             }
             setRows(result.data.rows);
             flashSaved();
+            notifyDailyUpdateSaved();
           }}
           onExport={exportCsv}
           onDelete={() => setConfirmDelete(true)}
