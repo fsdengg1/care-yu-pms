@@ -1,7 +1,8 @@
 'use client';
 
+import { useRouter } from '@/lib/navigation';
 import React, { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react';
-import { useRouter } from 'next/navigation';
+
 import { User } from '@/lib/types';
 import { apiRequest } from '@/lib/api';
 import { logoutWithApi } from '@/lib/auth';

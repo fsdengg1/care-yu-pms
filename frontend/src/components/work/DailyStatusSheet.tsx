@@ -429,7 +429,7 @@ export default function DailyStatusSheet({
                             type="checkbox"
                             checked={selectedIds.includes(row.id)}
                             onChange={(event) =>
-                              handleRowSelect(row.id, rowIndex, event.target.checked, event.nativeEvent.shiftKey)
+                              handleRowSelect(row.id, rowIndex, event.target.checked, (event.nativeEvent as MouseEvent).shiftKey)
                             }
                             aria-label={`Select ${row.person} task`}
                           />

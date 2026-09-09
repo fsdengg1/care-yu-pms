@@ -1,7 +1,8 @@
 'use client';
 
+import { Link } from '@/lib/navigation';
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
-import Link from 'next/link';
+
 import { DailyUpdate, Project, ProjectDetailPayload, Task, User } from '@/lib/types';
 import { DailyUpdatesApi } from '@/lib/dailyUpdatesApi';
 import { ProjectsApi } from '@/lib/projectsApi';

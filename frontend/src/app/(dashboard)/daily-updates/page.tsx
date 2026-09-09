@@ -1,7 +1,7 @@
 'use client';
 
+import { useRouter } from '@/lib/navigation';
 import React, { Suspense, useEffect, useState } from 'react';
-import { useRouter } from 'next/navigation';
 import { FileText, GitCompare, ListPlus, Moon, Plus, RefreshCw, Sun, X } from 'lucide-react';
 import { StorageService } from '@/lib/storage';
 import { DailyStatusApi } from '@/lib/dailyStatusApi';

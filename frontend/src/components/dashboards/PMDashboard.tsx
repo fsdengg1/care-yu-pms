@@ -1,5 +1,6 @@
 'use client';
 
+import { Link } from '@/lib/navigation';
 import React, { useEffect, useState } from 'react';
 import { User, DailyUpdate, DailyUpdateSummary, FeasibilitySuggestion, FeasibilityTeamAssignment, Project, WorkAssignment } from '@/lib/types';
 import { StorageService } from '@/lib/storage';
@@ -8,7 +9,7 @@ import { LeadApi } from '@/lib/leadApi';
 import { ProjectsApi } from '@/lib/projectsApi';
 import { formatLongDate, LEAD_STATUS_LABELS, WORK_STATUS_LABELS } from '@/lib/format';
 import { GanttChartSquare, Scan, ShieldAlert, MessageSquare, Inbox, ArrowRight, FileText, Clock } from 'lucide-react';
-import Link from 'next/link';
+
 import PendingActionsCard from '@/components/work/PendingActionsCard';
 import LeadPipelinePanel from '@/components/dashboards/LeadPipelinePanel';
 import LeadWorkflowTimeline from '@/components/dashboards/LeadWorkflowTimeline';

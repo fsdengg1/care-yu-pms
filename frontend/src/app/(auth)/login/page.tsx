@@ -1,8 +1,9 @@
 'use client';
 
+import { Link, useRouter } from '@/lib/navigation';
 import React, { useEffect, useRef, useState } from 'react';
-import Link from 'next/link';
-import { useRouter } from 'next/navigation';
+
+
 import { Mail } from 'lucide-react';
 import AuthShell from '@/components/auth/AuthShell';
 import AuthField from '@/components/auth/AuthField';

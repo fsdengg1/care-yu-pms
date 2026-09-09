@@ -1,7 +1,8 @@
 'use client';
 
+import { Link } from '@/lib/navigation';
 import React, { useState, useEffect } from 'react';
-import Link from 'next/link';
+
 import { StorageService } from '@/lib/storage';
 import { FeasibilityTeamAssignment, Lead, Project, User } from '@/lib/types';
 import { apiRequest } from '@/lib/api';

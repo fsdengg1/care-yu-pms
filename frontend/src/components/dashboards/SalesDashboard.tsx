@@ -1,7 +1,7 @@
 'use client';
 
+import { Link } from '@/lib/navigation';
 import React, { useEffect, useState } from 'react';
-import Link from 'next/link';
 import { User } from '@/lib/types';
 import { LeadApi, BusinessHeadDashboard } from '@/lib/leadApi';
 import { DailyUpdatesApi } from '@/lib/dailyUpdatesApi';

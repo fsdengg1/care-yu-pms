@@ -1,8 +1,9 @@
 'use client';
 
+import { Link, useParams, usePathname, useSearchParams } from '@/lib/navigation';
 import React, { useEffect, useState } from 'react';
-import Link from 'next/link';
-import { useParams, usePathname, useSearchParams } from 'next/navigation';
+
+
 import { resolveProjectIdFromLocation } from '@/lib/projectRoutes';
 import { History } from 'lucide-react';
 import { DailyUpdatesApi } from '@/lib/dailyUpdatesApi';

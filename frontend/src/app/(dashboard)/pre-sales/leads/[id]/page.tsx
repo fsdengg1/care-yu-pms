@@ -1,8 +1,9 @@
 'use client';
 
+import { Link, useParams, usePathname, useRouter, useSearchParams } from '@/lib/navigation';
 import React, { useState, useEffect, useCallback } from 'react';
-import { useParams, usePathname, useRouter, useSearchParams } from 'next/navigation';
-import Link from 'next/link';
+
+
 import { StorageService } from '@/lib/storage';
 import { LeadApi } from '@/lib/leadApi';
 import LeadCyclePanels from '@/components/leads/LeadCyclePanels';

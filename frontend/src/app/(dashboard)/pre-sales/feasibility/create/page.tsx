@@ -1,6 +1,6 @@
 'use client';
+import { useRouter } from '@/lib/navigation';
 import { useEffect } from 'react';
-import { useRouter } from 'next/navigation';
 
 /**
  * Feasibility assignments are now created directly from the Lead Detail page

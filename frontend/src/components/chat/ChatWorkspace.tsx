@@ -1,7 +1,8 @@
 'use client';
 
+import { useRouter, useSearchParams } from '@/lib/navigation';
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
-import { useRouter, useSearchParams } from 'next/navigation';
+
 import { ChatApi, ChatParticipant } from '@/lib/chatApi';
 import { ChatMessage, ConversationSummary, ConversationType, User } from '@/lib/types';
 import { formatRelativeTime } from '@/lib/format';

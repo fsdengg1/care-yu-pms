@@ -1,7 +1,8 @@
 'use client';
 
+import { Link } from '@/lib/navigation';
 import React, { useEffect, useState } from 'react';
-import Link from 'next/link';
+
 import { ArrowRight, Building2, FolderKanban, Inbox, Plus } from 'lucide-react';
 import { Lead } from '@/lib/types';
 import { LeadApi } from '@/lib/leadApi';

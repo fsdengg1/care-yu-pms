@@ -1,8 +1,9 @@
 'use client';
 
+import { Link, usePathname } from '@/lib/navigation';
 import React from 'react';
-import Link from 'next/link';
-import { usePathname } from 'next/navigation';
+
+
 import { User } from '@/lib/types';
 import { filterNavForUser, isCeoViewOnly, CEO_NAV_CATEGORY_LABELS } from '@/lib/rbac';
 import CareyuLogo from '@/components/brand/CareyuLogo';

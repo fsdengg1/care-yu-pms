@@ -1,7 +1,8 @@
 'use client';
 
+import { Link } from '@/lib/navigation';
 import React, { useEffect, useMemo, useState } from 'react';
-import Link from 'next/link';
+
 import { ChevronDown, ChevronUp, History, Inbox, Search } from 'lucide-react';
 import { apiRequest } from '@/lib/api';
 import { formatRelativeTime } from '@/lib/format';

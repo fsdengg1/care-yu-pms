@@ -5,7 +5,7 @@ function isLoopbackHost(hostname: string) {
 }
 
 function resolveApiBaseUrl() {
-  const configured = (process.env.NEXT_PUBLIC_API_URL ?? '').replace(/\/$/, '');
+  const configured = (import.meta.env.VITE_API_URL ?? '').replace(/\/$/, '');
 
   if (typeof window !== 'undefined') {
     const { hostname, origin } = window.location;

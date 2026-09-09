@@ -1,8 +1,9 @@
 'use client';
 
+import { Link, useRouter } from '@/lib/navigation';
 import React, { useState, useEffect } from 'react';
-import Link from 'next/link';
-import { useRouter } from 'next/navigation';
+
+
 import { StorageService } from '@/lib/storage';
 import { Lead, LeadStatus, User } from '@/lib/types';
 import { canCreateLead, canManageLeadRecord, isCeoViewOnly, userIsOnLeadTeam } from '@/lib/rbac';

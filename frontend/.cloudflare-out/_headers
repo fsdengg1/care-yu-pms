@@ -1,16 +1,12 @@
-/_next/static/*
-  Cache-Control: public, max-age=31536000, immutable
-
-/_next/static/chunks/*.js
-  Content-Type: application/javascript; charset=UTF-8
+/*
+  Referrer-Policy: same-origin
   X-Content-Type-Options: nosniff
 
-/_next/static/chunks/*.css
-  Content-Type: text/css; charset=UTF-8
-
-/_next/static/css/*
-  Content-Type: text/css; charset=UTF-8
-
-/_next/static/media/*
+/assets/*
   Cache-Control: public, max-age=31536000, immutable
-  Access-Control-Allow-Origin: *
+
+/assets/*.js
+  Content-Type: application/javascript; charset=UTF-8
+
+/assets/*.css
+  Content-Type: text/css; charset=UTF-8

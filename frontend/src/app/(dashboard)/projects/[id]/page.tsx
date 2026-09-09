@@ -1,8 +1,7 @@
 'use client';
 
+import { Link, useParams, usePathname, useRouter, useSearchParams } from '@/lib/navigation';
 import React, { useEffect, useState } from 'react';
-import Link from 'next/link';
-import { useParams, usePathname, useRouter, useSearchParams } from 'next/navigation';
 import { resolveProjectIdFromLocation } from '@/lib/projectRoutes';
 import { ArrowLeft, Bot, ShieldAlert } from 'lucide-react';
 import { ProjectsApi } from '@/lib/projectsApi';

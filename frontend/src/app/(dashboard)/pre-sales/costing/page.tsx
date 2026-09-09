@@ -1,7 +1,8 @@
 'use client';
 
+import { Link } from '@/lib/navigation';
 import React, { useEffect, useState } from 'react';
-import Link from 'next/link';
+
 import { Calculator } from 'lucide-react';
 import { Lead } from '@/lib/types';
 import { formatInrCompact } from '@/lib/format';

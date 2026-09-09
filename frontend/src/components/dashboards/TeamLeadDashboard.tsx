@@ -1,5 +1,6 @@
 'use client';
 
+import { Link } from '@/lib/navigation';
 import React, { useEffect, useState } from 'react';
 import { DailyUpdateSummary, FeasibilityTeamAssignment, Lead, Project, User } from '@/lib/types';
 import { StorageService } from '@/lib/storage';
@@ -8,7 +9,6 @@ import { LeadApi } from '@/lib/leadApi';
 import { ProjectsApi } from '@/lib/projectsApi';
 import { canCreateWorkTask, userIsOnLeadTeam } from '@/lib/rbac';
 import { Users, ArrowRight, Clock, Plus } from 'lucide-react';
-import Link from 'next/link';
 import PendingActionsCard from '@/components/work/PendingActionsCard';
 import LeadPipelinePanel from '@/components/dashboards/LeadPipelinePanel';
 import LeadWorkflowTimeline from '@/components/dashboards/LeadWorkflowTimeline';

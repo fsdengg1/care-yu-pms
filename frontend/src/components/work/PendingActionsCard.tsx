@@ -1,7 +1,8 @@
 'use client';
 
+import { Link } from '@/lib/navigation';
 import React, { useEffect, useState } from 'react';
-import Link from 'next/link';
+
 import { LeadApi } from '@/lib/leadApi';
 import { MyWorkItem } from '@/lib/types';
 import { LEAD_STATUS_LABELS } from '@/lib/format';

@@ -1,7 +1,8 @@
 'use client';
 
+import { Link } from '@/lib/navigation';
 import React, { useEffect, useMemo, useState } from 'react';
-import Link from 'next/link';
+
 import { Mail, MailCheck, User } from 'lucide-react';
 import SignupShell from '@/components/auth/SignupShell';
 import AuthField from '@/components/auth/AuthField';

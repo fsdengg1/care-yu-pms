@@ -1,7 +1,8 @@
 'use client';
 
+import { Link } from '@/lib/navigation';
 import React, { useEffect, useState } from 'react';
-import Link from 'next/link';
+
 import {
   ArrowRight,
   Cpu,

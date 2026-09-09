@@ -4,7 +4,7 @@ This repo is split into a frontend app and a backend API.
 
 ```
 care-yu-project-hub/
-  frontend/     Next.js UI
+  frontend/     React + Vite UI
   backend/      Express API
 ```
 
@@ -12,7 +12,7 @@ care-yu-project-hub/
 
 Copy is already done for local development:
 
-- `frontend/.env.local` → `NEXT_PUBLIC_API_URL=http://localhost:4000`
+- `frontend/.env.local` → `BACKEND_URL=http://localhost:4100` (Vite dev proxy; leave `VITE_API_URL` empty locally)
 - `backend/.env` → `PORT`, `JWT_SECRET`, `CORS_ORIGIN`, `DEMO_PASSWORD`
 
 Use the `.env.example` files in each folder as templates.

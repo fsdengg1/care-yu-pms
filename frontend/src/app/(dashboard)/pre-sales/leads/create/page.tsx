@@ -1,7 +1,8 @@
 'use client';
 
+import { useRouter, useSearchParams } from '@/lib/navigation';
 import React, { Suspense, useEffect, useRef, useState } from 'react';
-import { useRouter, useSearchParams } from 'next/navigation';
+
 import { StorageService } from '@/lib/storage';
 import { canManageLeadRecord } from '@/lib/rbac';
 import { LeadApi } from '@/lib/leadApi';

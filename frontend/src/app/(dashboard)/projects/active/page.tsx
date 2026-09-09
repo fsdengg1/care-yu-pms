@@ -1,7 +1,8 @@
 'use client';
 
+import { Link } from '@/lib/navigation';
 import React, { useEffect, useMemo, useState } from 'react';
-import Link from 'next/link';
+
 import { Bot, Inbox, Plus, Search } from 'lucide-react';
 import { ProjectsApi } from '@/lib/projectsApi';
 import { Project, ProjectHealth, User } from '@/lib/types';

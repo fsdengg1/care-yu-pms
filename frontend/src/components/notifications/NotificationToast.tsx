@@ -1,7 +1,8 @@
 'use client';
 
+import { Link } from '@/lib/navigation';
 import React, { useEffect, useRef } from 'react';
-import Link from 'next/link';
+
 import { AtSign, Bell, CheckCircle2, ClipboardList, Heart, Megaphone, MessageCircle, MessagesSquare, Pin, X } from 'lucide-react';
 import { NotificationItem } from '@/lib/types';
 import { formatRelativeTime } from '@/lib/format';

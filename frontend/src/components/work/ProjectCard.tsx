@@ -1,7 +1,8 @@
 'use client';
 
+import { Link } from '@/lib/navigation';
 import React, { useMemo, useState } from 'react';
-import Link from 'next/link';
+
 import { formatEmployeeDisplayName } from '@/lib/people';
 import { formatLongDate } from '@/lib/format';
 import { Project } from '@/lib/types';

@@ -1,7 +1,7 @@
 'use client';
 
+import { useRouter } from '@/lib/navigation';
 import React, { useEffect } from 'react';
-import { useRouter } from 'next/navigation';
 import { useAuth } from '@/components/auth/AuthProvider';
 import { getDashboardPath } from '@/lib/auth';
 import { canAccessTeamDashboard } from '@/lib/rbac';

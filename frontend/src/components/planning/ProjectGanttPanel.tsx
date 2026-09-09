@@ -1,7 +1,8 @@
 'use client';
 
+import { Link } from '@/lib/navigation';
 import React, { useEffect, useState } from 'react';
-import Link from 'next/link';
+
 import { GanttChartSquare, Lock } from 'lucide-react';
 import { PlanningApi } from '@/lib/planningApi';
 import { canAccessGanttPlanning } from '@/lib/rbac';

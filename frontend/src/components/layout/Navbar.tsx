@@ -1,10 +1,11 @@
 'use client';
 
+import { Link } from '@/lib/navigation';
 import React, { useEffect, useRef, useState } from 'react';
 import { User } from '@/lib/types';
 import { formatRelativeTime } from '@/lib/format';
 import { Bell, Search, LogOut, ChevronDown, Settings, UserRound, Menu } from 'lucide-react';
-import Link from 'next/link';
+
 import AppearanceToggle from '@/components/theme/AppearanceToggle';
 import CareyuLogo from '@/components/brand/CareyuLogo';
 import { useSidebar } from '@/components/layout/SidebarContext';

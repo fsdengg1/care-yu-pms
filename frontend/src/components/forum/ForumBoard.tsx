@@ -1,7 +1,8 @@
 'use client';
 
+import { useRouter, useSearchParams } from '@/lib/navigation';
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { useRouter, useSearchParams } from 'next/navigation';
+
 import {
   ArrowLeft,
   HelpCircle,

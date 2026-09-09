@@ -1,8 +1,7 @@
 'use client';
 
+import { Link, useParams, usePathname, useSearchParams } from '@/lib/navigation';
 import React, { useEffect, useState } from 'react';
-import Link from 'next/link';
-import { useParams, usePathname, useSearchParams } from 'next/navigation';
 import { resolveEscalationIdFromLocation } from '@/lib/escalationRoutes';
 import { ArrowLeft, ShieldAlert } from 'lucide-react';
 import { apiRequest } from '@/lib/api';

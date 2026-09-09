@@ -1,8 +1,9 @@
 'use client';
 
+import { Link, useRouter } from '@/lib/navigation';
 import React, { useEffect, useState } from 'react';
-import Link from 'next/link';
-import { useRouter } from 'next/navigation';
+
+
 import { CheckCircle2 } from 'lucide-react';
 import AuthShell from '@/components/auth/AuthShell';
 import AuthPasswordField from '@/components/auth/AuthPasswordField';

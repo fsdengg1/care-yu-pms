@@ -1,7 +1,8 @@
 'use client';
 
+import { Link } from '@/lib/navigation';
 import React, { useEffect, useState } from 'react';
-import Link from 'next/link';
+
 import { Users } from 'lucide-react';
 import { apiRequest } from '@/lib/api';
 import { CeoDashboardPayload } from '@/lib/types';

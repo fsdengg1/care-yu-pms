@@ -1,7 +1,8 @@
 'use client';
 
+import { Link } from '@/lib/navigation';
 import React, { useEffect, useMemo, useState } from 'react';
-import Link from 'next/link';
+
 import { ArrowRight } from 'lucide-react';
 import { User } from '@/lib/types';
 import { DailyUpdatesApi } from '@/lib/dailyUpdatesApi';

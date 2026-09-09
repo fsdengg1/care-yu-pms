@@ -1,8 +1,7 @@
 'use client';
 
+import { Link, useRouter, useSearchParams } from '@/lib/navigation';
 import React, { Suspense, useEffect, useState } from 'react';
-import Link from 'next/link';
-import { useRouter, useSearchParams } from 'next/navigation';
 import { AlertCircle, ArrowLeft, Paperclip, Save, Send } from 'lucide-react';
 import { StorageService } from '@/lib/storage';
 import { DailyUpdatesApi } from '@/lib/dailyUpdatesApi';

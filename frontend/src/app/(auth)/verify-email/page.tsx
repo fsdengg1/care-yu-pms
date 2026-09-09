@@ -1,8 +1,9 @@
 'use client';
 
+import { Link, useSearchParams } from '@/lib/navigation';
 import React, { Suspense, useEffect, useMemo, useState } from 'react';
-import Link from 'next/link';
-import { useSearchParams } from 'next/navigation';
+
+
 import { CheckCircle2, Loader2, Mail } from 'lucide-react';
 import AuthShell from '@/components/auth/AuthShell';
 import AuthField from '@/components/auth/AuthField';

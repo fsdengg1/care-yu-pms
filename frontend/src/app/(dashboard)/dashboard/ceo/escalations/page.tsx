@@ -1,7 +1,7 @@
 'use client';
 
+import { Link } from '@/lib/navigation';
 import React, { useEffect, useState } from 'react';
-import Link from 'next/link';
 import { ShieldAlert } from 'lucide-react';
 import { apiRequest } from '@/lib/api';
 import { Escalation } from '@/lib/types';

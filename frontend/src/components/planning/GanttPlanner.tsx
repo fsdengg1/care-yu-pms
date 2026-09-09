@@ -1,8 +1,7 @@
 'use client';
 
+import { Link, useRouter, useSearchParams } from '@/lib/navigation';
 import React, { useEffect, useMemo, useState } from 'react';
-import Link from 'next/link';
-import { useRouter, useSearchParams } from 'next/navigation';
 import { AlertTriangle, Diamond, GanttChartSquare, Lock, Plus, ShieldAlert, Trash2 } from 'lucide-react';
 import { PlanningApi, PlanTaskPayload } from '@/lib/planningApi';
 import { formatLongDate } from '@/lib/format';

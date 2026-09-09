@@ -1,8 +1,9 @@
 'use client';
 
+import { Link, useRouter, useSearchParams } from '@/lib/navigation';
 import React, { Suspense, useEffect, useState } from 'react';
-import Link from 'next/link';
-import { useRouter, useSearchParams } from 'next/navigation';
+
+
 import { KeyRound, Loader2, Mail } from 'lucide-react';
 import AuthShell from '@/components/auth/AuthShell';
 import AuthField from '@/components/auth/AuthField';

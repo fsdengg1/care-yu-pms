@@ -1,7 +1,8 @@
 'use client';
 
+import { Link } from '@/lib/navigation';
 import React, { useEffect, useState } from 'react';
-import Link from 'next/link';
+
 import { AlertCircle, Bell, CheckCircle2, KeyRound, Loader2, Mail, Shield, User } from 'lucide-react';
 import PasswordRequirements from '@/components/auth/PasswordRequirements';
 import {

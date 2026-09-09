@@ -1,8 +1,9 @@
 'use client';
 
+import { Link, useRouter, useSearchParams } from '@/lib/navigation';
 import React, { Suspense, useEffect, useRef, useState } from 'react';
-import Link from 'next/link';
-import { useRouter, useSearchParams } from 'next/navigation';
+
+
 import { canCreateLead } from '@/lib/rbac';
 import { ProjectsApi } from '@/lib/projectsApi';
 import { useAuth } from '@/components/auth/AuthProvider';

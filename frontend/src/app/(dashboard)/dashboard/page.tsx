@@ -1,7 +1,8 @@
 'use client';
 
+import { useRouter } from '@/lib/navigation';
 import React, { useEffect } from 'react';
-import { useRouter } from 'next/navigation';
+
 import { getDashboardPath } from '@/lib/auth';
 import { useAuth } from '@/components/auth/AuthProvider';
 import CEODashboard from '@/components/dashboards/CEODashboard';

@@ -1,8 +1,7 @@
 'use client';
 
+import { Link, useParams, usePathname, useRouter, useSearchParams } from '@/lib/navigation';
 import React, { useEffect, useState } from 'react';
-import Link from 'next/link';
-import { useParams, usePathname, useRouter, useSearchParams } from 'next/navigation';
 import { resolveDailyUpdateIdFromLocation } from '@/lib/dailyUpdateRoutes';
 import { AlertTriangle, ArrowLeft, CheckCircle2, Paperclip, ShieldAlert } from 'lucide-react';
 import { StorageService } from '@/lib/storage';

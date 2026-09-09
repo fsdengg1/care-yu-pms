@@ -2,33 +2,41 @@
   "name": "careyu-frontend",
   "version": "0.1.0",
   "private": true,
+  "type": "module",
   "scripts": {
-    "dev": "next dev",
-    "build": "next build && node scripts/build-cloudflare.mjs",
-    "build:pages": "next build && node scripts/build-cloudflare.mjs",
-    "start": "next start",
+    "dev": "vite",
+    "build": "tsc -b && vite build && node scripts/build-cloudflare.mjs",
+    "build:pages": "tsc -b && vite build && node scripts/build-cloudflare.mjs",
+    "preview": "vite preview",
     "deploy:pages": "wrangler pages deploy .cloudflare-out --project-name=careyu-frontend",
     "lint": "eslint",
     "check:theme": "node scripts/check-theme-contrast.mjs",
     "demo:record": "node scripts/record-demo.mjs"
   },
   "dependencies": {
+    "@fontsource/inter": "^5.2.5",
     "clsx": "^2.1.1",
     "lucide-react": "^1.31.0",
-    "next": "16.3.0",
     "react": "19.2.8",
     "react-dom": "19.2.8",
+    "react-router-dom": "^7.6.2",
     "tailwind-merge": "^3.6.0"
   },
   "devDependencies": {
+    "@eslint/js": "^9.28.0",
     "@tailwindcss/postcss": "^4",
     "@types/node": "^20",
     "@types/react": "^19",
     "@types/react-dom": "^19",
+    "@vitejs/plugin-react": "^4.5.2",
     "eslint": "^9",
-    "eslint-config-next": "16.3.0",
+    "eslint-plugin-react-hooks": "^5.2.0",
+    "eslint-plugin-react-refresh": "^0.4.20",
+    "globals": "^16.2.0",
     "playwright": "^1.62.1",
     "tailwindcss": "^4",
-    "typescript": "^5"
+    "typescript": "^5",
+    "typescript-eslint": "^8.34.0",
+    "vite": "^6.3.5"
   }
 }
