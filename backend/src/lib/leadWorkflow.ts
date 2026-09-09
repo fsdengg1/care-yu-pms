@@ -831,6 +831,13 @@ export function convertLeadToProject(lead: Lead, user: User): { lead: Lead; proj
   return { lead: updated, project };
 }
 
+function leadWorkHref(lead: Lead): string {
+  if (['DRAFT', 'RETURNED_TO_SALES', 'ADDITIONAL_INFORMATION_REQUIRED'].includes(lead.status)) {
+    return `/pre-sales/leads/create?id=${encodeURIComponent(lead.id)}`;
+  }
+  return `/pre-sales/leads/${lead.id}`;
+}
+
 function workItem(lead: Lead, category: MyWorkItem['category'], summary: string): MyWorkItem {
   const hydrated = hydrateLead(lead);
   return {
@@ -842,7 +849,7 @@ function workItem(lead: Lead, category: MyWorkItem['category'], summary: string)
     pipeline_stage: hydrated.pipeline_stage || stageFromStatus(lead.status),
     category,
     summary,
-    href: `/pre-sales/leads/${lead.id}`,
+    href: leadWorkHref(lead),
     priority: lead.priority,
     due_date: hydrated.due_date,
     action_required: hydrated.action_required || summary,

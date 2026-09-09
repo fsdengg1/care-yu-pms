@@ -1,7 +1,7 @@
 'use client';
 
-import { useRouter } from '@/lib/navigation';
 import React, { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 
 import { User } from '@/lib/types';
 import { apiRequest } from '@/lib/api';
@@ -26,7 +26,7 @@ function rememberSession() {
 }
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
-  const router = useRouter();
+  const navigate = useNavigate();
   const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
 
@@ -75,14 +75,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       if (!ok) {
         const next = `${window.location.pathname}${window.location.search}`;
         const encoded = encodeURIComponent(next);
-        router.replace(next.startsWith('/login') ? '/login' : `/login?next=${encoded}`);
+        navigate(next.startsWith('/login') ? '/login' : `/login?next=${encoded}`, { replace: true });
       }
       setLoading(false);
     })();
     return () => {
       cancelled = true;
     };
-  }, [refreshUser, router]);
+  }, [refreshUser, navigate]);
 
   const value = useMemo(
     () => ({

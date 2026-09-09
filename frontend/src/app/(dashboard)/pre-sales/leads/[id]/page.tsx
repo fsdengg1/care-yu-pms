@@ -6,6 +6,7 @@ import React, { useState, useEffect, useCallback } from 'react';
 
 import { StorageService } from '@/lib/storage';
 import { LeadApi } from '@/lib/leadApi';
+import { useAuth } from '@/components/auth/AuthProvider';
 import LeadCyclePanels from '@/components/leads/LeadCyclePanels';
 import CreateLeadTaskForm from '@/components/work/CreateLeadTaskForm';
 import LeadTasksPanel from '@/components/work/LeadTasksPanel';
@@ -36,6 +37,7 @@ export default function LeadDetailPage() {
   const router = useRouter();
   const pathname = usePathname();
   const searchParams = useSearchParams();
+  const { user: authUser, loading: authLoading } = useAuth();
   const leadId = resolveLeadIdFromLocation(params.id, pathname, searchParams.get('id'));
 
   const [currentUser, setCurrentUser] = useState<User | null>(null);
@@ -145,12 +147,12 @@ export default function LeadDetailPage() {
   }, [leadId]);
 
   useEffect(() => {
-    const u = StorageService.getCurrentUser();
-    setCurrentUser(u);
-    if (!u) {
+    if (authLoading) return;
+    if (!authUser) {
       router.replace('/login');
       return;
     }
+    setCurrentUser(authUser);
     void loadData();
     const tab = new URLSearchParams(window.location.search).get('tab');
     const action = workflowActionFromQuery(new URLSearchParams(window.location.search).get('action'));
@@ -173,9 +175,9 @@ export default function LeadDetailPage() {
     ) {
       setActiveTab(tab);
     }
-  }, [leadId, loadData, router]);
+  }, [authLoading, authUser, leadId, loadData, router]);
 
-  if (!currentUser) {
+  if (authLoading || !currentUser) {
     return <div className="p-12 text-center text-slate-400 text-xs">Loading Lead Details…</div>;
   }
 

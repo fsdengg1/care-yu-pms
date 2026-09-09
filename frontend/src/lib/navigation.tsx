@@ -1,3 +1,4 @@
+import { useMemo } from 'react';
 import {
   Link as RouterLink,
   type LinkProps,
@@ -19,11 +20,14 @@ export function Link({ href, ...props }: AppLinkProps) {
 /** Drop-in replacement for Next.js `useRouter()`. */
 export function useRouter() {
   const navigate = useNavigate();
-  return {
-    push: (url: string) => navigate(url),
-    replace: (url: string) => navigate(url, { replace: true }),
-    back: () => navigate(-1),
-  };
+  return useMemo(
+    () => ({
+      push: (url: string) => navigate(url),
+      replace: (url: string) => navigate(url, { replace: true }),
+      back: () => navigate(-1),
+    }),
+    [navigate]
+  );
 }
 
 /** Drop-in replacement for Next.js `usePathname()`. */
