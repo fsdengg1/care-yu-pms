@@ -3,13 +3,18 @@ import { app, initializeBackend } from './index.js';
 import { runPendingReminders, runDailyDigests } from './lib/reminderJob.js';
 import { sendConfiguredEmailReport } from './lib/emailReportSchedule.js';
 
+type WorkerEnv = Record<string, unknown> & {
+  ASSETS?: { fetch: (request: Request) => Promise<Response> };
+};
+
 let initialized = false;
 let initializing: Promise<void> | null = null;
 
-function bindWorkerEnv(env: Record<string, unknown>) {
+function bindWorkerEnv(env: WorkerEnv) {
   if (!env) return;
   process.env.CLOUDFLARE_WORKER = '1';
   for (const [key, value] of Object.entries(env)) {
+    if (key === 'ASSETS' || key === 'HYPERDRIVE') continue;
     if (typeof value === 'string' && value.trim() !== '') {
       process.env[key] = value.trim();
     }
@@ -170,62 +175,58 @@ function dispatchExpress(request: Request, raw: Buffer): Promise<Response> {
   });
 }
 
-export default {
-  async fetch(request: Request, env: Record<string, unknown>, _ctx: unknown): Promise<Response> {
-    bindWorkerEnv(env);
+async function handleApiRequest(request: Request, env: WorkerEnv): Promise<Response> {
+  bindWorkerEnv(env);
 
-    if (request.method === 'OPTIONS') {
-      return new Response(null, { status: 204, headers: corsHeaders(request) });
-    }
+  if (request.method === 'OPTIONS') {
+    return new Response(null, { status: 204, headers: corsHeaders(request) });
+  }
 
-    const pathname = new URL(request.url).pathname;
-    if (pathname === '/api/health' || pathname === '/') {
-      const payload =
-        pathname === '/'
-          ? {
-              ok: true,
-              service: 'careyu-backend-api',
-              message: 'CareYu PMS Backend API Service',
-              health: '/api/health',
-              store: initialized ? 'ready' : 'starting',
-            }
-          : {
-              ok: true,
-              service: 'careyu-backend',
-              env: String(env.NODE_ENV || process.env.NODE_ENV || 'production'),
-              store: initialized ? 'ready' : 'starting',
-            };
-      return new Response(JSON.stringify(payload), {
-        status: 200,
+  try {
+    await ensureInitialized();
+  } catch (err) {
+    console.error('[worker-init] Store init error:', err);
+    return new Response(
+      JSON.stringify({
+        error: 'Backend Initialization Error',
+        message: err instanceof Error ? err.message : String(err),
+      }),
+      {
+        status: 503,
         headers: { 'Content-Type': 'application/json', ...Object.fromEntries(corsHeaders(request)) },
-      });
+      }
+    );
+  }
+
+  const raw =
+    ['POST', 'PUT', 'PATCH', 'DELETE'].includes(request.method)
+      ? Buffer.from(await request.arrayBuffer())
+      : Buffer.alloc(0);
+
+  return dispatchExpress(request, raw);
+}
+
+export default {
+  async fetch(request: Request, env: WorkerEnv, _ctx: unknown): Promise<Response> {
+    const pathname = new URL(request.url).pathname;
+
+    // API routes are handled by the Worker (see run_worker_first in wrangler.jsonc).
+    if (pathname === '/api' || pathname.startsWith('/api/')) {
+      return handleApiRequest(request, env);
     }
 
-    try {
-      await ensureInitialized();
-    } catch (err) {
-      console.error('[worker-init] Store init error:', err);
-      return new Response(
-        JSON.stringify({
-          error: 'Backend Initialization Error',
-          message: err instanceof Error ? err.message : String(err),
-        }),
-        {
-          status: 503,
-          headers: { 'Content-Type': 'application/json', ...Object.fromEntries(corsHeaders(request)) },
-        }
-      );
+    // Fallback: serve static SPA assets when the Worker is invoked for non-API paths.
+    if (env.ASSETS) {
+      return env.ASSETS.fetch(request);
     }
 
-    const raw =
-      ['POST', 'PUT', 'PATCH', 'DELETE'].includes(request.method)
-        ? Buffer.from(await request.arrayBuffer())
-        : Buffer.alloc(0);
-
-    return dispatchExpress(request, raw);
+    return new Response('CareYu PMS is starting. Rebuild frontend assets and redeploy.', {
+      status: 503,
+      headers: { 'Content-Type': 'text/plain' },
+    });
   },
 
-  async scheduled(event: { cron: string; scheduledTime: number }, env: Record<string, unknown>, _ctx: unknown): Promise<void> {
+  async scheduled(event: { cron: string; scheduledTime: number }, env: WorkerEnv, _ctx: unknown): Promise<void> {
     bindWorkerEnv(env);
     await ensureInitialized();
     const cron = event.cron || '';

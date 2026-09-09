@@ -2,7 +2,7 @@
 
 - React 19 + TypeScript + Vite + React Router
 - Path alias: `@/*` → `src/*`
-- Navigation shim: `@/lib/navigation` (Link with `href`, useRouter, usePathname, useParams, useSearchParams)
-- API client: `src/lib/api.ts` — uses `VITE_API_URL` (empty = same-origin `/api` proxy)
-- Dev proxy: `vite.config.ts` proxies `/api` → `BACKEND_URL` (default `http://127.0.0.1:4100`)
-- Cloudflare build: `npm run build` → `dist/` → `.cloudflare-out/` with SPA `_redirects`
+- Navigation shim: `@/lib/navigation`
+- API client: `src/lib/api.ts` — leave `VITE_API_URL` empty; uses same-origin `/api`
+- Local dev: Vite proxies `/api` → `BACKEND_URL`
+- Production: unified Cloudflare Worker serves SPA + `/api` from one deployment

@@ -11,15 +11,18 @@ node_modules
 # testing
 coverage
 
-# next.js
+# legacy next.js (removed — do not commit)
 /.next/
 frontend/.next/
 frontend/out/
+frontend/next-env.d.ts
 
-# production
+# production build output
 build
 dist
+frontend/dist
 backend/dist
+frontend/.cloudflare-out
 
 # backend generated store
 backend/data/db.json
@@ -59,4 +62,3 @@ yarn-error.log*
 
 # typescript
 *.tsbuildinfo
-frontend/next-env.d.ts

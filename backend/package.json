@@ -8,6 +8,7 @@
     "start": "node dist/server.js",
     "build": "tsc && node -e \"console.log('Backend compiled to dist/')\"",
     "typecheck": "tsc --noEmit",
+    "deploy": "wrangler deploy",
     "deploy:worker": "wrangler deploy",
     "dev:worker": "wrangler dev",
     "dry-run:worker": "wrangler deploy --dry-run",

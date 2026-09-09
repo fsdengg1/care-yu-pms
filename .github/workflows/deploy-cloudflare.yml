@@ -1,0 +1,52 @@
+# Deploy unified CareYu PMS (React SPA + Express API) to Cloudflare Workers.
+# Requires GitHub repo secret: CLOUDFLARE_API_TOKEN
+#
+# Disable the old Cloudflare Pages project (careyu-frontend) in the dashboard
+# to avoid duplicate/competing frontend deployments.
+
+name: Deploy CareYu PMS (Cloudflare Workers)
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'frontend/**'
+      - 'backend/**'
+      - 'package.json'
+      - 'package-lock.json'
+      - '.github/workflows/deploy-cloudflare.yml'
+  workflow_dispatch:
+
+concurrency:
+  group: deploy-careyu-pms
+  cancel-in-progress: true
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      deployments: write
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build frontend and backend
+        run: npm run build:prod
+
+      - name: Deploy unified Worker
+        uses: cloudflare/wrangler-action@v3
+        with:
+          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          accountId: ecea99dafa2e59907d7ee4d33150bfe4
+          workingDirectory: backend
+          command: deploy --commit-dirty=true
