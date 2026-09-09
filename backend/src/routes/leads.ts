@@ -57,7 +57,7 @@ import {
   validateLeadPayload,
 } from '../lib/leadValidation.js';
 import { transact } from '../store/db.js';
-import { documentNamesForLead, emitLeadWorkflow, emitWorkflowEvent } from '../lib/workflowEngine.js';
+import { documentNamesForLead, emitLeadWorkflow, emitLeadWorkflowAsync, emitWorkflowEvent } from '../lib/workflowEngine.js';
 import { fileTypeError, isAllowedFileType, MAX_FILE_SIZE } from '../config/files.js';
 import { canAccessEntity } from '../lib/documents.js';
 import { notificationService } from '../lib/notificationService.js';
@@ -111,8 +111,8 @@ function forbidden(
   return res.status(403).json({ message });
 }
 
-function recordPmSubmissionNotification(lead: Lead, actor: User, pmId: string) {
-  emitLeadWorkflow({
+async function recordPmSubmissionNotification(lead: Lead, actor: User, pmId: string) {
+  await emitLeadWorkflowAsync({
     event: 'PROJECT_SUBMITTED',
     lead,
     actor,
@@ -165,7 +165,7 @@ function workflowError(res: import('express').Response, error: unknown) {
   });
 }
 
-function submitExistingLead(lead: Lead, user: User, body: Record<string, unknown> = {}): Lead {
+async function submitExistingLead(lead: Lead, user: User, body: Record<string, unknown> = {}): Promise<Lead> {
   if (PM_REVIEW_STATUSES.includes(lead.status)) {
     throw Object.assign(new Error('This lead has already been submitted to the Project Manager.'), { status: 409 });
   }
@@ -229,7 +229,7 @@ function submitExistingLead(lead: Lead, user: User, body: Record<string, unknown
       status: 500,
     });
   }
-  recordPmSubmissionNotification(assigned, user, assigned.pm_id!);
+  await recordPmSubmissionNotification(assigned, user, assigned.pm_id!);
   audit(user, assigned, next, `${user.name} submitted ${lead.lead_number} to PM.`);
   return assigned;
 }
@@ -431,13 +431,13 @@ router.post('/', requireAuth, requirePermission('create:lead'), async (req: Auth
   };
 
   try {
-    const created = await transact(() => {
+    const created = await transact(async () => {
       const current = store.getLeads();
       current.unshift(lead);
       store.saveLeads(current);
       audit(user, lead, 'LEAD_CREATED', `${user.name} created lead ${lead.lead_number}`);
       if (!wantsSubmit) return lead;
-      return submitExistingLead(lead, user, body);
+      return await submitExistingLead(lead, user, body);
     });
     return res.status(201).json(payloadFor(created));
   } catch (error) {
@@ -503,7 +503,9 @@ router.post('/:id/submit', requireAuth, requirePermission('create:lead', 'edit:l
   }
   if (!canEditProjectInput(user, lead)) return forbidden(res);
   try {
-    const assigned = await transact(() => submitExistingLead(lead, user, (req.body ?? {}) as Record<string, unknown>));
+    const assigned = await transact(async () =>
+      submitExistingLead(lead, user, (req.body ?? {}) as Record<string, unknown>)
+    );
     return res.json(payloadFor(assigned));
   } catch (error) {
     return workflowError(res, error);

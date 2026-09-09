@@ -2,6 +2,7 @@ import { IncomingMessage, ServerResponse } from 'node:http';
 import { app, initializeBackend } from './index.js';
 import { runPendingReminders, runDailyDigests } from './lib/reminderJob.js';
 import { sendConfiguredEmailReport } from './lib/emailReportSchedule.js';
+import { setWorkerWaitUntil } from './store/db.js';
 
 type WorkerEnv = Record<string, unknown> & {
   ASSETS?: { fetch: (request: Request) => Promise<Response> };
@@ -116,7 +117,7 @@ function dispatchExpress(request: Request, raw: Buffer): Promise<Response> {
           headers: { 'Content-Type': 'application/json', ...Object.fromEntries(corsHeaders(request)) },
         })
       );
-    }, 25000);
+    }, 120000);
 
     try {
       const url = new URL(request.url);
@@ -175,8 +176,9 @@ function dispatchExpress(request: Request, raw: Buffer): Promise<Response> {
   });
 }
 
-async function handleApiRequest(request: Request, env: WorkerEnv): Promise<Response> {
+async function handleApiRequest(request: Request, env: WorkerEnv, ctx?: { waitUntil: (promise: Promise<unknown>) => void }): Promise<Response> {
   bindWorkerEnv(env);
+  setWorkerWaitUntil(ctx ? (promise) => ctx.waitUntil(promise) : null);
 
   if (request.method === 'OPTIONS') {
     return new Response(null, { status: 204, headers: corsHeaders(request) });
@@ -203,16 +205,20 @@ async function handleApiRequest(request: Request, env: WorkerEnv): Promise<Respo
       ? Buffer.from(await request.arrayBuffer())
       : Buffer.alloc(0);
 
-  return dispatchExpress(request, raw);
+  try {
+    return await dispatchExpress(request, raw);
+  } finally {
+    setWorkerWaitUntil(null);
+  }
 }
 
 export default {
-  async fetch(request: Request, env: WorkerEnv, _ctx: unknown): Promise<Response> {
+  async fetch(request: Request, env: WorkerEnv, ctx: { waitUntil: (promise: Promise<unknown>) => void }): Promise<Response> {
     const pathname = new URL(request.url).pathname;
 
     // API routes are handled by the Worker (see run_worker_first in wrangler.jsonc).
     if (pathname === '/api' || pathname.startsWith('/api/')) {
-      return handleApiRequest(request, env);
+      return handleApiRequest(request, env, ctx);
     }
 
     // Fallback: serve static SPA assets when the Worker is invoked for non-API paths.

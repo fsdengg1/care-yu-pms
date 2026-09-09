@@ -206,13 +206,7 @@ export function findLead(id: string): Lead | undefined {
 }
 
 export function saveLead(lead: Lead): Lead {
-  const leads = store.getLeads();
-  const index = leads.findIndex((item) => item.id === lead.id);
-  const next = { ...lead, updated_at: new Date().toISOString() };
-  if (index === -1) leads.unshift(next);
-  else leads[index] = next;
-  store.saveLeads(leads);
-  return next;
+  return store.saveLeadRecord(lead);
 }
 
 export function deleteLead(lead: Lead, user: User): void {
@@ -238,7 +232,6 @@ export function recordHistory(
   user: User,
   reason?: string
 ): LeadStatusHistory {
-  const history = store.getLeadStatusHistory();
   const entry: LeadStatusHistory = {
     id: newId('hist'),
     lead_id: lead.id,
@@ -250,9 +243,7 @@ export function recordHistory(
     reason,
     created_at: new Date().toISOString(),
   };
-  history.unshift(entry);
-  store.saveLeadStatusHistory(history);
-  return entry;
+  return store.appendLeadStatusHistory(entry);
 }
 
 export function audit(

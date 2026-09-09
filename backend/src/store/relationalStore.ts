@@ -165,20 +165,29 @@ export async function loadRelationalCollections(
 export async function saveRelationalCollections(
   client: pg.PoolClient,
   collections: Partial<Record<CollectionName, unknown[]>>,
-  only?: CollectionName[]
+  only?: CollectionName[],
+  recordKeys?: Map<CollectionName, Set<string>>
 ): Promise<void> {
   const selected = only ? new Set(only) : null;
   for (const def of RELATIONAL_TABLES) {
     if (selected && !selected.has(def.collection)) continue;
-    const records = ((collections[def.collection] as Record<string, unknown>[] | undefined) ?? []).filter(
+    const allRecords = ((collections[def.collection] as Record<string, unknown>[] | undefined) ?? []).filter(
       (record) => record && record.id
     );
-    const keepKeys = records.map((record) => String(record.id));
-    if (!keepKeys.length) {
-      await client.query(`DELETE FROM ${def.table}`);
+    const touchedKeys = recordKeys?.get(def.collection);
+    const records = touchedKeys?.size
+      ? allRecords.filter((record) => touchedKeys.has(String(record.id)))
+      : allRecords;
+    if (!records.length) {
+      if (!touchedKeys?.size && !allRecords.length) {
+        await client.query(`DELETE FROM ${def.table}`);
+      }
       continue;
     }
-    await client.query(`DELETE FROM ${def.table} WHERE NOT (record_key = ANY($1::text[]))`, [keepKeys]);
+    if (!touchedKeys?.size) {
+      const keepKeys = allRecords.map((record) => String(record.id));
+      await client.query(`DELETE FROM ${def.table} WHERE NOT (record_key = ANY($1::text[]))`, [keepKeys]);
+    }
     const sql = insertSql(def);
     for (const record of records) {
       await client.query(sql, recordValues(def, record));

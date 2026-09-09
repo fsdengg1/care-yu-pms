@@ -301,7 +301,8 @@ export async function loadAllCollections(): Promise<Record<CollectionName, unkno
 
 export async function saveAllCollections(
   collections: Record<CollectionName, unknown[]>,
-  only?: CollectionName[]
+  only?: CollectionName[],
+  recordKeys?: Map<CollectionName, Set<string>>
 ): Promise<void> {
   const selected = only?.length ? new Set(only) : null;
   const client = await getPool().connect();
@@ -309,10 +310,15 @@ export async function saveAllCollections(
     const { saveRelationalCollections } = await import('./relationalStore.js');
     if (!selected || selected.has('users')) {
       const { saveUsersTable } = await import('./usersTable.js');
-      await saveUsersTable((collections.users as User[]) ?? []);
+      const users = (collections.users as User[]) ?? [];
+      const userKeys = recordKeys?.get('users');
+      const touchedUsers = userKeys?.size ? users.filter((user) => userKeys.has(user.id)) : users;
+      if (touchedUsers.length) {
+        await saveUsersTable(touchedUsers, { partial: Boolean(userKeys?.size) });
+      }
     }
     await client.query('BEGIN');
-    await saveRelationalCollections(client, collections, only);
+    await saveRelationalCollections(client, collections, only, recordKeys);
     await client.query('COMMIT');
   } catch (error) {
     try {

@@ -135,15 +135,44 @@ let persistPaused = false;
 let initialized = false;
 let mutex: Promise<void> = Promise.resolve();
 const dirtyCollections = new Set<CollectionName>();
+const dirtyRecordKeys = new Map<CollectionName, Set<string>>();
+
+type DirtySnapshot = {
+  collections: CollectionName[];
+  recordKeys: Map<CollectionName, Set<string>>;
+};
+
+let workerWaitUntil: ((promise: Promise<unknown>) => void) | null = null;
+
+export function setWorkerWaitUntil(handler: ((promise: Promise<unknown>) => void) | null) {
+  workerWaitUntil = handler;
+}
 
 function markDirty(...names: CollectionName[]) {
   for (const name of names) dirtyCollections.add(name);
 }
 
-function takeDirty(): CollectionName[] {
-  const names = [...dirtyCollections];
+function markDirtyRecords(name: CollectionName, ...ids: string[]) {
+  dirtyCollections.add(name);
+  if (!ids.length) return;
+  const bucket = dirtyRecordKeys.get(name) ?? new Set<string>();
+  for (const id of ids) {
+    if (id) bucket.add(id);
+  }
+  dirtyRecordKeys.set(name, bucket);
+}
+
+function takeDirty(): DirtySnapshot {
+  const collections = [...dirtyCollections];
   dirtyCollections.clear();
-  return names;
+  const recordKeys = new Map(dirtyRecordKeys);
+  dirtyRecordKeys.clear();
+  return { collections, recordKeys };
+}
+
+function clearDirtyState() {
+  dirtyCollections.clear();
+  dirtyRecordKeys.clear();
 }
 
 function snapshotDb(db: DbShape): DbShape {
@@ -644,23 +673,37 @@ function countRecords(db: DbShape): Record<string, number> {
   return counts;
 }
 
-async function persistDb(db: DbShape, names?: CollectionName[]): Promise<void> {
+async function persistDb(
+  db: DbShape,
+  names?: CollectionName[],
+  recordKeys?: Map<CollectionName, Set<string>>
+): Promise<void> {
   if (names) {
     if (!names.length) return;
-    await saveAllCollections(toCollections(db), names);
+    await saveAllCollections(toCollections(db), names, recordKeys);
     return;
   }
-  await saveAllCollections(toCollections(db));
+  await saveAllCollections(toCollections(db), undefined, recordKeys);
 }
 
-function enqueuePersist(db: DbShape): void {
-  const names = takeDirty();
-  if (!names.length) return;
+function schedulePersist(db: DbShape, dirty: DirtySnapshot, options?: { background?: boolean }): Promise<void> {
+  const promise = persistDb(db, dirty.collections, dirty.recordKeys);
   writeChain = writeChain
-    .then(() => persistDb(db, names))
+    .then(() => promise)
     .catch((error) => {
       console.error('[store] Failed to persist to Postgres:', error);
     });
+  if (options?.background && workerWaitUntil) {
+    workerWaitUntil(promise);
+    return promise;
+  }
+  return promise;
+}
+
+function enqueuePersist(db: DbShape): void {
+  const dirty = takeDirty();
+  if (!dirty.collections.length) return;
+  schedulePersist(db, dirty);
 }
 
 function loadDb(): DbShape {
@@ -684,7 +727,7 @@ export async function runWithoutPersisting<T>(fn: () => T | Promise<T>): Promise
     return await fn();
   } finally {
     cache = snapshot;
-    dirtyCollections.clear();
+    clearDirtyState();
     persistPaused = false;
   }
 }
@@ -697,11 +740,16 @@ export async function transact<T>(fn: () => T | Promise<T>): Promise<T> {
     try {
       const result = await fn();
       persistPaused = false;
-      await persistDb(loadDb(), takeDirty());
+      const dirty = takeDirty();
+      if (workerWaitUntil) {
+        schedulePersist(loadDb(), dirty, { background: true });
+      } else {
+        await schedulePersist(loadDb(), dirty);
+      }
       return result;
     } catch (error) {
       cache = snapshot;
-      dirtyCollections.clear();
+      clearDirtyState();
       persistPaused = false;
       throw error;
     } finally {
@@ -882,6 +930,18 @@ export const store = {
     db.leads = leads;
     markDirty('leads');
     saveDb(db);
+  },
+  saveLeadRecord(lead: Lead): Lead {
+    const db = loadDb();
+    const leads = db.leads ?? [];
+    const index = leads.findIndex((item) => item.id === lead.id);
+    const next = { ...lead, updated_at: new Date().toISOString() };
+    if (index === -1) leads.unshift(next);
+    else leads[index] = next;
+    db.leads = leads;
+    markDirtyRecords('leads', next.id);
+    saveDb(db);
+    return next;
   },
   saveProjects(projects: Project[]) {
     const db = loadDb();
@@ -1151,7 +1211,10 @@ export const store = {
       created_at: new Date(nowMs).toISOString(),
     };
     audits.unshift(log);
-    this.saveAudits(audits);
+    const db = loadDb();
+    db.audits = audits;
+    markDirtyRecords('audits', log.id);
+    saveDb(db);
     return log;
   },
   appendNotification(entry: Omit<NotificationItem, 'id' | 'created_at' | 'read_status'>): NotificationItem {
@@ -1163,7 +1226,28 @@ export const store = {
       created_at: new Date().toISOString(),
     };
     notifications.unshift(item);
-    this.saveNotifications(notifications);
+    const db = loadDb();
+    db.notifications = notifications;
+    markDirtyRecords('notifications', item.id);
+    saveDb(db);
     return item;
+  },
+  appendLeadStatusHistory(entry: LeadStatusHistory): LeadStatusHistory {
+    const history = this.getLeadStatusHistory();
+    history.unshift(entry);
+    const db = loadDb();
+    db.leadStatusHistory = history;
+    markDirtyRecords('leadStatusHistory', entry.id);
+    saveDb(db);
+    return entry;
+  },
+  appendAssignmentHistory(entry: AssignmentHistory): AssignmentHistory {
+    const history = this.getAssignmentHistory();
+    history.unshift(entry);
+    const db = loadDb();
+    db.assignmentHistory = history;
+    markDirtyRecords('assignmentHistory', entry.id);
+    saveDb(db);
+    return entry;
   },
 };

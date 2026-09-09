@@ -190,11 +190,8 @@ export function reportingManagerOf(user?: User | null): User | undefined {
 }
 
 export function appendAssignmentHistory(entry: Omit<AssignmentHistory, 'id'>): AssignmentHistory {
-  const history = store.getAssignmentHistory();
   const item: AssignmentHistory = { ...entry, id: newId('asg') };
-  history.unshift(item);
-  store.saveAssignmentHistory(history);
-  return item;
+  return store.appendAssignmentHistory(item);
 }
 
 export function reminderScheduleFields(pending = true) {

@@ -1,6 +1,6 @@
 import { EscalationLevel, Lead, LeadStatus, NotificationItem, User } from '../types.js';
 import { store } from '../store/db.js';
-import { dispatchHandover } from './lifecycleNotify.js';
+import { dispatchHandover, dispatchHandoverAsync } from './lifecycleNotify.js';
 import { procurementUsers } from './lifecycleNotify.js';
 
 export const SUBMISSION_STAGE_LABELS = {
@@ -603,6 +603,51 @@ const EVENTS: Record<WorkflowEventKey, EventSpec> = {
   },
 };
 
+async function emitWorkflowEventAsync(input: {
+  event: WorkflowEventKey;
+  actor: User;
+  entityType: string;
+  entityId: string;
+  entityName: string;
+  recipientIds: Array<string | undefined>;
+  customer?: string;
+  status?: string;
+  previousStatus?: string;
+  dueDate?: string;
+  comments?: string;
+  assignedBy?: string;
+  details?: Array<[string, string]>;
+  message?: string;
+  actionUrl?: string;
+  eventKey?: string;
+  priority?: NotificationItem['priority'];
+}) {
+  const spec = EVENTS[input.event];
+  await dispatchHandoverAsync({
+    recipientIds: input.recipientIds,
+    actor: input.actor,
+    entityType: input.entityType,
+    entityId: input.entityId,
+    entityName: input.entityName,
+    customer: input.customer,
+    title: spec.subject(input.entityName),
+    message: input.message || `${input.actor.name} moved "${input.entityName}" to the next workflow owner.`,
+    actionRequired: spec.actionRequired,
+    ctaLabel: spec.ctaLabel,
+    actionUrl: input.actionUrl || spec.path(input.entityId),
+    type: spec.type,
+    status: input.status,
+    previousStatus: input.previousStatus,
+    dueDate: input.dueDate,
+    comments: input.comments,
+    assignedBy: input.assignedBy || input.actor.name,
+    details: input.details,
+    priority: input.priority,
+    eventKey: input.eventKey || `${input.event}:${input.entityId}`,
+    preferenceCategory: spec.preferenceCategory,
+  });
+}
+
 export function emitWorkflowEvent(input: {
   event: WorkflowEventKey;
   actor: User;
@@ -662,6 +707,48 @@ export function emitLeadWorkflow(params: {
   const ctx = workflowContextForStatus(params.lead.status);
   const recipients = params.recipientIds || defaultLeadRecipients(params.event, params.lead);
   emitWorkflowEvent({
+    event: params.event,
+    actor: params.actor,
+    entityType: 'LEAD',
+    entityId: params.lead.id,
+    entityName: params.lead.title,
+    recipientIds: [...recipients, ...(params.extraRecipientIds || [])],
+    customer: params.lead.customer_name,
+    status: leadSubmissionStatusLabel(params.lead),
+    previousStatus: params.lead.previous_status,
+    dueDate: params.lead.due_date || params.lead.customer_target_date,
+    comments: params.comments,
+    assignedBy: params.lead.assigned_by_name || params.actor.name,
+    details: [
+      ['Project name', params.lead.title],
+      ['Customer', params.lead.customer_name],
+      ['Submitted by', params.lead.submitted_by || params.actor.name],
+      ['Requirements', params.lead.requirement_summary || params.lead.detailed_requirement || ''],
+      ['Priority', String(params.lead.priority || '')],
+      ['Current owner', params.lead.current_owner_name || params.lead.responsible_user_name || ''],
+      ['Action required', ctx.action_required],
+      ['Next action', ctx.next_action],
+      ...(params.details || []),
+    ],
+    message: params.message,
+    actionUrl: params.actionUrl,
+  });
+}
+
+export async function emitLeadWorkflowAsync(params: {
+  event: WorkflowEventKey;
+  lead: Lead;
+  actor: User;
+  recipientIds?: Array<string | undefined>;
+  comments?: string;
+  details?: Array<[string, string]>;
+  message?: string;
+  extraRecipientIds?: Array<string | undefined>;
+  actionUrl?: string;
+}) {
+  const ctx = workflowContextForStatus(params.lead.status);
+  const recipients = params.recipientIds || defaultLeadRecipients(params.event, params.lead);
+  await emitWorkflowEventAsync({
     event: params.event,
     actor: params.actor,
     entityType: 'LEAD',

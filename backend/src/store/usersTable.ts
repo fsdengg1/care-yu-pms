@@ -216,15 +216,17 @@ export async function loadUsersTable(): Promise<User[]> {
   return result.rows.map(rowToUser);
 }
 
-export async function saveUsersTable(users: User[]): Promise<void> {
+export async function saveUsersTable(users: User[], options?: { partial?: boolean }): Promise<void> {
   const client = await getPool().connect();
   try {
     await client.query('BEGIN');
     const keepKeys = users.map((user) => user.id);
-    if (!keepKeys.length) {
-      await client.query('DELETE FROM users');
-    } else {
-      await client.query(`DELETE FROM users WHERE NOT (user_key = ANY($1::text[]))`, [keepKeys]);
+    if (!options?.partial) {
+      if (!keepKeys.length) {
+        await client.query('DELETE FROM users');
+      } else {
+        await client.query(`DELETE FROM users WHERE NOT (user_key = ANY($1::text[]))`, [keepKeys]);
+      }
     }
 
     for (const user of users) {
