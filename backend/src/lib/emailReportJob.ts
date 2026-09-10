@@ -1,4 +1,5 @@
 import { env } from '../config/env.js';
+import { applyScheduledMorningLock } from './dailyStatus.js';
 import {
   getEmailReportScheduleConfig,
   saveEmailReportScheduleConfig,
@@ -22,6 +23,19 @@ async function runSlot(slot: 'noon' | 'evening') {
   } catch (error) {
     console.error(`[email-report-scheduler] ${slot} crashed`, error);
   }
+}
+
+/** Lock morning snapshot then send the 11:00 AM report. Idempotent across overlapping ticks. */
+export async function runMorningLockAndEmail() {
+  try {
+    const lock = applyScheduledMorningLock();
+    console.info(
+      `[scheduler] morning lock ${lock.skipped ? 'skipped' : 'applied'} date=${lock.date} locked=${lock.locked} reason=${lock.reason || 'ok'}`
+    );
+  } catch (error) {
+    console.error('[scheduler] morning lock crashed', error);
+  }
+  await runSlot('noon');
 }
 
 function ensureDefaultScheduleConfig() {
@@ -57,14 +71,7 @@ export async function startEmailReportScheduler() {
     cron.schedule(
       '0 11 * * *',
       () => {
-        console.info('[scheduler] morning phase lock / snapshot window');
-      },
-      { timezone }
-    );
-    cron.schedule(
-      '15 11 * * *',
-      () => {
-        void runSlot('noon');
+        void runMorningLockAndEmail();
       },
       { timezone }
     );
@@ -78,7 +85,7 @@ export async function startEmailReportScheduler() {
     );
 
     console.log(
-      `[scheduler] email report jobs started (11:15 and 19:15, timezone=${timezone})`
+      `[scheduler] email report jobs started (11:00 lock+morning email, 19:15 evening, timezone=${timezone})`
     );
   } catch (error) {
     console.warn('[scheduler] node-cron not loaded:', error instanceof Error ? error.message : error);

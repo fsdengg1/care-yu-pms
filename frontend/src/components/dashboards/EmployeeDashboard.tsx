@@ -44,7 +44,7 @@ export default function EmployeeDashboard({ user }: { user: User }) {
     if (sheet.ok) {
       setPeople(sheet.people);
       setProjects(sheet.projects);
-      setSheetRows(sheet.rows);
+      setSheetRows((sheet.rows || []).filter((row) => row.personId === user.id));
     }
   }, []);
 

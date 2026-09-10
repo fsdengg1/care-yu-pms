@@ -262,6 +262,7 @@ export async function ensureSchema(): Promise<void> {
       ALTER TABLE daily_updates ADD COLUMN IF NOT EXISTS period TEXT;
       ALTER TABLE daily_updates ADD COLUMN IF NOT EXISTS update_type TEXT;
       ALTER TABLE tasks ADD COLUMN IF NOT EXISTS delay_reason TEXT;
+      ALTER TABLE leads ADD COLUMN IF NOT EXISTS fs_review_history JSONB;
     `);
     const tables = await client.query<{ table_name: string }>(`
       SELECT table_name

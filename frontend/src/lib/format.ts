@@ -97,18 +97,22 @@ export const LEAD_STATUS_LABELS: Record<string, string> = {
   CANCELLED: 'Rejected',
 };
 
-export type WorkflowActionKind = 'submit' | 'approve' | 'reject';
+export type WorkflowActionKind = 'submit' | 'approve' | 'reject' | 'return' | 'accept';
 
 export const WORKFLOW_ACTION_SUCCESS: Record<WorkflowActionKind, string> = {
   submit: 'Submitted Successfully',
   approve: 'Approved Successfully',
   reject: 'Rejected Successfully',
+  return: 'Sent Back Successfully',
+  accept: 'Accepted Successfully',
 };
 
 export const WORKFLOW_STAGE_FOR_ACTION: Record<WorkflowActionKind, string> = {
   submit: 'Submitted',
   approve: 'Approved',
   reject: 'Rejected',
+  return: 'Sent Back',
+  accept: 'Accepted',
 };
 
 const SUBMITTED_STATUSES = new Set([
@@ -182,6 +186,8 @@ export function workflowActionFromQuery(value: string | null): WorkflowActionKin
   if (value === 'submitted' || value === 'submit') return 'submit';
   if (value === 'approved' || value === 'approve') return 'approve';
   if (value === 'rejected' || value === 'reject') return 'reject';
+  if (value === 'returned' || value === 'return' || value === 'sent-back') return 'return';
+  if (value === 'accepted' || value === 'accept') return 'accept';
   return null;
 }
 

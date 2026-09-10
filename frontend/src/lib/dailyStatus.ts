@@ -59,6 +59,7 @@ export interface DailyStatusRow {
   createdById?: string;
   createdByName?: string;
   canEdit?: boolean;
+  canEditBaseline?: boolean;
   canAccept?: boolean;
   eveningSubmitted?: boolean;
   delayReasonRequired?: boolean;

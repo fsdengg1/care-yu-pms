@@ -158,7 +158,7 @@ export const LeadApi = {
     return { ok: false as const, message: result.message || (submit ? 'Unable to submit feasibility.' : 'Unable to save feasibility.') };
   },
 
-  async reviewFeasibility(id: string, action: 'approve' | 'return' | 'reject', reason?: string) {
+  async reviewFeasibility(id: string, action: 'accept' | 'approve' | 'return' | 'reject', reason?: string) {
     const result = await call<LeadWorkflowPayload>(`/api/leads/${id}/feasibility/review`, {
       method: 'POST',
       body: JSON.stringify({ action, reason }),
@@ -330,6 +330,12 @@ export const LeadApi = {
       lead_date?: string;
       submitted_at?: string;
       status: string;
+      status_label?: string;
+      previous_review?: string;
+      previous_review_action?: string;
+      previous_review_reason?: string;
+      previous_review_by?: string;
+      previous_review_at?: string;
       href: string;
     }>;
   } | null> {
@@ -349,6 +355,12 @@ export const LeadApi = {
         lead_date?: string;
         submitted_at?: string;
         status: string;
+        status_label?: string;
+        previous_review?: string;
+        previous_review_action?: string;
+        previous_review_reason?: string;
+        previous_review_by?: string;
+        previous_review_at?: string;
         href: string;
       }>;
     }>('/api/dashboard/pm');

@@ -2,6 +2,7 @@ import { IncomingMessage, ServerResponse } from 'node:http';
 import { app, initializeBackend } from './index.js';
 import { runPendingReminders, runDailyDigests } from './lib/reminderJob.js';
 import { sendConfiguredEmailReport } from './lib/emailReportSchedule.js';
+import { runMorningLockAndEmail } from './lib/emailReportJob.js';
 import { setWorkerWaitUntil } from './store/db.js';
 
 type WorkerEnv = Record<string, unknown> & {
@@ -245,8 +246,8 @@ export default {
       if (cron === '0 2 * * *') {
         await runDailyDigests();
       }
-      if (cron === '45 5 * * *') {
-        await sendConfiguredEmailReport({ slot: 'noon', source: 'schedule' });
+      if (cron === '30 5 * * *' || cron === '45 5 * * *') {
+        await runMorningLockAndEmail();
       }
       if (cron === '45 13 * * *') {
         await sendConfiguredEmailReport({ slot: 'evening', source: 'schedule' });

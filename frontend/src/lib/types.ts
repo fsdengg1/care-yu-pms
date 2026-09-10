@@ -555,6 +555,17 @@ export interface Lead {
 
 export type WorkflowRecordStatus = 'DRAFT' | 'SUBMITTED' | 'APPROVED' | 'RETURNED' | 'REJECTED';
 
+export type FeasibilityReviewAction = 'ACCEPT' | 'REJECT' | 'SEND_BACK';
+
+export interface FeasibilityReviewRecord {
+  id: string;
+  action: FeasibilityReviewAction;
+  reason?: string;
+  reviewed_by: string;
+  reviewed_by_id: string;
+  reviewed_at: string;
+}
+
 export interface FeasibilityStudy {
   technical_feasibility: string;
   required_resources: string;
@@ -575,6 +586,13 @@ export interface FeasibilityStudy {
   pm_approved_by?: string;
   pm_approved_at?: string;
   pm_return_reason?: string;
+  review_action?: FeasibilityReviewAction;
+  reviewed_by?: string;
+  reviewed_by_id?: string;
+  reviewed_at?: string;
+  rejection_reason?: string;
+  send_back_reason?: string;
+  review_history?: FeasibilityReviewRecord[];
 }
 
 export interface CostingRecord {

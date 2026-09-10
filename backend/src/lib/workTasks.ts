@@ -253,6 +253,37 @@ export function canMutateWorkTask(user: User, task: Task): boolean {
   return assignee || canManage || isProjectTeamLead || ownAdditional;
 }
 
+/**
+ * Task Description / Start Date / Deadline may be changed only by someone authorized
+ * for the related project or lead — not by every PM and not by the assigned employee.
+ */
+export function canEditTaskBaselineFields(user: User, task: Task): boolean {
+  if (['SYSTEM_ADMIN', 'ENG_DIRECTOR', 'CEO'].includes(user.role_code)) return true;
+  const managerRoles = ['PROJECT_MANAGER', 'TEAM_LEAD', 'ENG_DIRECTOR', 'SYSTEM_ADMIN'];
+  if (isTaskCreator(user, task) && managerRoles.includes(user.role_code)) return true;
+  if (task.project_id) {
+    const project = store.getProjects().find((item) => item.id === task.project_id);
+    if (project?.pm_id === user.id) return true;
+    if (user.role_code === 'TEAM_LEAD' && project?.team_lead_id === user.id) return true;
+  }
+  if (task.lead_id) {
+    const lead = store.getLeads().find((item) => item.id === task.lead_id);
+    if (lead?.pm_id === user.id) return true;
+    if (user.role_code === 'TEAM_LEAD' && lead?.assigned_team_lead_id === user.id) return true;
+  }
+  return false;
+}
+
+function requestedBaselineFieldChange(body: Record<string, unknown>, current: Task): boolean {
+  if (body.description !== undefined && String(body.description) !== String(current.description || '')) return true;
+  if (body.title !== undefined && String(body.title || '').trim() && String(body.title).trim() !== current.title) return true;
+  const nextDue = body.due_date !== undefined ? String(body.due_date || '') || undefined : undefined;
+  if (body.due_date !== undefined && nextDue !== (current.due_date || undefined)) return true;
+  const nextStart = body.start_date !== undefined ? String(body.start_date || '') || undefined : undefined;
+  if (body.start_date !== undefined && nextStart !== (current.start_date || undefined)) return true;
+  return false;
+}
+
 type CreateWorkTaskResult = { error: string; status?: number } | { task: Task; tasks: Task[] };
 
 export function createWorkTask(user: User, body: Record<string, unknown>): CreateWorkTaskResult {
@@ -536,11 +567,17 @@ export function updateWorkTask(user: User, id: string, body: Record<string, unkn
 
   const next: Task = { ...current, updated_at: new Date().toISOString() };
   const canEditSheetFields = canExecute || canManage || ownAdditional || current.assigned_to_id === user.id;
-  if (canEditSheetFields) {
+  const canEditBaseline = canEditTaskBaselineFields(user, current);
+  if (requestedBaselineFieldChange(body, current) && !canEditBaseline) {
+    return { error: 'forbidden' as const, status: 403 };
+  }
+  if (canEditBaseline) {
     if (body.title) next.title = String(body.title).trim();
     if (body.description !== undefined) next.description = String(body.description);
     if (body.due_date !== undefined) next.due_date = String(body.due_date || '') || undefined;
     if (body.start_date !== undefined) next.start_date = String(body.start_date || '') || undefined;
+  }
+  if (canEditSheetFields) {
     if (body.sheet_hidden !== undefined) next.sheet_hidden = body.sheet_hidden === true;
     if (body.project_name !== undefined || body.project_id !== undefined) {
       if (isLeadBasedTask(current)) {

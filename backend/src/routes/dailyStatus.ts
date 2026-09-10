@@ -14,10 +14,12 @@ import {
   loadDailyStatusSnapshot,
   ensureMorningSnapshot,
   lockMorningStatus,
+  MORNING_LOCKED_MESSAGE,
   sheetPhase,
   renderDailyStatusEmailHtml,
   restoreDailyStatusReport,
   rejectMorningBaselinePatch,
+  rowsForEmailReport,
   rowsForPeriod,
   saveDailyStatusSnapshot,
   sendDailyStatusReport,
@@ -81,7 +83,7 @@ router.get(
         const liveById = new Map(rows.map((row) => [row.id, row]));
         rows = snap.map((row) => {
           const live = liveById.get(row.id);
-          return live ? { ...row, canEdit: false, eveningSubmitted: live.eveningSubmitted } : { ...row, canEdit: false };
+          return live ? { ...row, canEdit: false, canEditBaseline: false, eveningSubmitted: live.eveningSubmitted } : { ...row, canEdit: false, canEditBaseline: false };
         });
         for (const row of rows) {
           if (row.rowKind === 'leave' && !snap.some((item) => item.id === row.id)) {
@@ -123,6 +125,9 @@ router.post(
     const date = readIsoDate(req.body?.date);
     const action = String(req.body?.action || 'lock').toLowerCase() === 'unlock' ? 'unlock' : 'lock';
     const result = action === 'unlock' ? unlockMorningStatus(user, date) : lockMorningStatus(user, date);
+    if ('error' in result && result.error) {
+      return res.status(result.status || 400).json({ message: result.error, ...result });
+    }
     return res.json({
       message:
         action === 'unlock'
@@ -193,7 +198,7 @@ router.get(
   (req: AuthedRequest, res) => {
     const period = readPeriod(req.query.period);
     const date = readIsoDate(req.query.date);
-    const packed = rowsForPeriod(req.user!, period, date);
+    const packed = rowsForEmailReport(req.user!, period, date);
     const rendered = renderDailyStatusEmailHtml({
       period,
       date,
@@ -277,7 +282,7 @@ router.get(
       config,
       timezone: config.timezone || env.appTimezone,
       schedule: [
-        { slot: 'noon', time: '11:15 AM', enabled: config.sendAtNoon },
+        { slot: 'noon', time: '11:00 AM', enabled: config.sendAtNoon },
         { slot: 'evening', time: '7:15 PM', enabled: config.sendAtEvening },
       ],
     });
@@ -358,11 +363,13 @@ router.patch(
       return res.status(400).json({ message: 'Leave and permission rows are not editable task records.' });
     }
     ensureMorningSnapshot(req.user!, date);
-    if (period === 'morning' && isMorningStatusLocked(date)) {
-      return res.status(400).json({
-        message:
-          'Morning Status is locked for this date. Switch to Evening Status to continue updates, or ask a Project Manager to unlock morning.',
-      });
+    if (isMorningStatusLocked(date) && period !== 'evening') {
+      const mutatingKeys = Object.keys(req.body || {}).filter(
+        (key) => !['work_date', 'period', 'sheet_hidden'].includes(key)
+      );
+      if (period === 'morning' || mutatingKeys.length) {
+        return res.status(400).json({ message: MORNING_LOCKED_MESSAGE });
+      }
     }
     if (period === 'evening' && !isEveningStatusOpen(date)) {
       return res.status(400).json({

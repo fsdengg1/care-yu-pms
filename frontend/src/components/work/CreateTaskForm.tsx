@@ -1,10 +1,11 @@
 'use client';
 
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { DailySheetStatus, DailyStatusPerson, SHEET_STATUSES, formatSheetDate } from '@/lib/dailyStatus';
 import { TasksApi } from '@/lib/tasksApi';
 import DependencyMultiSelect from './DependencyMultiSelect';
 import StatusDropdown from './StatusDropdown';
+import UserDropdown from './UserDropdown';
 
 function todayIso() {
   return new Date().toISOString().slice(0, 10);
@@ -15,6 +16,10 @@ export default function CreateTaskForm({
   people,
   projects: _projects,
   currentUserId,
+  assignedToId,
+  period,
+  workDate,
+  isAdditional,
   onClose,
   onCreated,
 }: {
@@ -22,6 +27,10 @@ export default function CreateTaskForm({
   people: DailyStatusPerson[];
   projects: Array<{ id: string; name: string }>;
   currentUserId: string;
+  assignedToId?: string;
+  period?: 'morning' | 'evening';
+  workDate?: string;
+  isAdditional?: boolean;
   onClose: () => void;
   onCreated: (message: string) => void;
 }) {
@@ -33,6 +42,12 @@ export default function CreateTaskForm({
   const [deadline, setDeadline] = useState('');
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
+  const [assigneeId, setAssigneeId] = useState(assignedToId || currentUserId);
+
+  useEffect(() => {
+    if (!open) return;
+    setAssigneeId(assignedToId || currentUserId);
+  }, [open, assignedToId, currentUserId]);
 
   if (!open) return null;
 
@@ -55,6 +70,11 @@ export default function CreateTaskForm({
       setError('Task deadline is required.');
       return;
     }
+    const assignee = assignedToId !== undefined ? assigneeId : currentUserId;
+    if (!assignee) {
+      setError('Select a person first.');
+      return;
+    }
     const typedProject = projectName.trim();
     setBusy(true);
     const result = await TasksApi.create({
@@ -62,11 +82,14 @@ export default function CreateTaskForm({
       description: description.trim(),
       task_type: typedProject ? 'PROJECT_TASK' : 'NON_PROJECT_TASK',
       project_name: typedProject || undefined,
-      assigned_to_id: currentUserId,
+      assigned_to_id: assignee,
       start_date: today,
       due_date: deadline,
       depends_on_ids: dependsOn,
       status,
+      period,
+      work_date: workDate,
+      is_additional: isAdditional,
     });
     setBusy(false);
     if (!result.ok) {
@@ -83,9 +106,22 @@ export default function CreateTaskForm({
       <div className="w-full max-w-lg rounded-2xl border border-slate-800 bg-slate-900 p-5 text-xs shadow-xl">
         <h3 className="text-sm font-bold text-slate-100">Create Task</h3>
         <p className="mt-1 text-slate-400">
-          Uses the same columns as Daily Work Updates. This task is assigned to you and is visible to the CEO and Engineering Director.
+          {assignedToId !== undefined
+            ? 'Uses the same columns as Daily Work Updates. The task is assigned to the selected person and uses the existing task record.'
+            : 'Uses the same columns as Daily Work Updates. This task is assigned to you and is visible to the CEO and Engineering Director.'}
         </p>
         <div className="mt-4 space-y-3">
+          {assignedToId !== undefined && (
+            <div>
+              <div className="mb-1 font-semibold text-slate-300">Person</div>
+              <UserDropdown
+                people={people}
+                value={assigneeId}
+                onChange={setAssigneeId}
+                placeholder="Select person"
+              />
+            </div>
+          )}
           <div>
             <div className="mb-1 font-semibold text-slate-300">Project</div>
             <input
@@ -108,7 +144,7 @@ export default function CreateTaskForm({
           <div>
             <div className="mb-1 font-semibold text-slate-300">Dependencies</div>
             <DependencyMultiSelect
-              people={people.filter((person) => person.id !== currentUserId)}
+              people={people.filter((person) => person.id !== assigneeId)}
               value={dependsOn}
               onChange={setDependsOn}
             />

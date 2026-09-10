@@ -1,6 +1,8 @@
 import { store } from '../store/db.js';
 import {
   CostingRecord,
+  FeasibilityReviewAction,
+  FeasibilityReviewRecord,
   FeasibilityStudy,
   FeasibilityTeamAssignment,
   Lead,
@@ -198,6 +200,12 @@ export function hydrateLead(lead: Lead): Lead {
     responsible_user_name: aligned.responsible_user_name || ownerName,
     assigned_team_ids: assignedTeamIds,
     assigned_team_names: assignedTeamNames,
+    feasibility_study: aligned.feasibility_study
+      ? {
+          ...aligned.feasibility_study,
+          review_history: feasibilityReviewHistory(aligned),
+        }
+      : aligned.feasibility_study,
   });
 }
 
@@ -473,6 +481,107 @@ export function emptyFeasibility(partial: Partial<FeasibilityStudy> = {}): Feasi
     status: 'DRAFT',
     ...partial,
   };
+}
+
+export function appendFeasibilityReview(
+  study: FeasibilityStudy | undefined,
+  user: User,
+  action: FeasibilityReviewAction,
+  reason?: string
+): FeasibilityStudy {
+  const now = new Date().toISOString();
+  const current = emptyFeasibility(study || {});
+  const trimmed = (reason || '').trim();
+  const entry: FeasibilityReviewRecord = {
+    id: newId('fsrev'),
+    action,
+    reason: trimmed || undefined,
+    reviewed_by: user.name,
+    reviewed_by_id: user.id,
+    reviewed_at: now,
+  };
+  const history = [...(current.review_history || []), entry];
+  return emptyFeasibility({
+    ...current,
+    review_history: history,
+    review_action: action,
+    reviewed_by: user.name,
+    reviewed_by_id: user.id,
+    reviewed_at: now,
+    rejection_reason: action === 'REJECT' ? trimmed : current.rejection_reason,
+    send_back_reason: action === 'SEND_BACK' ? trimmed : current.send_back_reason,
+    pm_return_reason: action === 'ACCEPT' ? current.pm_return_reason : trimmed || current.pm_return_reason,
+    pm_approved_by: action === 'ACCEPT' ? user.name : current.pm_approved_by,
+    pm_approved_at: action === 'ACCEPT' ? now : current.pm_approved_at,
+  });
+}
+
+function deriveFeasibilityReviewsFromStatusHistory(leadId: string): FeasibilityReviewRecord[] {
+  return store
+    .getLeadStatusHistory()
+    .filter((item) => item.lead_id === leadId && item.old_status === 'FEASIBILITY_SUBMITTED')
+    .filter((item) =>
+      ['COSTING_IN_PROGRESS', 'FEASIBILITY_RETURNED', 'FEASIBILITY_REJECTED'].includes(item.new_status)
+    )
+    .sort((a, b) => +new Date(a.created_at) - +new Date(b.created_at))
+    .map((item) => ({
+      id: item.id,
+      action:
+        item.new_status === 'COSTING_IN_PROGRESS'
+          ? ('ACCEPT' as const)
+          : item.new_status === 'FEASIBILITY_REJECTED'
+            ? ('REJECT' as const)
+            : ('SEND_BACK' as const),
+      reason: item.reason,
+      reviewed_by: item.changed_by,
+      reviewed_by_id: item.changed_by_id,
+      reviewed_at: item.created_at,
+    }));
+}
+
+export function feasibilityReviewHistory(lead: Lead): FeasibilityReviewRecord[] {
+  const stored = lead.feasibility_study?.review_history;
+  if (Array.isArray(stored) && stored.length) return stored;
+  return deriveFeasibilityReviewsFromStatusHistory(lead.id);
+}
+
+export function previousFeasibilityReview(lead: Lead): FeasibilityReviewRecord | undefined {
+  const history = feasibilityReviewHistory(lead);
+  return history[history.length - 1];
+}
+
+export function setFeasibilityAssignmentStatusForLead(
+  leadId: string,
+  status: FeasibilityTeamAssignment['status']
+) {
+  const now = new Date().toISOString();
+  const assignments = store.getFeasibilityTeamAssignments();
+  let changed = false;
+  const next = assignments.map((item) => {
+    if (item.lead_id !== leadId || item.status === 'CANCELLED') return item;
+    changed = true;
+    return { ...item, status, updated_at: now };
+  });
+  if (changed) store.saveFeasibilityTeamAssignments(next);
+}
+
+function previousReviewSummary(lead: Lead): string {
+  const prev = previousFeasibilityReview(lead);
+  if (!prev) return '';
+  if (prev.action === 'SEND_BACK') return prev.reason ? `Sent Back: ${prev.reason}` : 'Sent Back';
+  if (prev.action === 'REJECT') return prev.reason ? `Rejected: ${prev.reason}` : 'Rejected';
+  if (prev.action === 'ACCEPT') return 'Accepted';
+  return '';
+}
+
+function pendingReviewStatusLabel(lead: Lead): string {
+  if (lead.status === 'FEASIBILITY_SUBMITTED') {
+    const prev = previousFeasibilityReview(lead);
+    if (prev?.action === 'SEND_BACK' || lead.previous_status === 'FEASIBILITY_RETURNED') return 'Resubmitted';
+    return 'Submitted to PM';
+  }
+  if (lead.status === 'RESUBMITTED_TO_PM') return 'Resubmitted';
+  return lead.status;
 }
 
 export function emptyCosting(partial: Partial<CostingRecord> = {}): CostingRecord {
@@ -826,6 +935,9 @@ function leadWorkHref(lead: Lead): string {
   if (['DRAFT', 'RETURNED_TO_SALES', 'ADDITIONAL_INFORMATION_REQUIRED'].includes(lead.status)) {
     return `/pre-sales/leads/create?id=${encodeURIComponent(lead.id)}`;
   }
+  if (lead.status === 'FEASIBILITY_SUBMITTED' || lead.status === 'FEASIBILITY_RETURNED') {
+    return `/pre-sales/leads/${lead.id}?tab=feasibility`;
+  }
   return `/pre-sales/leads/${lead.id}`;
 }
 
@@ -1168,7 +1280,9 @@ export function buildPmDashboard(user: User) {
   });
 
   const pendingReviews = assigned.filter(
-    (lead) => PM_REVIEW_STATUSES.includes(lead.status) && (leadOwnerId(lead) === user.id || user.role_code === 'SYSTEM_ADMIN')
+    (lead) =>
+      (PM_REVIEW_STATUSES.includes(lead.status) || lead.status === 'FEASIBILITY_SUBMITTED') &&
+      (leadOwnerId(lead) === user.id || lead.pm_id === user.id || user.role_code === 'SYSTEM_ADMIN')
   );
   const feasibilityPending = assigned.filter((lead) =>
     ['ACCEPTED_FOR_FEASIBILITY', 'FEASIBILITY_IN_PROGRESS', 'FEASIBILITY_SUBMITTED', 'FEASIBILITY_RETURNED'].includes(
@@ -1190,22 +1304,32 @@ export function buildPmDashboard(user: User) {
     pendingReviews: pendingReviews
       .slice()
       .sort((a, b) => +new Date(b.submitted_at || b.updated_at) - +new Date(a.submitted_at || a.updated_at))
-      .map((lead) => ({
-        id: lead.id,
-        lead_number: lead.lead_number,
-        customer_name: lead.customer_name,
-        title: lead.title,
-        business_vertical: lead.business_vertical,
-        sales_owner: lead.sales_owner,
-        sales_owner_id: lead.sales_owner_id,
-        priority: lead.priority,
-        lead_date: lead.lead_date,
-        submitted_at: lead.submitted_at,
-        status: lead.status,
-        current_owner_id: leadOwnerId(lead),
-        current_owner_name: lead.current_owner_name || lead.responsible_user_name,
-        href: `/pre-sales/leads/${lead.id}`,
-      })),
+      .map((lead) => {
+        const previous = previousFeasibilityReview(lead);
+        const feasibilityQueue = lead.status === 'FEASIBILITY_SUBMITTED';
+        return {
+          id: lead.id,
+          lead_number: lead.lead_number,
+          customer_name: lead.customer_name,
+          title: lead.title,
+          business_vertical: lead.business_vertical,
+          sales_owner: lead.sales_owner,
+          sales_owner_id: lead.sales_owner_id,
+          priority: lead.priority,
+          lead_date: lead.lead_date,
+          submitted_at: lead.submitted_at,
+          status: lead.status,
+          status_label: pendingReviewStatusLabel(lead),
+          previous_review: previousReviewSummary(lead),
+          previous_review_action: previous?.action,
+          previous_review_reason: previous?.reason,
+          previous_review_by: previous?.reviewed_by,
+          previous_review_at: previous?.reviewed_at,
+          current_owner_id: leadOwnerId(lead),
+          current_owner_name: lead.current_owner_name || lead.responsible_user_name,
+          href: feasibilityQueue ? `/pre-sales/leads/${lead.id}?tab=feasibility` : `/pre-sales/leads/${lead.id}`,
+        };
+      }),
     myWork: buildMyWork(user),
   };
 }

@@ -14,6 +14,8 @@ export interface CreateTaskPayload {
   depends_on_id?: string;
   depends_on_ids?: string[];
   is_additional?: boolean;
+  period?: 'morning' | 'evening';
+  work_date?: string;
   status?: string;
   project_name?: string;
   parent_task_id?: string;

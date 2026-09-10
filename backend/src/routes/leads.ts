@@ -34,6 +34,8 @@ import {
   emptyCosting,
   emptyFeasibility,
   emptyQuotation,
+  appendFeasibilityReview,
+  setFeasibilityAssignmentStatusForLead,
   findLead,
   findPm,
   hydrateLead,
@@ -843,13 +845,14 @@ router.post('/:id/feasibility', requireAuth, requirePermission('create:feasibili
     ...current,
     ...req.body?.study,
     documents: req.body?.study?.documents || current.documents || [],
-    status: submit ? 'SUBMITTED' : 'DRAFT',
+    status: submit ? 'SUBMITTED' : current.status === 'RETURNED' ? 'RETURNED' : 'DRAFT',
     submitted_by: submit ? user.name : current.submitted_by,
     submitted_by_id: submit ? user.id : current.submitted_by_id,
     submitted_at: submit ? now : current.submitted_at,
     started_at: start || submit ? current.started_at || now : current.started_at,
     started_by: start || submit ? current.started_by || user.name : current.started_by,
     started_by_id: start || submit ? current.started_by_id || user.id : current.started_by_id,
+    review_history: current.review_history,
   });
   const nextStatus: LeadStatus = submit
     ? 'FEASIBILITY_SUBMITTED'
@@ -883,6 +886,7 @@ router.post('/:id/feasibility', requireAuth, requirePermission('create:feasibili
       ],
     });
     audit(user, updated, 'FEASIBILITY_SUBMITTED', `${user.name} submitted feasibility for ${lead.lead_number}.`);
+    setFeasibilityAssignmentStatusForLead(lead.id, 'SUBMITTED_TO_PM');
   } else {
     audit(user, updated, 'FEASIBILITY_SAVED', `${user.name} saved feasibility for ${lead.lead_number}.`);
     if (nextStatus === 'FEASIBILITY_IN_PROGRESS' && (start || lead.status !== 'FEASIBILITY_IN_PROGRESS' || !current.started_at)) {
@@ -909,16 +913,23 @@ router.post(
     if (lead.status !== 'FEASIBILITY_SUBMITTED') {
       return res.status(400).json({ message: 'Feasibility is not awaiting PM approval.' });
     }
-    const action = req.body?.action as string;
+    const actionRaw = String(req.body?.action || '').toLowerCase();
+    const action = actionRaw === 'accept' ? 'approve' : actionRaw;
     if (action === 'return' || action === 'reject') {
       const reason = String(req.body?.reason || '').trim();
       if (!reason) return res.status(400).json({ message: 'A reason is required.' });
       const rejected = action === 'reject';
-      const study = emptyFeasibility({
-        ...(lead.feasibility_study || {}),
-        status: rejected ? 'REJECTED' : 'RETURNED',
-        pm_return_reason: reason,
-      });
+      const reviewAction = rejected ? 'REJECT' : 'SEND_BACK';
+      const study = appendFeasibilityReview(
+        emptyFeasibility({
+          ...(lead.feasibility_study || {}),
+          status: rejected ? 'REJECTED' : 'RETURNED',
+          pm_return_reason: reason,
+        }),
+        user,
+        reviewAction,
+        reason
+      );
       const updated = transitionLead(lead, rejected ? 'FEASIBILITY_REJECTED' : 'FEASIBILITY_RETURNED', user, reason, {
         feasibility_study: study,
         feasibility_return_reason: reason,
@@ -932,6 +943,7 @@ router.post(
         const transferred = transferLeadResponsibility(updated, owner, user, reason);
         next = saveLead({ ...transferred.lead, pending_action: true });
       }
+      setFeasibilityAssignmentStatusForLead(lead.id, rejected ? 'CANCELLED' : 'CHANGE_SUGGESTED');
       const allocations = store.getFeasibilityEmployeeAllocations().filter((item) => item.lead_id === lead.id);
       emitLeadWorkflow({
         event: rejected ? 'FEASIBILITY_REJECTED' : 'FEASIBILITY_SENT_BACK',
@@ -946,21 +958,29 @@ router.post(
       audit(user, next, rejected ? 'FEASIBILITY_REJECTED' : 'FEASIBILITY_RETURNED', `${user.name} ${rejected ? 'rejected' : 'returned'} feasibility for ${lead.lead_number}.`);
       return res.json(payloadFor(next));
     }
-    const study = emptyFeasibility({
-      ...(lead.feasibility_study || {}),
-      status: 'APPROVED',
-      pm_approved_by: user.name,
-      pm_approved_at: new Date().toISOString(),
-    });
-    const updated = transitionLead(lead, 'COSTING_IN_PROGRESS', user, 'Feasibility approved', { feasibility_study: study });
-    const handed = handLeadToProcurement(updated, user, 'Feasibility approved — procurement pending');
+    if (action !== 'approve') {
+      return res.status(400).json({ message: 'Action must be accept, reject, or send back.' });
+    }
+    const study = appendFeasibilityReview(
+      emptyFeasibility({
+        ...(lead.feasibility_study || {}),
+        status: 'APPROVED',
+        pm_approved_by: user.name,
+        pm_approved_at: new Date().toISOString(),
+      }),
+      user,
+      'ACCEPT'
+    );
+    const updated = transitionLead(lead, 'COSTING_IN_PROGRESS', user, 'Feasibility accepted', { feasibility_study: study });
+    const handed = handLeadToProcurement(updated, user, 'Feasibility accepted — procurement pending');
+    setFeasibilityAssignmentStatusForLead(lead.id, 'COMPLETED');
     emitLeadWorkflow({
       event: 'FEASIBILITY_APPROVED',
       lead: handed,
       actor: user,
-      message: `Feasibility approved for "${lead.title}". Start vendor identification, costing, and procurement documentation.`,
+      message: `Feasibility accepted for "${lead.title}". Start vendor identification, costing, and procurement documentation.`,
     });
-    audit(user, handed, 'FEASIBILITY_APPROVED', `${user.name} approved feasibility for ${lead.lead_number}.`);
+    audit(user, handed, 'FEASIBILITY_APPROVED', `${user.name} accepted feasibility for ${lead.lead_number}.`);
     return res.json(payloadFor(handed));
   }
 );

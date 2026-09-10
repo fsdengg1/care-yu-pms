@@ -109,9 +109,6 @@ export default function DailyStatusSheet({
   period,
   phase,
   attendance = [],
-  canManageMorningLock = false,
-  morningLockBusy = false,
-  onMorningLockToggle,
 }: {
   rows: DailyStatusRow[];
   people: DailyStatusPerson[];
@@ -164,7 +161,7 @@ export default function DailyStatusSheet({
   const [lastSelectedIndex, setLastSelectedIndex] = useState<number | null>(null);
   const selectAllRef = useRef<HTMLInputElement>(null);
   const today = workDate || todayIso();
-  const morningBaselineLocked = Boolean(period === 'evening' && phase?.morningLocked);
+  const morningBaselineLocked = Boolean(phase?.morningLocked);
 
   const toggleExpand = (id: string) => {
     setExpandedIds((prev) => (prev.includes(id) ? prev.filter((item) => item !== id) : [...prev, id]));
@@ -292,9 +289,7 @@ export default function DailyStatusSheet({
           phase?.morningLocked ? (
             <span className="inline-flex items-center gap-1 rounded-full border border-amber-300 bg-amber-50 px-2 py-0.5 text-[10px] font-bold text-amber-800">
               <Lock className="h-3 w-3" aria-hidden />
-              {phase.lockSource === 'manual'
-                ? `Morning locked${phase.lockedByName ? ` by ${phase.lockedByName}` : ''}`
-                : 'Morning locked at 11:00'}
+              Morning Locked at 11:00 AM
             </span>
           ) : (
             <span className="inline-flex items-center gap-1 rounded-full border border-emerald-300 bg-emerald-50 px-2 py-0.5 text-[10px] font-bold text-emerald-800">
@@ -309,29 +304,9 @@ export default function DailyStatusSheet({
           </span>
         ) : (
           <span className="rounded-full border border-slate-300 bg-slate-50 px-2 py-0.5 text-[10px] font-bold text-slate-700">
-            Lock morning status to enter evening updates
+            Evening updates open after 11:00 AM
           </span>
         )}
-        {canManageMorningLock && onMorningLockToggle ? (
-          <button
-            type="button"
-            disabled={morningLockBusy}
-            onClick={() => onMorningLockToggle(phase?.morningLocked ? 'unlock' : 'lock')}
-            className={`inline-flex items-center gap-1 rounded-md px-2 py-1 text-[10px] font-bold transition-colors disabled:opacity-60 ${
-              phase?.morningLocked
-                ? 'border border-amber-400 bg-amber-50 text-amber-900 hover:border-amber-500'
-                : 'border border-emerald-600 bg-emerald-50 text-emerald-900 hover:border-emerald-500'
-            }`}
-            title={
-              phase?.morningLocked
-                ? 'Unlock morning task details for editing'
-                : 'Lock morning task details and open evening updates'
-            }
-          >
-            {phase?.morningLocked ? <LockOpen className="h-3 w-3" /> : <Lock className="h-3 w-3" />}
-            {phase?.morningLocked ? 'Unlock Morning Status' : 'Lock Morning Status'}
-          </button>
-        ) : null}
         <div className="relative min-w-[200px] flex-1">
           <Search className="absolute left-2.5 top-2 h-3.5 w-3.5 text-[#94a3b8]" />
           <input
@@ -474,6 +449,7 @@ export default function DailyStatusSheet({
                   const rowIndex = flatIndex++;
                   const editable = canEditRow(row);
                   const baselineEditable = editable && !morningBaselineLocked;
+                  const canEditTaskMeta = Boolean(row.canEditBaseline) && !morningBaselineLocked && !readOnly;
                   const tone = deadlineTone(row.status, row.deadlineIso || row.deadline, today);
                   const personAttendance = attendance.find((item) => item.personId === group.personId);
                   return (
@@ -582,7 +558,7 @@ export default function DailyStatusSheet({
                         )}
                         <div className="flex items-start gap-1">
                           <div className="min-w-0 flex-1">
-                            {baselineEditable && period !== 'evening' ? (
+                            {canEditTaskMeta && period !== 'evening' ? (
                               <AutoResizeTextarea
                                 key={row.taskDescription}
                                 defaultValue={row.taskDescription}
@@ -715,7 +691,7 @@ export default function DailyStatusSheet({
                     )}
                   </td>
                   <td className="date-cell">
-                    {baselineEditable ? (
+                    {canEditTaskMeta ? (
                       <input
                         type="date"
                         className="sheet-input sheet-date-input"
@@ -727,7 +703,7 @@ export default function DailyStatusSheet({
                     )}
                   </td>
                   <td className={`date-cell tone-cell ${deadlineCellClass(tone)}`} style={deadlineCellStyle(tone)}>
-                    {baselineEditable ? (
+                    {canEditTaskMeta ? (
                       <input
                         type="date"
                         className="sheet-input sheet-date-input"

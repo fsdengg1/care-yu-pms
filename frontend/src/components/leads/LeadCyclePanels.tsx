@@ -3,7 +3,7 @@
 import React, { useState } from 'react';
 import { LeadApi } from '@/lib/leadApi';
 import { canPerformPmOperations, canPrepareCosting, canPrepareFeasibility, canPrepareQuotation, isCeoViewOnly, userIsOnLeadTeam } from '@/lib/rbac';
-import { CostingRecord, FeasibilityStudy, FeasibilityTeamAssignment, Lead, Team, User } from '@/lib/types';
+import { CostingRecord, FeasibilityReviewRecord, FeasibilityStudy, FeasibilityTeamAssignment, Lead, Team, User } from '@/lib/types';
 import { formatDateTime, formatInrCompact, WorkflowActionKind, WORKFLOW_ACTION_SUCCESS } from '@/lib/format';
 import EntityDocumentUpload from '@/components/documents/EntityDocumentUpload';
 import { WorkflowActionFeedback } from '@/components/leads/WorkflowStatusBanner';
@@ -11,7 +11,7 @@ import AutoGrowTextarea, { AUTO_GROW_COMPACT_HEIGHT, AUTO_GROW_DEFAULT_HEIGHT } 
 import VisitManagementPanel from '@/components/leads/VisitManagementPanel';
 import { QuotationSubmissionMethod } from '@/lib/types';
 import {
-  AlertTriangle, Check, CheckCircle2, RotateCcw, Send, Calculator, FileText, Handshake, Building2
+  AlertTriangle, Check, CheckCircle2, RotateCcw, Send, Calculator, FileText, Handshake, Building2, X
 } from 'lucide-react';
 
 interface Props {
@@ -51,6 +51,63 @@ const emptyCost = (lead: Lead): CostingRecord => ({
   documents: lead.costing?.documents || [],
   status: lead.costing?.status || 'DRAFT',
 });
+
+function reviewActionLabel(action?: string) {
+  if (action === 'ACCEPT') return 'ACCEPTED';
+  if (action === 'REJECT') return 'REJECTED';
+  if (action === 'SEND_BACK') return 'SENT BACK';
+  return action || '—';
+}
+
+function FeasibilityReviewHistory({
+  history,
+  currentStatus,
+}: {
+  history: FeasibilityReviewRecord[];
+  currentStatus: string;
+}) {
+  if (!history.length && currentStatus !== 'FEASIBILITY_SUBMITTED') return null;
+  const previous = history[history.length - 1];
+  return (
+    <div className="space-y-3">
+      {currentStatus === 'FEASIBILITY_SUBMITTED' && (
+        <div className="rounded-lg border border-cyan-800 bg-cyan-950/40 p-3 text-cyan-100">
+          <div className="text-[11px] font-bold uppercase tracking-wide text-cyan-300">Current Review</div>
+          <div className="mt-1 font-semibold">Submitted for PM Review</div>
+        </div>
+      )}
+      {previous && (
+        <div className="rounded-lg border border-amber-800 bg-amber-950/30 p-3 text-amber-100">
+          <div className="text-[11px] font-bold uppercase tracking-wide text-amber-300">Previous Review</div>
+          <div className="mt-1 font-semibold">Action: {reviewActionLabel(previous.action)}</div>
+          {previous.reason ? <div className="mt-0.5 text-xs">Reason: {previous.reason}</div> : null}
+          <div className="mt-0.5 text-xs">
+            {previous.action === 'SEND_BACK' ? 'Sent Back By' : 'Reviewed By'}: {previous.reviewed_by}
+          </div>
+          <div className="text-xs">
+            {previous.action === 'SEND_BACK' ? 'Sent Back On' : 'Reviewed On'}: {formatDateTime(previous.reviewed_at)}
+          </div>
+        </div>
+      )}
+      {history.length > 1 && (
+        <div className="rounded-lg border border-slate-800 bg-slate-950/50 p-3">
+          <div className="mb-2 text-[11px] font-bold uppercase tracking-wide text-slate-400">Previous Review History</div>
+          <div className="space-y-2">
+            {[...history].reverse().map((item) => (
+              <div key={item.id} className="border-t border-slate-800 pt-2 text-xs text-slate-300 first:border-t-0 first:pt-0">
+                <span className="font-bold text-slate-100">{reviewActionLabel(item.action)}</span>
+                {item.reason ? <span className="text-slate-400"> — {item.reason}</span> : null}
+                <div className="text-[11px] text-slate-500">
+                  {item.reviewed_by} · {formatDateTime(item.reviewed_at)}
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
 
 export default function LeadCyclePanels({ lead, currentUser, teams, users, assignments = [], onUpdated }: Props) {
   const isPM = canPerformPmOperations(currentUser);
@@ -96,6 +153,8 @@ export default function LeadCyclePanels({ lead, currentUser, teams, users, assig
   const [assigneesByTeam, setAssigneesByTeam] = useState<Record<string, string>>({});
   const [pmNotes, setPmNotes] = useState(lead.pm_review_notes || '');
   const [returnReason, setReturnReason] = useState('');
+  const [reviewDialog, setReviewDialog] = useState<null | 'reject' | 'return'>(null);
+  const [reviewReason, setReviewReason] = useState('');
 
   const [study, setStudy] = useState<FeasibilityStudy>(() => emptyStudy(lead));
   const [costing, setCosting] = useState<CostingRecord>(() => emptyCost(lead));
@@ -386,6 +445,9 @@ export default function LeadCyclePanels({ lead, currentUser, teams, users, assig
             <span className="text-[11px] text-slate-400">{(lead.assigned_team_names || [lead.assigned_team_name]).filter(Boolean).join(', ') || 'Unassigned team'}{lead.assigned_team_lead_name ? ` · ${lead.assigned_team_lead_name}` : ''}</span>
           </div>
           {lead.status === 'FEASIBILITY_RETURNED' && (
+            <FeasibilityReviewHistory history={lead.feasibility_study?.review_history || []} currentStatus={lead.status} />
+          )}
+          {lead.status === 'FEASIBILITY_RETURNED' && !lead.feasibility_study?.review_history?.length && (
             <div className="rounded border border-amber-800 bg-amber-950/40 p-3 text-amber-200">
               <AlertTriangle className="mr-1 inline h-4 w-4" /> {lead.feasibility_return_reason || 'PM returned this feasibility for correction.'}
             </div>
@@ -440,7 +502,8 @@ export default function LeadCyclePanels({ lead, currentUser, teams, users, assig
 
       {isPM && lead.status === 'FEASIBILITY_SUBMITTED' && (
         <div className="space-y-3 rounded-xl border border-emerald-800/80 bg-emerald-950/30 p-5">
-          <div className="font-bold text-emerald-300">PM Approval — Feasibility</div>
+          <div className="font-bold text-emerald-300">PM Review — Feasibility</div>
+          <FeasibilityReviewHistory history={lead.feasibility_study?.review_history || []} currentStatus={lead.status} />
           <EntityDocumentUpload
             title="Submitted feasibility documents"
             entityType="FEASIBILITY"
@@ -449,12 +512,109 @@ export default function LeadCyclePanels({ lead, currentUser, teams, users, assig
             ensureEntity={async () => lead.id}
             compact
           />
-          <textarea rows={2} value={returnReason} onChange={(e) => setReturnReason(e.target.value)} placeholder="Return reason if sending back to the team" className="form-control" />
-          <div className="flex gap-2">
-            <button type="button" disabled={busy} onClick={() => void run(() => LeadApi.reviewFeasibility(lead.id, 'approve'), 'Unable to approve feasibility.', 'approve')} className="rounded-lg bg-emerald-600 px-4 py-2 font-bold text-white hover:bg-emerald-500">Approve Feasibility</button>
-            <button type="button" disabled={busy} onClick={() => requireReason(() => LeadApi.reviewFeasibility(lead.id, 'return', returnReason.trim()))} className="rounded-lg bg-amber-600 px-4 py-2 font-bold text-slate-950 hover:bg-amber-500">Send Back</button>
-            <button type="button" disabled={busy} onClick={() => requireReason(() => LeadApi.reviewFeasibility(lead.id, 'reject', returnReason.trim()), 'Unable to reject feasibility.', 'reject')} className="rounded-lg bg-rose-700 px-4 py-2 font-bold text-white hover:bg-rose-600">Reject</button>
+          <div className="flex flex-wrap gap-2">
+            <button
+              type="button"
+              disabled={busy}
+              onClick={() => void run(() => LeadApi.reviewFeasibility(lead.id, 'accept'), 'Unable to accept feasibility.', 'accept')}
+              className="rounded-lg bg-emerald-600 px-4 py-2 font-bold text-white hover:bg-emerald-500 disabled:opacity-60"
+            >
+              Accept
+            </button>
+            <button
+              type="button"
+              disabled={busy}
+              onClick={() => {
+                setReviewReason('');
+                setReviewDialog('reject');
+              }}
+              className="rounded-lg bg-rose-700 px-4 py-2 font-bold text-white hover:bg-rose-600 disabled:opacity-60"
+            >
+              Reject
+            </button>
+            <button
+              type="button"
+              disabled={busy}
+              onClick={() => {
+                setReviewReason('');
+                setReviewDialog('return');
+              }}
+              className="rounded-lg bg-amber-600 px-4 py-2 font-bold text-slate-950 hover:bg-amber-500 disabled:opacity-60"
+            >
+              Send Back
+            </button>
           </div>
+          {reviewDialog && (
+            <div className="modal-scrim fixed inset-0 z-[90] flex items-center justify-center p-4" onClick={() => !busy && setReviewDialog(null)}>
+              <div
+                className="w-full max-w-md rounded-2xl border border-slate-700 bg-slate-900 p-5 shadow-xl"
+                onClick={(event) => event.stopPropagation()}
+              >
+                <div className="flex items-start justify-between gap-3">
+                  <h3 className="text-sm font-bold text-slate-100">
+                    {reviewDialog === 'reject' ? 'Reject Feasibility' : 'Send Back Feasibility'}
+                  </h3>
+                  <button type="button" disabled={busy} onClick={() => setReviewDialog(null)} className="text-slate-400 hover:text-slate-200">
+                    <X className="h-4 w-4" />
+                  </button>
+                </div>
+                <p className="mt-2 text-xs text-slate-400">
+                  {reviewDialog === 'reject'
+                    ? 'A rejection reason is required.'
+                    : 'Describe the required correction so the feasibility team can revise and resubmit.'}
+                </p>
+                <label className="mt-3 block text-xs font-semibold text-slate-300">
+                  {reviewDialog === 'reject' ? 'Rejection Reason' : 'Send Back Reason / Required Correction'}
+                </label>
+                <textarea
+                  rows={4}
+                  value={reviewReason}
+                  onChange={(event) => setReviewReason(event.target.value)}
+                  placeholder={
+                    reviewDialog === 'reject'
+                      ? 'Feasibility does not meet the required technical requirements.'
+                      : 'Please revise the feasibility calculation and provide the missing layout details.'
+                  }
+                  className="form-control mt-1"
+                />
+                {error && <div className="mt-2 text-xs text-rose-300">{error}</div>}
+                <div className="mt-4 flex justify-end gap-2">
+                  <button
+                    type="button"
+                    disabled={busy}
+                    onClick={() => setReviewDialog(null)}
+                    className="rounded-lg border border-slate-700 px-3 py-2 text-xs font-bold text-slate-200"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="button"
+                    disabled={busy}
+                    onClick={() => {
+                      if (!reviewReason.trim()) {
+                        setError(reviewDialog === 'reject' ? 'Enter a rejection reason.' : 'Enter a send-back reason.');
+                        return;
+                      }
+                      void run(
+                        () => LeadApi.reviewFeasibility(lead.id, reviewDialog === 'reject' ? 'reject' : 'return', reviewReason.trim()),
+                        reviewDialog === 'reject' ? 'Unable to reject feasibility.' : 'Unable to send feasibility back.',
+                        reviewDialog === 'reject' ? 'reject' : 'return',
+                        () => {
+                          setReviewDialog(null);
+                          setReviewReason('');
+                        }
+                      );
+                    }}
+                    className={`rounded-lg px-3 py-2 text-xs font-bold ${
+                      reviewDialog === 'reject' ? 'bg-rose-700 text-white hover:bg-rose-600' : 'bg-amber-600 text-slate-950 hover:bg-amber-500'
+                    } disabled:opacity-60`}
+                  >
+                    {reviewDialog === 'reject' ? 'Confirm Reject' : 'Confirm Send Back'}
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
         </div>
       )}
 

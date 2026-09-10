@@ -27,12 +27,16 @@ const FEEDBACK_STYLE: Record<WorkflowActionKind, string> = {
   submit: 'border-cyan-700 bg-cyan-950/70 text-cyan-300',
   approve: 'border-emerald-700 bg-emerald-950/70 text-emerald-300',
   reject: 'border-rose-700 bg-rose-950/70 text-rose-300',
+  return: 'border-amber-700 bg-amber-950/70 text-amber-300',
+  accept: 'border-emerald-700 bg-emerald-950/70 text-emerald-300',
 };
 
 const FEEDBACK_ICON: Record<WorkflowActionKind, React.ReactNode> = {
   submit: <CheckCircle2 className="h-5 w-5 shrink-0 text-cyan-300" />,
   approve: <CheckCircle2 className="h-5 w-5 shrink-0 text-emerald-300" />,
   reject: <XCircle className="h-5 w-5 shrink-0 text-rose-300" />,
+  return: <AlertCircle className="h-5 w-5 shrink-0 text-amber-300" />,
+  accept: <CheckCircle2 className="h-5 w-5 shrink-0 text-emerald-300" />,
 };
 
 export default function WorkflowStatusBanner({ status, lead, feedback, error, showStage = true }: Props) {

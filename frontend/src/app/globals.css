@@ -683,12 +683,15 @@ html.light .theme-app ::-webkit-scrollbar-thumb:hover {
   flex: 1 1 auto;
   min-height: 280px;
   min-width: 0;
-  overflow: auto;
+  width: 100%;
+  overflow-x: hidden;
+  overflow-y: auto;
 }
 
 .daily-status-sheet {
   width: 100%;
-  min-width: 1748px;
+  min-width: 0;
+  max-width: 100%;
   border-collapse: collapse;
   table-layout: fixed;
   background: #ffffff;
@@ -696,44 +699,47 @@ html.light .theme-app ::-webkit-scrollbar-thumb:hover {
 }
 
 .daily-status-sheet col.col-check {
-  width: 36px;
+  width: 2.5%;
 }
 
 .daily-status-sheet col.col-person {
-  width: 108px;
+  width: 8%;
 }
 
 .daily-status-sheet col.col-project {
-  width: 200px;
+  width: 12%;
 }
 
 .daily-status-sheet col.col-task-desc {
-  width: 460px;
+  width: 22%;
 }
 
 .daily-status-sheet col.col-deps {
-  width: 150px;
+  width: 8%;
 }
 
 .daily-status-sheet col.col-status {
-  width: 132px;
+  width: 11%;
 }
 
-.daily-status-sheet col.col-date,
+.daily-status-sheet col.col-date {
+  width: 8%;
+}
+
 .daily-status-sheet col.col-deadline {
-  width: 128px;
+  width: 9%;
 }
 
 .daily-status-sheet col.col-hours {
-  width: 148px;
+  width: 9%;
 }
 
 .daily-status-sheet col.col-delay {
-  width: 160px;
+  width: 10.5%;
 }
 
 .daily-status-sheet col.col-actions {
-  width: 44px;
+  width: 3%;
 }
 
 .daily-status-sheet.daily-status-compare {
@@ -755,10 +761,19 @@ html.light .theme-app ::-webkit-scrollbar-thumb:hover {
   overflow-wrap: anywhere;
 }
 
-.daily-status-sheet.daily-status-compare .hours-cell,
-.daily-status-sheet.daily-status-compare .status-cell {
+.daily-status-sheet.daily-status-compare .hours-cell {
   white-space: normal;
   text-align: center;
+}
+
+.daily-status-sheet.daily-status-compare .status-cell {
+  white-space: nowrap;
+  text-align: center;
+}
+
+.daily-status-sheet th,
+.daily-status-sheet td {
+  box-sizing: border-box;
 }
 
 .daily-status-sheet th {
@@ -769,24 +784,25 @@ html.light .theme-app ::-webkit-scrollbar-thumb:hover {
   color: #0f172a;
   font-size: 11px;
   font-weight: 800;
-  letter-spacing: 0.04em;
+  letter-spacing: 0.03em;
   text-transform: uppercase;
   text-align: center;
   vertical-align: middle;
   border: 1px solid #d4a017;
-  padding: 10px 12px;
-  white-space: nowrap;
+  padding: 8px 6px;
+  white-space: normal;
+  overflow: hidden;
+  line-height: 1.25;
 }
 
 .daily-status-sheet td {
   border: 1px solid #d8dee6;
-  padding: 8px 10px;
-  vertical-align: top;
+  padding: 8px 8px;
+  vertical-align: middle;
   font-size: 12px;
   color: #0f172a;
   background: #ffffff;
-  word-break: break-word;
-  overflow-wrap: anywhere;
+  overflow: hidden;
   line-height: 1.45;
 }
 
@@ -812,36 +828,80 @@ html.light .theme-app ::-webkit-scrollbar-thumb:hover {
   vertical-align: middle;
   background: #fffef6;
   padding-inline: 6px;
+  word-break: break-word;
+  overflow-wrap: anywhere;
 }
 
 .daily-status-sheet td.project-cell {
-  min-width: 200px;
+  min-width: 0;
+  vertical-align: middle;
+  word-break: break-word;
+  overflow-wrap: break-word;
 }
 
 .daily-status-sheet td.task-desc-cell {
-  min-width: 460px;
+  min-width: 0;
+  vertical-align: middle;
+  word-break: break-word;
+  overflow-wrap: break-word;
+  white-space: normal;
 }
 
 .daily-status-sheet td.deps-cell {
-  min-width: 150px;
+  min-width: 0;
+  vertical-align: middle;
+  word-break: break-word;
+  overflow-wrap: break-word;
 }
 
 .daily-status-sheet td.status-cell {
-  min-width: 132px;
+  min-width: 0;
+  padding: 6px 4px;
   white-space: nowrap;
   text-align: center;
   vertical-align: middle;
-  word-break: normal;
-  overflow-wrap: normal;
+  overflow: hidden;
+}
+
+.daily-status-sheet .sheet-status-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  box-sizing: border-box;
+  width: 100%;
+  max-width: 100%;
+  min-width: 0;
+  height: 26px;
+  margin: 0;
+  padding: 0 6px;
+  overflow: hidden;
+  font-size: 10px;
+  font-weight: 800;
+  line-height: 1;
+  white-space: nowrap;
+}
+
+.daily-status-sheet td.status-cell > span {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  box-sizing: border-box;
+  width: 100%;
+  max-width: 100%;
+  height: 26px;
+  overflow: hidden;
+  white-space: nowrap;
 }
 
 .daily-status-sheet td.date-cell {
-  min-width: 128px;
+  min-width: 0;
+  padding: 6px 4px;
   white-space: nowrap;
   text-align: center;
   vertical-align: middle;
-  word-break: normal;
-  overflow-wrap: normal;
+  overflow: hidden;
+  font-variant-numeric: tabular-nums;
+  font-weight: 600;
 }
 
 /* Deadline tones — must beat `.daily-status-sheet td { background }` (mail uses the same colors inline). */
@@ -882,26 +942,29 @@ html.light .theme-app ::-webkit-scrollbar-thumb:hover {
 }
 
 .daily-status-sheet td.hours-cell {
-  min-width: 132px;
+  min-width: 0;
   white-space: normal;
   text-align: center;
   vertical-align: middle;
-  word-break: normal;
-  overflow-wrap: normal;
-  padding-left: 10px;
-  padding-right: 10px;
+  overflow: hidden;
+  padding: 6px 8px;
 }
 
 .sheet-progress-hours {
   display: flex;
   flex-direction: column;
   align-items: center;
+  justify-content: center;
   gap: 4px;
+  width: 100%;
+  max-width: 100%;
   min-width: 0;
+  overflow: hidden;
 }
 
 .sheet-progress-track {
   width: 100%;
+  max-width: 100%;
   height: 6px;
   overflow: hidden;
   border-radius: 999px;
@@ -954,8 +1017,10 @@ html.light .theme-app ::-webkit-scrollbar-thumb:hover {
 }
 
 .daily-status-sheet td.delay-cell {
-  min-width: 160px;
+  min-width: 0;
   vertical-align: middle;
+  word-break: break-word;
+  overflow-wrap: break-word;
 }
 
 .daily-status-sheet td.actions-cell {
@@ -971,16 +1036,29 @@ html.light .theme-app ::-webkit-scrollbar-thumb:hover {
 
 .daily-status-sheet .sheet-task-field {
   min-height: 56px;
+  max-width: 100%;
   line-height: 1.5;
+  overflow-wrap: break-word;
+  word-break: break-word;
 }
 
 .daily-status-sheet .sheet-date-input {
   display: block;
   width: 100%;
+  min-width: 0;
+  max-width: 100%;
+  box-sizing: border-box;
   text-align: center;
-  font-size: 12px;
+  font-size: 11px;
   padding: 2px 0;
   white-space: nowrap;
+}
+
+.daily-status-sheet td.date-cell input[type='date'] {
+  width: 100%;
+  max-width: 100%;
+  min-width: 0;
+  color-scheme: light;
 }
 
 .daily-status-sheet .sheet-input,
@@ -1020,6 +1098,32 @@ html.light .theme-app ::-webkit-scrollbar-thumb:hover {
   font-size: 10px;
   font-weight: 600;
   line-height: 1.4;
+}
+
+html.dark .daily-status-workspace,
+html.light .daily-status-workspace {
+  background: #ffffff;
+  color: #0f172a;
+}
+
+html.dark .daily-status-workspace {
+  border-color: #334155;
+}
+
+html.dark .daily-status-sheet .sheet-input,
+html.dark .daily-status-sheet .sheet-textarea,
+html.dark .daily-status-sheet .sheet-select,
+html.dark .daily-status-sheet .sheet-progress-pct,
+html.dark .daily-status-sheet .sheet-hours-label,
+html.dark .daily-status-sheet .sheet-text {
+  color: #0f172a;
+}
+
+html.dark .daily-status-sheet td.date-cell input[type='date'],
+html.light .daily-status-sheet td.date-cell input[type='date'] {
+  color-scheme: light;
+  color: #0f172a;
+  background: transparent;
 }
 
 .theme-app .form-control {

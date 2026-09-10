@@ -763,6 +763,7 @@ export const RELATIONAL_TABLES: TableDef[] = [
       f('fs_pm_approved_by', 'text', 'feasibility_study.pm_approved_by'),
       f('fs_pm_approved_at', 'timestamptz', 'feasibility_study.pm_approved_at'),
       f('fs_pm_return_reason', 'text', 'feasibility_study.pm_return_reason'),
+      f('fs_review_history', 'jsonb', 'feasibility_study.review_history'),
       f('costing_bom_components', 'text', 'costing.bom_components'),
       f('costing_vendor_requirements', 'text', 'costing.vendor_requirements'),
       f('costing_vendor_quotations', 'text', 'costing.vendor_quotations'),

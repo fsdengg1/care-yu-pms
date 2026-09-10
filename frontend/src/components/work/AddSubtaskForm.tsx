@@ -52,6 +52,8 @@ export default function AddSubtaskForm({
   currentUserId,
   canAssignOthers = false,
   editing,
+  period,
+  workDate,
   onCreated,
   onCancel,
 }: {
@@ -61,6 +63,8 @@ export default function AddSubtaskForm({
   currentUserId: string;
   canAssignOthers?: boolean;
   editing?: EditableSubtask | null;
+  period?: 'morning' | 'evening';
+  workDate?: string;
   onCreated: (message: string) => void;
   onCancel: () => void;
 }) {
@@ -142,6 +146,9 @@ export default function AddSubtaskForm({
       status: nextStatus,
       progress_percent: progressPercent,
       parent_task_id: parentId,
+      period,
+      work_date: workDate,
+      is_additional: period === 'evening',
     });
     setBusy(false);
     if (!result.ok) {
@@ -149,7 +156,11 @@ export default function AddSubtaskForm({
       return;
     }
     if (hours) {
-      await DailyStatusApi.updateRow(result.data.task.id, { hours_worked: Number(hours) });
+      await DailyStatusApi.updateRow(result.data.task.id, {
+        hours_worked: Number(hours),
+        work_date: workDate,
+        period,
+      });
     }
     onCreated('Subtask created under the selected parent task.');
   };

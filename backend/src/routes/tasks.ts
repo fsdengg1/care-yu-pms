@@ -12,6 +12,12 @@ import {
   updateWorkTask,
 } from '../lib/workTasks.js';
 import { listAssignmentsForUser } from '../lib/dailyUpdates.js';
+import {
+  dateInAppTimezone,
+  isMorningStatusLocked,
+  isTaskInLockedMorningSnapshot,
+  MORNING_LOCKED_MESSAGE,
+} from '../lib/dailyStatus.js';
 
 const router = Router();
 
@@ -31,7 +37,16 @@ router.get('/', requireAuth, (req: AuthedRequest, res) => {
 });
 
 router.post('/', requireAuth, (req: AuthedRequest, res) => {
-  const result = createWorkTask(req.user!, req.body || {});
+  const body = { ...(req.body || {}) } as Record<string, unknown>;
+  const period = String(body.period || '').toLowerCase();
+  const workDate = String(body.work_date || dateInAppTimezone()).slice(0, 10);
+  if (period === 'morning' && isMorningStatusLocked(workDate)) {
+    return res.status(400).json({ message: MORNING_LOCKED_MESSAGE });
+  }
+  if (isMorningStatusLocked(workDate) && (period === 'evening' || body.is_additional === true)) {
+    body.is_additional = true;
+  }
+  const result = createWorkTask(req.user!, body);
   if ('error' in result) return res.status(result.status || 400).json({ message: result.error });
   return res.status(201).json({ task: result.task, tasks: result.tasks || [result.task] });
 });
@@ -51,6 +66,10 @@ router.post('/dependency-request', requireAuth, (req: AuthedRequest, res) => {
 
 router.post('/bulk-delete', requireAuth, (req: AuthedRequest, res) => {
   const ids = Array.isArray(req.body?.ids) ? req.body.ids.map((id: unknown) => String(id)) : [];
+  const date = dateInAppTimezone();
+  if (ids.some((id: string) => isTaskInLockedMorningSnapshot(id, date))) {
+    return res.status(400).json({ message: MORNING_LOCKED_MESSAGE });
+  }
   const result = deleteWorkTasks(req.user!, ids);
   if ('error' in result) return res.status(result.status || 400).json({ message: result.error });
   return res.json({ message: `${result.deleted} selected task${result.deleted === 1 ? '' : 's'} deleted.`, ...result });

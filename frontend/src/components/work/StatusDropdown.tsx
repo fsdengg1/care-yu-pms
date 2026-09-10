@@ -58,10 +58,10 @@ export default function StatusDropdown({
         type="button"
         disabled={disabled}
         onClick={() => setOpen((value) => !value)}
-        className={`inline-flex w-full items-center gap-1 rounded border px-2 py-1 text-[10px] font-bold whitespace-nowrap hover:opacity-90 disabled:cursor-default disabled:opacity-80 ${sheetStatusClass(value)} ${variant === 'sheet' ? 'min-w-[7.5rem] justify-center' : 'rounded-full'}`}
+        className={`inline-flex items-center gap-1 rounded border text-[10px] font-bold whitespace-nowrap hover:opacity-90 disabled:cursor-default disabled:opacity-80 ${sheetStatusClass(value)} ${variant === 'sheet' ? 'sheet-status-badge' : 'w-full rounded-full px-2 py-1'}`}
       >
-        {value || 'Yet to Start'}
-        {!disabled && <ChevronDown className="h-3 w-3" />}
+        <span className="min-w-0 truncate">{value || 'Yet to Start'}</span>
+        {!disabled && <ChevronDown className="h-3 w-3 shrink-0" />}
       </button>
       {open &&
         createPortal(

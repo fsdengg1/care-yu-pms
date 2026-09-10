@@ -2,20 +2,22 @@
 
 import { useRouter } from '@/lib/navigation';
 import React, { Suspense, useEffect, useState } from 'react';
-import { FileText, GitCompare, ListPlus, Lock, LockOpen, Moon, Plus, RefreshCw, Sun, X } from 'lucide-react';
+import { FileText, GitCompare, ListPlus, Lock, Moon, Plus, RefreshCw, Sun, X } from 'lucide-react';
 import { StorageService } from '@/lib/storage';
 import { DailyStatusApi } from '@/lib/dailyStatusApi';
 import { TasksApi } from '@/lib/tasksApi';
-import { canAddDailyWorkTask, canCreateWorkTask, canEditDailySheet, canPerformPmOperations } from '@/lib/rbac';
+import { UsersApi, directoryStatus } from '@/lib/usersApi';
+import { canAddDailyWorkTask, canCreateWorkTask, canEditDailySheet } from '@/lib/rbac';
 import { CompareItem, DailyStatusPerson, DailyStatusRow, DailyStatusSubtask, appTodayIso, readStoredWorkDate, writeStoredWorkDate } from '@/lib/dailyStatus';
+import { formatEmployeeDisplayName } from '@/lib/people';
 import { User } from '@/lib/types';
 import ConfirmDialog from '@/components/work/ConfirmDialog';
 import CompareView from '@/components/work/CompareView';
-import DailyStatusReportView from '@/components/work/DailyStatusReportView';
 import DailyStatusSheet from '@/components/work/DailyStatusSheet';
 import AdditionalTaskForm from '@/components/work/AdditionalTaskForm';
 import AddSubtaskForm, { EditableSubtask, subtaskToEditable } from '@/components/work/AddSubtaskForm';
 import CreateTaskForm from '@/components/work/CreateTaskForm';
+import UserDropdown from '@/components/work/UserDropdown';
 
 function friendlyError(error: unknown, fallback: string) {
   const text = error instanceof Error ? error.message : String(error || '');
@@ -40,11 +42,23 @@ export default function DailyWorkUpdatesPage() {
   );
 }
 
+function userToSheetPerson(user: User): DailyStatusPerson {
+  return {
+    id: user.id,
+    name: user.name,
+    displayName: formatEmployeeDisplayName(user),
+    email: user.email,
+    role_name: user.role_name,
+  };
+}
+
 function DailyWorkUpdatesInner() {
   const router = useRouter();
   const [user, setUser] = useState<User | null>(null);
   const [rows, setRows] = useState<DailyStatusRow[]>([]);
   const [people, setPeople] = useState<DailyStatusPerson[]>([]);
+  const [activePeople, setActivePeople] = useState<DailyStatusPerson[]>([]);
+  const [addTaskPersonId, setAddTaskPersonId] = useState('');
   const [sheetProjects, setSheetProjects] = useState<Array<{ id: string; name: string; code: string }>>([]);
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
@@ -81,22 +95,21 @@ function DailyWorkUpdatesInner() {
   const [attendance, setAttendance] = useState<
     Array<{ personId: string; person: string; onLeave?: boolean; halfDay?: string; permission?: { fromTime?: string; toTime?: string; reason?: string } }>
   >([]);
-  const [activePanel, setActivePanel] = useState<'hub' | 'morning-status'>('hub');
-  const [reportRows, setReportRows] = useState<DailyStatusRow[]>([]);
-  const [reportLoading, setReportLoading] = useState(false);
 
   const canManageTasks = canCreateWorkTask(user);
   const canEditSheet = canEditDailySheet(user);
   const canAddTask = canAddDailyWorkTask(user);
-  const canManageMorningLock = canPerformPmOperations(user);
+  const morningLocked = Boolean(phase?.morningLocked);
+  const morningAddBlocked = period === 'morning' && morningLocked;
+  const pickerPeople = activePeople.length ? activePeople : people;
+
+  const selectedEmployeeIds = () =>
+    [...new Set(selectedIds.map((id) => rows.find((row) => row.id === id)?.personId).filter(Boolean))] as string[];
 
   const changeWorkDate = (date: string) => {
     const next = date || appTodayIso();
     setWorkDate(next);
     writeStoredWorkDate(next);
-    if (activePanel === 'morning-status') {
-      void loadMorningReport(next);
-    }
   };
 
   const loadCompare = async (date?: string) => {
@@ -128,17 +141,6 @@ function DailyWorkUpdatesInner() {
     setAttendance(sheet.attendance || []);
   };
 
-  const loadMorningReport = async (date = workDate) => {
-    setReportLoading(true);
-    const sheet = await DailyStatusApi.sheet(date, 'morning');
-    setReportLoading(false);
-    if (!sheet.ok) {
-      setError(sheet.message || 'Unable to load the morning status report.');
-      return;
-    }
-    setReportRows(sheet.rows);
-  };
-
   useEffect(() => {
     const current = StorageService.getCurrentUser();
     if (!current) return;
@@ -146,16 +148,22 @@ function DailyWorkUpdatesInner() {
     const initialDate = readStoredWorkDate();
     setWorkDate(initialDate);
     void loadSheet(initialDate, period).catch((err) => setError(friendlyError(err, 'Unable to load daily work updates.')));
+    void UsersApi.list().then((result) => {
+      if (!result.ok) return;
+      setActivePeople(
+        result.users
+          .filter((item) => {
+            const account = directoryStatus(item);
+            return item.status === 'ACTIVE' && !account.pending && account.key !== 'INACTIVE';
+          })
+          .map(userToSheetPerson)
+      );
+    });
   }, []);
 
   useEffect(() => {
     if (!user) return;
-    const panel = activePanel;
     const refresh = () => {
-      if (panel === 'morning-status') {
-        void loadMorningReport(workDate).catch(() => undefined);
-        return;
-      }
       void loadSheet(workDate, period).catch(() => undefined);
     };
     refresh();
@@ -165,13 +173,9 @@ function DailyWorkUpdatesInner() {
       window.removeEventListener('focus', refresh);
       window.clearInterval(timer);
     };
-  }, [user, workDate, period, activePanel]);
+  }, [user, workDate, period]);
 
   const refreshSheet = async () => {
-    if (activePanel === 'morning-status') {
-      await loadMorningReport(workDate);
-      return;
-    }
     await loadSheet(workDate, period);
     setSelectedIds([]);
   };
@@ -183,27 +187,6 @@ function DailyWorkUpdatesInner() {
 
   const notifyDailyUpdateSaved = () => {
     window.dispatchEvent(new CustomEvent('careyu-daily-update-saved', { detail: { workDate, period } }));
-  };
-
-  const toggleMorningLock = async (action: 'lock' | 'unlock') => {
-    setBusy(true);
-    setError(null);
-    try {
-      const result = await DailyStatusApi.morningLock(action, workDate);
-      if (!result.ok) {
-        setError(result.message || 'Unable to update Morning Status lock.');
-        return;
-      }
-      setPhase(result.data.phase || null);
-      setRows(result.data.rows);
-      if (action === 'lock' && period === 'morning') {
-        setPeriod('evening');
-      }
-      setNotice(result.data.message);
-      await loadSheet(workDate, action === 'lock' ? 'evening' : period);
-    } finally {
-      setBusy(false);
-    }
   };
 
   const openAddSubtask = (parentId?: string) => {
@@ -224,27 +207,28 @@ function DailyWorkUpdatesInner() {
     setEditingSubtask(null);
   };
 
-  const addTask = async () => {
-    if (!user) return;
-    // Sheet managers keep the quick blank-row flow; everyone else uses the create form.
-    if (!canEditSheet) {
-      setCreateOpen(true);
+  const addTask = () => {
+    const fromRows = selectedEmployeeIds();
+    const personId = addTaskPersonId || (fromRows.length === 1 ? fromRows[0] : '');
+    if (!personId) {
+      setError('Select a person first.');
       return;
     }
-    setBusy(true);
+    if (fromRows.length > 1 && !addTaskPersonId) {
+      setError('Select only one employee for Add Task.');
+      return;
+    }
     setError(null);
-    const result = await TasksApi.create({
-      title: 'New task',
-      assigned_to_id: user.id,
-      task_type: 'NON_PROJECT_TASK',
-    });
-    setBusy(false);
-    if (!result.ok) {
-      setError(result.message || 'Unable to create the task.');
-      return;
-    }
-    setNotice('Task created.');
-    await refreshSheet();
+    setAddTaskPersonId(personId);
+    setCreateOpen(true);
+  };
+
+  const handleSelectedIds = (ids: string[]) => {
+    setSelectedIds(ids);
+    const personIds = [
+      ...new Set(ids.map((id) => rows.find((row) => row.id === id)?.personId).filter(Boolean)),
+    ] as string[];
+    if (personIds.length === 1) setAddTaskPersonId(personIds[0]);
   };
 
   const exportCsv = (visibleRows: DailyStatusRow[]) => {
@@ -282,42 +266,30 @@ function DailyWorkUpdatesInner() {
             <p className="mt-0.5 text-[11px] text-slate-400">Manage daily task updates and status directly from the central task sheet.</p>
           </div>
           <div className="flex flex-wrap gap-1.5">
-            <button
-              type="button"
-              onClick={() => setActivePanel('hub')}
-              className={`inline-flex items-center gap-1 rounded-md px-2.5 py-1.5 font-bold transition-colors ${
-                activePanel === 'hub'
-                  ? 'bg-cyan-600 text-white shadow-sm'
-                  : 'border border-slate-700 text-slate-100 hover:border-cyan-600'
-              }`}
-            >
-              <FileText className="h-3.5 w-3.5" /> Daily Work Updates
-            </button>
-            <button
-              type="button"
-              onClick={() => {
-                setActivePanel('morning-status');
-                void loadMorningReport(workDate);
-              }}
-              className={`inline-flex items-center gap-1 rounded-md px-2.5 py-1.5 font-bold transition-colors ${
-                activePanel === 'morning-status'
-                  ? 'bg-amber-500 text-slate-950 shadow-sm'
-                  : 'border border-slate-700 text-slate-100 hover:border-amber-400'
-              }`}
-            >
-              <Sun className="h-3.5 w-3.5" /> Morning Status
-            </button>
-            {activePanel === 'hub' && canAddTask && (
-              <button
-                type="button"
-                disabled={busy}
-                onClick={() => void addTask()}
-                className="inline-flex items-center gap-1 rounded-md bg-cyan-600 px-2.5 py-1.5 font-bold text-white hover:bg-cyan-500 disabled:opacity-60"
-              >
-                <Plus className="h-3.5 w-3.5" /> Add Task
-              </button>
+            {canAddTask && !morningAddBlocked && (
+              <>
+                <div className="min-w-[180px]">
+                  <UserDropdown
+                    people={pickerPeople}
+                    value={addTaskPersonId}
+                    onChange={(id) => {
+                      setAddTaskPersonId(id);
+                      setError(null);
+                    }}
+                    placeholder="Select person"
+                  />
+                </div>
+                <button
+                  type="button"
+                  disabled={busy}
+                  onClick={() => addTask()}
+                  className="inline-flex items-center gap-1 rounded-md bg-cyan-600 px-2.5 py-2 font-bold text-white hover:bg-cyan-500 disabled:opacity-60"
+                >
+                  <Plus className="h-3.5 w-3.5" /> Add Task
+                </button>
+              </>
             )}
-            {activePanel === 'hub' && canAddTask && (
+            {canAddTask && !morningAddBlocked && (
               <button
                 type="button"
                 disabled={busy || subtaskParents.length === 0}
@@ -328,7 +300,7 @@ function DailyWorkUpdatesInner() {
                 <ListPlus className="h-3.5 w-3.5" /> Add Subtask
               </button>
             )}
-            {activePanel === 'hub' && (
+            {!morningAddBlocked && (
               <button
                 type="button"
                 disabled={busy}
@@ -338,61 +310,38 @@ function DailyWorkUpdatesInner() {
                 <Plus className="h-3.5 w-3.5" /> Additional Task
               </button>
             )}
-            {activePanel === 'hub' && canManageMorningLock && (
-              <button
-                type="button"
-                disabled={busy}
-                onClick={() => void toggleMorningLock(phase?.morningLocked ? 'unlock' : 'lock')}
-                className={`inline-flex items-center gap-1 rounded-md px-2.5 py-1.5 font-bold transition-colors ${
-                  phase?.morningLocked
-                    ? 'border border-amber-400 bg-amber-950/40 text-amber-200 hover:border-amber-300'
-                    : 'border border-emerald-700 bg-emerald-950/30 text-emerald-200 hover:border-emerald-500'
-                }`}
-                title={
-                  phase?.morningLocked
-                    ? 'Unlock morning task details for editing'
-                    : 'Lock morning task details and open evening updates'
-                }
-              >
-                {phase?.morningLocked ? <LockOpen className="h-3.5 w-3.5" /> : <Lock className="h-3.5 w-3.5" />}
-                {phase?.morningLocked ? 'Unlock Morning Status' : 'Lock Morning Status'}
-              </button>
-            )}
-            {activePanel === 'hub' && (
-              <>
-                <button
-                  type="button"
-                  disabled={busy}
-                  onClick={async () => {
-                    setPeriod('morning');
-                    await loadSheet(workDate, 'morning');
-                  }}
-                  className={`inline-flex items-center gap-1 rounded-md px-2.5 py-1.5 font-bold transition-colors ${
-                    period === 'morning'
-                      ? 'bg-amber-500 text-slate-950 font-extrabold shadow-sm'
-                      : 'border border-slate-700 text-slate-100 hover:border-amber-400'
-                  }`}
-                >
-                  <Sun className="h-3.5 w-3.5" /> Morning
-                </button>
-                <button
-                  type="button"
-                  disabled={busy || !phase?.morningLocked}
-                  title={!phase?.morningLocked ? 'Evening updates open after Morning Status is locked' : undefined}
-                  onClick={async () => {
-                    setPeriod('evening');
-                    await loadSheet(workDate, 'evening');
-                  }}
-                  className={`inline-flex items-center gap-1 rounded-md px-2.5 py-1.5 font-bold transition-colors ${
-                    period === 'evening'
-                      ? 'bg-indigo-600 text-white font-extrabold shadow-sm'
-                      : 'border border-slate-700 text-slate-100 hover:border-indigo-400'
-                  }`}
-                >
-                  <Moon className="h-3.5 w-3.5" /> Evening
-                </button>
-              </>
-            )}
+            <button
+              type="button"
+              disabled={busy}
+              onClick={async () => {
+                setPeriod('morning');
+                await loadSheet(workDate, 'morning');
+              }}
+              className={`inline-flex items-center gap-1 rounded-md px-2.5 py-1.5 font-bold transition-colors ${
+                period === 'morning'
+                  ? 'bg-amber-500 text-slate-950 font-extrabold shadow-sm'
+                  : 'border border-slate-700 text-slate-100 hover:border-amber-400'
+              }`}
+            >
+              {morningLocked ? <Lock className="h-3.5 w-3.5" /> : <Sun className="h-3.5 w-3.5" />}
+              {morningLocked ? 'Morning Locked • 11:00 AM' : 'Morning'}
+            </button>
+            <button
+              type="button"
+              disabled={busy || !phase?.morningLocked}
+              title={!phase?.morningLocked ? 'Evening updates open after Morning Status is locked' : undefined}
+              onClick={async () => {
+                setPeriod('evening');
+                await loadSheet(workDate, 'evening');
+              }}
+              className={`inline-flex items-center gap-1 rounded-md px-2.5 py-1.5 font-bold transition-colors ${
+                period === 'evening'
+                  ? 'bg-indigo-600 text-white font-extrabold shadow-sm'
+                  : 'border border-slate-700 text-slate-100 hover:border-indigo-400'
+              }`}
+            >
+              <Moon className="h-3.5 w-3.5" /> Evening
+            </button>
             <button
               type="button"
               disabled={compareBusy}
@@ -411,38 +360,26 @@ function DailyWorkUpdatesInner() {
       {error && <div className="mb-3 shrink-0 rounded-lg border border-rose-900 bg-rose-950/40 px-3 py-2 text-rose-300">{error}</div>}
       {notice && <div className="mb-3 shrink-0 rounded-lg border border-emerald-800 bg-emerald-950/40 px-3 py-2 text-emerald-200">{notice}</div>}
 
-      {activePanel === 'morning-status' ? (
-        <DailyStatusReportView
-          rows={reportRows}
-          workDate={workDate}
-          reportLabel="11:15 AM Daily Report"
-          intro="Please find the 11:15 AM Daily Report below. This table uses the same Daily Work Updates records as the hub."
-          loading={reportLoading}
-          onWorkDateChange={changeWorkDate}
-        />
-      ) : (
-        <DailyStatusSheet
+      <DailyStatusSheet
           rows={rows}
           people={people}
           projects={sheetProjects}
           userId={user.id}
           canEditAll={canEditSheet}
-          canDelete={canEditSheet || canManageTasks}
+          canDelete={(canEditSheet || canManageTasks) && !morningAddBlocked}
           saved={saved}
           selectedIds={selectedIds}
-          onSelectedIds={setSelectedIds}
+          onSelectedIds={handleSelectedIds}
           workDate={workDate}
           period={period}
           phase={phase || undefined}
           attendance={attendance}
-          canManageMorningLock={canManageMorningLock}
-          morningLockBusy={busy}
-          onMorningLockToggle={(action) => void toggleMorningLock(action)}
           onWorkDateChange={changeWorkDate}
-          onAddSubtask={canAddTask ? openAddSubtask : undefined}
-          onEditSubtask={canAddTask ? openEditSubtask : undefined}
+          readOnly={morningAddBlocked}
+          onAddSubtask={canAddTask && !morningAddBlocked ? openAddSubtask : undefined}
+          onEditSubtask={canAddTask && !morningAddBlocked ? openEditSubtask : undefined}
           onDeleteSubtask={
-            canAddTask
+            canAddTask && !morningAddBlocked
               ? (sub) => {
                   setConfirmSubtaskDelete(sub);
                 }
@@ -522,7 +459,6 @@ function DailyWorkUpdatesInner() {
           onExport={exportCsv}
           onDelete={() => setConfirmDelete(true)}
         />
-      )}
 
       {compareOpen && compare && (
         <div className="modal-scrim fixed inset-0 z-[85] flex justify-end overflow-x-hidden" onClick={() => setCompareOpen(false)}>
@@ -580,12 +516,18 @@ function DailyWorkUpdatesInner() {
 
       <CreateTaskForm
         open={createOpen}
-        people={people}
+        people={pickerPeople}
         projects={sheetProjects}
         currentUserId={user.id}
+        assignedToId={addTaskPersonId}
+        period={period}
+        workDate={workDate}
+        isAdditional={morningLocked}
         onClose={() => setCreateOpen(false)}
         onCreated={async (message) => {
           setNotice(message);
+          setAddTaskPersonId('');
+          setSelectedIds([]);
           await refreshSheet();
         }}
       />
@@ -596,6 +538,8 @@ function DailyWorkUpdatesInner() {
         projects={sheetProjects}
         currentUserId={user.id}
         requirePerson={canEditSheet}
+        period={period}
+        workDate={workDate}
         onClose={() => setAdditionalOpen(false)}
         onCreated={async (message) => {
           setNotice(message);
@@ -611,6 +555,8 @@ function DailyWorkUpdatesInner() {
           currentUserId={user.id}
           canAssignOthers={canManageTasks || canEditSheet}
           editing={editingSubtask}
+          period={period}
+          workDate={workDate}
           onCancel={closeSubtaskForm}
           onCreated={async (message) => {
             setNotice(message);

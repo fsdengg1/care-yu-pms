@@ -46,6 +46,8 @@ export default function PMDashboard({ user }: { user: User }) {
     priority: string;
     submitted_at?: string;
     status: string;
+    status_label?: string;
+    previous_review?: string;
     href: string;
   }>>([]);
   const [awaitingProjects, setAwaitingProjects] = useState<Project[]>([]);
@@ -197,9 +199,8 @@ export default function PMDashboard({ user }: { user: User }) {
                   <th className="py-2 pr-3">Lead ID</th>
                   <th className="py-2 pr-3">Customer</th>
                   <th className="py-2 pr-3">Lead Title</th>
-                  <th className="py-2 pr-3">Sales Owner</th>
-                  <th className="py-2 pr-3">Priority</th>
                   <th className="py-2 pr-3">Status</th>
+                  <th className="py-2 pr-3">Previous Review</th>
                   <th className="py-2 text-right">Action</th>
                 </tr>
               </thead>
@@ -209,9 +210,8 @@ export default function PMDashboard({ user }: { user: User }) {
                     <td className="py-2.5 pr-3 font-mono font-bold text-cyan-400">{lead.lead_number}</td>
                     <td className="py-2.5 pr-3">{lead.customer_name}</td>
                     <td className="py-2.5 pr-3 font-semibold text-slate-100">{lead.title}</td>
-                    <td className="py-2.5 pr-3">{lead.sales_owner}</td>
-                    <td className="py-2.5 pr-3 text-amber-300">{lead.priority}</td>
-                    <td className="py-2.5 pr-3">{LEAD_STATUS_LABELS[lead.status] || lead.status}</td>
+                    <td className="py-2.5 pr-3">{lead.status_label || LEAD_STATUS_LABELS[lead.status] || lead.status}</td>
+                    <td className="py-2.5 pr-3 text-amber-200">{lead.previous_review || '—'}</td>
                     <td className="py-2.5 text-right">
                       <Link href={lead.href} className="inline-flex items-center gap-1 rounded bg-cyan-600 px-3 py-1 text-[11px] font-bold text-white hover:bg-cyan-500">
                         View <ArrowRight className="h-3 w-3" />

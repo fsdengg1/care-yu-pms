@@ -4,7 +4,7 @@ import { User } from '../types.js';
 import {
   persistDailyStatusSnapshot,
   renderDailyStatusEmailHtml,
-  rowsForPeriod,
+  rowsForEmailReport,
   SnapshotPeriod,
 } from './dailyStatus.js';
 import { sendEmail } from './email.js';
@@ -54,10 +54,10 @@ const SLOT_META: Record<
   { timeLabel: string; cronHint: string; period: SnapshotPeriod; reportLabel: string }
 > = {
   noon: {
-    timeLabel: '11:15 AM',
-    cronHint: '15 11 * * *',
+    timeLabel: '11:00 AM',
+    cronHint: '0 11 * * *',
     period: 'morning',
-    reportLabel: '11:15 AM Daily Report',
+    reportLabel: '11:00 AM Daily Report',
   },
   evening: {
     timeLabel: '7:15 PM',
@@ -320,7 +320,7 @@ export async function sendConfiguredEmailReport(params: {
             updatedAt: new Date().toISOString(),
             source: params.source,
           } satisfies EmailReportHistoryEntry),
-        message: '11:15 AM schedule is disabled.',
+        message: '11:00 AM schedule is disabled.',
       };
     }
     if (params.slot === 'evening' && !config.sendAtEvening) {
@@ -435,7 +435,7 @@ export async function sendConfiguredEmailReport(params: {
   };
   writeHistoryEntry(pending);
 
-  const packed = rowsForPeriod(actor, meta.period, date);
+  const packed = rowsForEmailReport(actor, meta.period, date);
   // Freeze mailed rows for Compare (Task Description / Current Updates).
   persistDailyStatusSnapshot(date, meta.period, packed.rows, actor.id);
   const rendered = renderDailyStatusEmailHtml({

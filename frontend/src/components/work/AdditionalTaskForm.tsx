@@ -12,6 +12,8 @@ export default function AdditionalTaskForm({
   projects: _projects,
   currentUserId,
   requirePerson,
+  period,
+  workDate,
   onClose,
   onCreated,
 }: {
@@ -20,6 +22,8 @@ export default function AdditionalTaskForm({
   projects: Array<{ id: string; name: string }>;
   currentUserId: string;
   requirePerson: boolean;
+  period?: 'morning' | 'evening';
+  workDate?: string;
   onClose: () => void;
   onCreated: (message: string) => void;
 }) {
@@ -56,6 +60,8 @@ export default function AdditionalTaskForm({
       due_date: deadline || undefined,
       depends_on_ids: dependsOn,
       is_additional: true,
+      period,
+      work_date: workDate,
     });
     setBusy(false);
     if (!result.ok) {
