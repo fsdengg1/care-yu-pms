@@ -8,6 +8,16 @@ export function isLeadTask(item: Pick<WorkAssignment, 'task_type'> | Pick<Task, 
   return isLeadTaskType(item.task_type);
 }
 
+/** Assigned work whose parent context is a Lead (not a Project or non-project task). */
+export function isLeadBasedAssignment(
+  item: Pick<WorkAssignment, 'task_type' | 'source' | 'lead_id'>
+) {
+  if (item.task_type === 'LEAD_TASK') return true;
+  if (item.source === 'FEASIBILITY_ALLOCATION' || item.source === 'FEASIBILITY_ASSIGNMENT') return true;
+  if (item.task_type === 'PROJECT_TASK' || item.task_type === 'NON_PROJECT_TASK') return false;
+  return Boolean(item.lead_id);
+}
+
 export function leadWorkLabel(item: Pick<WorkAssignment, 'lead_number' | 'lead_name' | 'project_name'>) {
   const parts = [item.lead_number, item.lead_name].filter(Boolean);
   return parts.join(' – ') || item.project_name || 'Lead task';

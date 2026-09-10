@@ -1249,6 +1249,7 @@ export interface WorkAssignment {
   requested_by_id?: string;
   requested_by_name?: string;
   parent_task_id?: string;
+  parent_task_title?: string;
   requested_from_task_id?: string;
 }
 

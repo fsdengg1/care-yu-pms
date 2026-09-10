@@ -129,16 +129,20 @@ function latestUpdateFor(assignmentId: string, taskId?: string): DailyUpdate | u
 
 function assignmentFromTask(task: Task, project?: Project, lead?: Lead): WorkAssignment {
   const latest = latestUpdateFor(task.id, task.id);
-  const taskType = task.task_type || (task.project_id ? 'PROJECT_TASK' : 'NON_PROJECT_TASK');
-  const isLeadTask = taskType === 'LEAD_TASK';
-  const isNonProject = !isLeadTask && (taskType === 'NON_PROJECT_TASK' || !task.project_id) && !task.project_name;
-  const dependsOn = task.depends_on_id ? store.getTasks().find((item) => item.id === task.depends_on_id) : undefined;
+  const isLeadTask =
+    task.task_type === 'LEAD_TASK' ||
+    (Boolean(task.lead_id) && !task.project_id && task.task_type !== 'PROJECT_TASK' && task.task_type !== 'NON_PROJECT_TASK');
+  const taskType = task.task_type || (isLeadTask ? 'LEAD_TASK' : task.project_id ? 'PROJECT_TASK' : 'NON_PROJECT_TASK');
+  const isNonProject = !isLeadTask && (taskType === 'NON_PROJECT_TASK' || (!task.project_id && !task.project_name));
+  const allTasks = store.getTasks();
+  const dependsOn = task.depends_on_id ? allTasks.find((item) => item.id === task.depends_on_id) : undefined;
+  const parentTask = task.parent_task_id ? allTasks.find((item) => item.id === task.parent_task_id) : undefined;
   const dependencyIds = [...new Set([...(Array.isArray(task.depends_on_ids) ? task.depends_on_ids : []), task.depends_on_id].filter(Boolean))] as string[];
   const dependencyNames = dependencyIds
     .map((id) => {
       const person = store.findUserById(id);
       if (person) return formatEmployeeDisplayName(person);
-      return store.getTasks().find((item) => item.id === id)?.title;
+      return allTasks.find((item) => item.id === id)?.title;
     })
     .filter(Boolean)
     .join(', ');
@@ -194,6 +198,7 @@ function assignmentFromTask(task: Task, project?: Project, lead?: Lead): WorkAss
     requested_by_id: task.requested_by_id,
     requested_by_name: task.requested_by_name,
     parent_task_id: task.parent_task_id,
+    parent_task_title: parentTask?.title || parentTask?.description,
     requested_from_task_id: task.requested_from_task_id,
   };
 }
