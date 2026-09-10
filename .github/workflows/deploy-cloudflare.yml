@@ -1,5 +1,8 @@
 # Deploy unified CareYu PMS (React SPA + Express API) to Cloudflare Workers.
-# Requires GitHub repo secret: CLOUDFLARE_API_TOKEN
+#
+# Required GitHub Actions secret (repository settings, not committed):
+#   CLOUDFLARE_API_TOKEN  — Cloudflare API token with Workers Scripts Edit
+#     https://dash.cloudflare.com/profile/api-tokens
 #
 # Disable the old Cloudflare Pages project (careyu-frontend) in the dashboard
 # to avoid duplicate/competing frontend deployments.
@@ -9,12 +12,6 @@ name: Deploy CareYu PMS (Cloudflare Workers)
 on:
   push:
     branches: [main]
-    paths:
-      - 'frontend/**'
-      - 'backend/**'
-      - 'package.json'
-      - 'package-lock.json'
-      - '.github/workflows/deploy-cloudflare.yml'
   workflow_dispatch:
 
 concurrency:
@@ -26,7 +23,6 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       contents: read
-      deployments: write
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -34,7 +30,7 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: '20'
+          node-version: '22'
           cache: npm
 
       - name: Install dependencies
@@ -43,10 +39,27 @@ jobs:
       - name: Build frontend and backend
         run: npm run build:prod
 
-      - name: Deploy unified Worker
-        uses: cloudflare/wrangler-action@v3
-        with:
-          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-          accountId: ecea99dafa2e59907d7ee4d33150bfe4
-          workingDirectory: backend
-          command: deploy --commit-dirty=true
+      - name: Verify Worker assets exist
+        run: |
+          test -d frontend/dist
+          test -f frontend/dist/index.html
+          test -f backend/wrangler.jsonc
+
+      - name: Require Cloudflare API token
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+        run: |
+          if [ -z "$CLOUDFLARE_API_TOKEN" ]; then
+            echo "::error::Missing GitHub Actions secret CLOUDFLARE_API_TOKEN."
+            echo "Add it at https://github.com/${GITHUB_REPOSITORY}/settings/secrets/actions"
+            echo "Create a token with Account → Workers Scripts → Edit:"
+            echo "https://dash.cloudflare.com/profile/api-tokens"
+            exit 1
+          fi
+          echo "CLOUDFLARE_API_TOKEN is present (value not printed)."
+
+      - name: Deploy Worker careyu-backend-api
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ecea99dafa2e59907d7ee4d33150bfe4
+        run: npm exec -w backend -- wrangler deploy --config wrangler.jsonc
