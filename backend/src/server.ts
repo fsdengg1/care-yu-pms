@@ -4,6 +4,8 @@ import { shutdownStore } from './store/db.js';
 import { startNotificationScheduler } from './lib/reminderJob.js';
 import { startEmailReportScheduler } from './lib/emailReportJob.js';
 
+//server.js
+
 async function start() {
   console.log('Starting CareYu backend...');
   console.log(`[boot] NODE_ENV=${env.nodeEnv} PORT=${env.port} databaseSsl=${env.databaseSsl}`);
