@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useEffect, useMemo, useRef, useState } from 'react';
-import { Download, EyeOff, Filter, ListPlus, Pencil, Search, Trash2 } from 'lucide-react';
+import { Download, EyeOff, Filter, ListPlus, Lock, LockOpen, Moon, Pencil, Search, Trash2 } from 'lucide-react';
 import {
   DailyStatusPerson,
   DailyStatusRow,
@@ -109,6 +109,9 @@ export default function DailyStatusSheet({
   period,
   phase,
   attendance = [],
+  canManageMorningLock = false,
+  morningLockBusy = false,
+  onMorningLockToggle,
 }: {
   rows: DailyStatusRow[];
   people: DailyStatusPerson[];
@@ -144,6 +147,9 @@ export default function DailyStatusSheet({
     lockedByName?: string;
     manuallyUnlocked?: boolean;
   };
+  canManageMorningLock?: boolean;
+  morningLockBusy?: boolean;
+  onMorningLockToggle?: (action: 'lock' | 'unlock') => void;
   attendance?: Array<{
     personId: string;
     person: string;
@@ -158,6 +164,7 @@ export default function DailyStatusSheet({
   const [lastSelectedIndex, setLastSelectedIndex] = useState<number | null>(null);
   const selectAllRef = useRef<HTMLInputElement>(null);
   const today = workDate || todayIso();
+  const morningBaselineLocked = Boolean(period === 'evening' && phase?.morningLocked);
 
   const toggleExpand = (id: string) => {
     setExpandedIds((prev) => (prev.includes(id) ? prev.filter((item) => item !== id) : [...prev, id]));
@@ -283,18 +290,21 @@ export default function DailyStatusSheet({
         <SheetDateFilter value={workDate} onChange={onWorkDateChange} />
         {period === 'morning' ? (
           phase?.morningLocked ? (
-            <span className="rounded-full border border-amber-300 bg-amber-50 px-2 py-0.5 text-[10px] font-bold text-amber-800">
+            <span className="inline-flex items-center gap-1 rounded-full border border-amber-300 bg-amber-50 px-2 py-0.5 text-[10px] font-bold text-amber-800">
+              <Lock className="h-3 w-3" aria-hidden />
               {phase.lockSource === 'manual'
                 ? `Morning locked${phase.lockedByName ? ` by ${phase.lockedByName}` : ''}`
                 : 'Morning locked at 11:00'}
             </span>
           ) : (
-            <span className="rounded-full border border-emerald-300 bg-emerald-50 px-2 py-0.5 text-[10px] font-bold text-emerald-800">
+            <span className="inline-flex items-center gap-1 rounded-full border border-emerald-300 bg-emerald-50 px-2 py-0.5 text-[10px] font-bold text-emerald-800">
+              <LockOpen className="h-3 w-3" aria-hidden />
               Morning unlocked — edits allowed
             </span>
           )
         ) : phase?.morningLocked ? (
-          <span className="rounded-full border border-indigo-300 bg-indigo-50 px-2 py-0.5 text-[10px] font-bold text-indigo-800">
+          <span className="inline-flex items-center gap-1 rounded-full border border-indigo-300 bg-indigo-50 px-2 py-0.5 text-[10px] font-bold text-indigo-800">
+            <Moon className="h-3 w-3" aria-hidden />
             Evening updates open
           </span>
         ) : (
@@ -302,6 +312,26 @@ export default function DailyStatusSheet({
             Lock morning status to enter evening updates
           </span>
         )}
+        {canManageMorningLock && onMorningLockToggle ? (
+          <button
+            type="button"
+            disabled={morningLockBusy}
+            onClick={() => onMorningLockToggle(phase?.morningLocked ? 'unlock' : 'lock')}
+            className={`inline-flex items-center gap-1 rounded-md px-2 py-1 text-[10px] font-bold transition-colors disabled:opacity-60 ${
+              phase?.morningLocked
+                ? 'border border-amber-400 bg-amber-50 text-amber-900 hover:border-amber-500'
+                : 'border border-emerald-600 bg-emerald-50 text-emerald-900 hover:border-emerald-500'
+            }`}
+            title={
+              phase?.morningLocked
+                ? 'Unlock morning task details for editing'
+                : 'Lock morning task details and open evening updates'
+            }
+          >
+            {phase?.morningLocked ? <LockOpen className="h-3 w-3" /> : <Lock className="h-3 w-3" />}
+            {phase?.morningLocked ? 'Unlock Morning Status' : 'Lock Morning Status'}
+          </button>
+        ) : null}
         <div className="relative min-w-[200px] flex-1">
           <Search className="absolute left-2.5 top-2 h-3.5 w-3.5 text-[#94a3b8]" />
           <input
@@ -443,6 +473,7 @@ export default function DailyStatusSheet({
                 group.rows.map((row, index) => {
                   const rowIndex = flatIndex++;
                   const editable = canEditRow(row);
+                  const baselineEditable = editable && !morningBaselineLocked;
                   const tone = deadlineTone(row.status, row.deadlineIso || row.deadline, today);
                   const personAttendance = attendance.find((item) => item.personId === group.personId);
                   return (
@@ -461,7 +492,7 @@ export default function DailyStatusSheet({
                       )}
                     {index === 0 && (
                       <td className="person-cell" rowSpan={group.rows.length}>
-                        {canEditAll && !readOnly ? (
+                        {canEditAll && !readOnly && !morningBaselineLocked ? (
                           <UserDropdown
                             variant="sheet"
                             people={pickerPeople}
@@ -503,7 +534,7 @@ export default function DailyStatusSheet({
                         />
                         <span className="sheet-text">{row.project || '—'}</span>
                       </div>
-                    ) : editable ? (
+                    ) : baselineEditable ? (
                       <AutoResizeTextarea
                         key={`${row.id}-${row.project}`}
                         defaultValue={row.project === '—' ? '' : row.project}
@@ -551,7 +582,7 @@ export default function DailyStatusSheet({
                         )}
                         <div className="flex items-start gap-1">
                           <div className="min-w-0 flex-1">
-                            {editable && period !== 'evening' ? (
+                            {baselineEditable && period !== 'evening' ? (
                               <AutoResizeTextarea
                                 key={row.taskDescription}
                                 defaultValue={row.taskDescription}
@@ -593,7 +624,7 @@ export default function DailyStatusSheet({
                               </div>
                             ) : null}
                           </div>
-                          {onAddSubtask && editable && (
+                          {onAddSubtask && baselineEditable && (
                             <button
                               type="button"
                               onClick={() => onAddSubtask(row.id)}
@@ -658,7 +689,7 @@ export default function DailyStatusSheet({
                     </div>
                   </td>
                   <td className="deps-cell">
-                    {editable ? (
+                    {baselineEditable ? (
                       <DependencyMultiSelect
                         variant="sheet"
                         people={pickerPeople.filter((person) => person.id !== row.personId)}
@@ -684,7 +715,7 @@ export default function DailyStatusSheet({
                     )}
                   </td>
                   <td className="date-cell">
-                    {editable ? (
+                    {baselineEditable ? (
                       <input
                         type="date"
                         className="sheet-input sheet-date-input"
@@ -696,7 +727,7 @@ export default function DailyStatusSheet({
                     )}
                   </td>
                   <td className={`date-cell tone-cell ${deadlineCellClass(tone)}`} style={deadlineCellStyle(tone)}>
-                    {editable ? (
+                    {baselineEditable ? (
                       <input
                         type="date"
                         className="sheet-input sheet-date-input"

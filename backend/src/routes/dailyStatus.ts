@@ -17,6 +17,7 @@ import {
   sheetPhase,
   renderDailyStatusEmailHtml,
   restoreDailyStatusReport,
+  rejectMorningBaselinePatch,
   rowsForPeriod,
   saveDailyStatusSnapshot,
   sendDailyStatusReport,
@@ -369,6 +370,10 @@ router.patch(
       });
     }
     const body: Record<string, unknown> = { ...(req.body || {}) };
+    const baselineBlocked = rejectMorningBaselinePatch(period, date, body);
+    if (baselineBlocked) {
+      return res.status(400).json({ message: baselineBlocked });
+    }
     if (body.remarks !== undefined && body.delay_reason === undefined && body.reason_for_delay === undefined) {
       body.delay_reason = body.remarks;
     }

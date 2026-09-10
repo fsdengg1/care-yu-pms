@@ -807,7 +807,60 @@ export function buildDailyStatusRows(
       currentUpdate: item.leaveReason || '',
     }));
 
-  return [...leaveRows, ...taskRows].sort((a, b) => a.person.localeCompare(b.person) || a.project.localeCompare(b.project));
+  let combined = [...leaveRows, ...taskRows];
+  if (period === 'evening' && morningLocked) {
+    combined = applyMorningBaselineToEveningRows(combined, workDate);
+  }
+  return combined.sort((a, b) => a.person.localeCompare(b.person) || a.project.localeCompare(b.project));
+}
+
+/** Morning snapshot fields stay fixed as the evening baseline once morning is locked. */
+function applyMorningBaselineToEveningRows(rows: DailyStatusRow[], workDate: string): DailyStatusRow[] {
+  const morningSnap = loadDailyStatusSnapshot(workDate, 'morning');
+  if (!morningSnap?.length) return rows;
+  const morningById = new Map(morningSnap.map((row) => [row.id, row]));
+  return rows.map((row) => {
+    if (row.rowKind === 'leave' || row.rowKind === 'permission') return row;
+    const baseline = morningById.get(row.id);
+    if (!baseline) return row;
+    return {
+      ...row,
+      person: baseline.person,
+      project: baseline.project,
+      projectId: baseline.projectId,
+      taskDescription: baseline.taskDescription,
+      dependencyIds: baseline.dependencyIds,
+      dependencies: baseline.dependencies,
+      startDate: baseline.startDate,
+      startDateIso: baseline.startDateIso,
+      deadline: baseline.deadline,
+      deadlineIso: baseline.deadlineIso,
+      morningStatus: baseline.status,
+      morningProgressPercent: baseline.progressPercent,
+    };
+  });
+}
+
+const MORNING_BASELINE_PATCH_KEYS = new Set([
+  'description',
+  'title',
+  'project_name',
+  'project_id',
+  'start_date',
+  'due_date',
+  'depends_on_ids',
+  'assigned_to_id',
+]);
+
+export function rejectMorningBaselinePatch(
+  period: SnapshotPeriod | undefined,
+  workDate: string,
+  body: Record<string, unknown>
+): string | null {
+  if (period !== 'evening' || !isMorningStatusLocked(workDate)) return null;
+  const blocked = Object.keys(body).filter((key) => MORNING_BASELINE_PATCH_KEYS.has(key));
+  if (!blocked.length) return null;
+  return 'Morning baseline fields are locked. Edit evening updates, status, hours, or delay reason only.';
 }
 
 export function buildDailyStatusKpis(user: User, rows = visibleSheetRows(buildDailyStatusRows(user))): DailyStatusKpis {
@@ -1053,6 +1106,9 @@ export function rowsForPeriod(user: User, period: SnapshotPeriod, date = todayIs
     if (frozen?.length && isMorningStatusLocked(date)) {
       return { rows: scopedDailyStatusRows(user, frozen), source: 'snapshot', available: true };
     }
+  }
+  if (period === 'evening' && isMorningStatusLocked(date)) {
+    ensureMorningSnapshot(user, date);
   }
   // Evening reports always use live Daily Work Updates — never mailed/snapshot rows.
   return {

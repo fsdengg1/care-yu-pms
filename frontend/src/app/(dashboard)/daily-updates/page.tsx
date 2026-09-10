@@ -435,6 +435,9 @@ function DailyWorkUpdatesInner() {
           period={period}
           phase={phase || undefined}
           attendance={attendance}
+          canManageMorningLock={canManageMorningLock}
+          morningLockBusy={busy}
+          onMorningLockToggle={(action) => void toggleMorningLock(action)}
           onWorkDateChange={changeWorkDate}
           onAddSubtask={canAddTask ? openAddSubtask : undefined}
           onEditSubtask={canAddTask ? openEditSubtask : undefined}
