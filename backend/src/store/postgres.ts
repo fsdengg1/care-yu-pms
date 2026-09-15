@@ -300,6 +300,29 @@ export async function loadAllCollections(): Promise<Record<CollectionName, unkno
   return out;
 }
 
+export async function loadSelectedCollections(names: CollectionName[]): Promise<Partial<Record<CollectionName, unknown[]>>> {
+  const out: Partial<Record<CollectionName, unknown[]>> = {};
+  if (!names.length) return out;
+  const { loadRelationalRows } = await import('./relationalStore.js');
+  const pool = getPool();
+  for (const name of names) {
+    if (name === 'users') continue;
+    out[name] = await loadRelationalRows(pool, name);
+  }
+  return out;
+}
+
+export async function loadLeadRowById(id: string): Promise<Record<string, unknown> | undefined> {
+  const { loadRelationalRows } = await import('./relationalStore.js');
+  const rows = await loadRelationalRows(getPool(), 'leads', 'record_key = $1 OR lead_number = $1', [id]);
+  return rows[0];
+}
+
+export async function loadAssignmentsForLead(leadId: string): Promise<Record<string, unknown>[]> {
+  const { loadRelationalRows } = await import('./relationalStore.js');
+  return loadRelationalRows(getPool(), 'feasibilityTeamAssignments', 'lead_id = $1', [leadId]);
+}
+
 export async function saveAllCollections(
   collections: Record<CollectionName, unknown[]>,
   only?: CollectionName[],

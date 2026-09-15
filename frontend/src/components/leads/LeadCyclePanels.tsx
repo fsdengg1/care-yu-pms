@@ -3,7 +3,7 @@
 import React, { useState } from 'react';
 import { LeadApi } from '@/lib/leadApi';
 import { canPerformPmOperations, canPrepareCosting, canPrepareFeasibility, canPrepareQuotation, isCeoViewOnly, userIsOnLeadTeam } from '@/lib/rbac';
-import { CostingRecord, FeasibilityReviewRecord, FeasibilityStudy, FeasibilityTeamAssignment, Lead, Team, User } from '@/lib/types';
+import { CostingRecord, FeasibilityReviewRecord, FeasibilityStudy, FeasibilityTeamAssignment, Lead, LeadWorkflowPayload, Team, User } from '@/lib/types';
 import { formatDateTime, formatInrCompact, WorkflowActionKind, WORKFLOW_ACTION_SUCCESS } from '@/lib/format';
 import EntityDocumentUpload from '@/components/documents/EntityDocumentUpload';
 import { WorkflowActionFeedback } from '@/components/leads/WorkflowStatusBanner';
@@ -20,7 +20,7 @@ interface Props {
   teams: Team[];
   users: User[];
   assignments?: FeasibilityTeamAssignment[];
-  onUpdated: (feedback?: WorkflowActionFeedback) => void;
+  onUpdated: (feedback?: WorkflowActionFeedback, payload?: LeadWorkflowPayload | null) => void;
 }
 
 const emptyStudy = (lead: Lead): FeasibilityStudy => ({
@@ -222,10 +222,17 @@ export default function LeadCyclePanels({ lead, currentUser, teams, users, assig
         setError(fail);
       } else {
         onSuccess?.();
+        const payload =
+          result && typeof result === 'object' && 'payload' in result
+            ? ((result as { payload?: LeadWorkflowPayload }).payload ?? null)
+            : result && typeof result === 'object' && 'lead' in result
+              ? (result as LeadWorkflowPayload)
+              : null;
         onUpdated(
           action
             ? { kind: action, message: WORKFLOW_ACTION_SUCCESS[action], previousStatus: lead.status }
-            : undefined
+            : undefined,
+          payload
         );
       }
     } catch {

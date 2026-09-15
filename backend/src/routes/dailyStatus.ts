@@ -47,7 +47,7 @@ import {
 import { attendanceForUsers } from '../lib/leaveRequests.js';
 import { normalizeDelayReason } from '../lib/workCalendar.js';
 import { env } from '../config/env.js';
-import { flushStore, store } from '../store/db.js';
+import { flushStore, replaceCollectionsFromPostgres, store } from '../store/db.js';
 
 const router = Router();
 
@@ -73,7 +73,8 @@ router.use(requireAuth);
 router.get(
   '/sheet',
   requirePermission('view:daily-updates', 'submit:daily-update', 'view:dashboard:ceo'),
-  (req: AuthedRequest, res) => {
+  async (req: AuthedRequest, res) => {
+    await replaceCollectionsFromPostgres(['tasks', 'systemMeta', 'dailyUpdates']);
     const user = req.user!;
     const date = readIsoDate(req.query.date);
     const period = typeof req.query.period === 'string' && req.query.period ? readPeriod(req.query.period) : undefined;

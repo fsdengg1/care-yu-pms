@@ -57,19 +57,9 @@ export const LeadApi = {
   async get(id: string): Promise<LeadWorkflowPayload | null> {
     const result = await call<LeadWorkflowPayload>(`/api/leads/${id}`);
     if (result.ok) return syncPayload(result.data);
-    const lead = StorageService.getLeadById(id);
-    if (!lead) return null;
-    return {
-      lead,
-      documents: StorageService.getLeadDocuments(lead.id),
-      comments: StorageService.getLeadComments(lead.id),
-      activities: StorageService.getLeadActivities(lead.id),
-      history: StorageService.getLeadStatusHistory(lead.id),
-      assignments: StorageService.getFeasibilityTeamAssignmentsByLeadId(lead.id),
-      allocations: StorageService.getFeasibilityAllocationsByLeadId(lead.id),
-      teams: StorageService.getTeams(),
-      users: StorageService.getUsers(),
-    };
+    // Never fall back to localStorage for failed/forbidden reads — that keeps PM
+    // Approve panels and empty Feasibility Teams after a successful API assign.
+    return null;
   },
 
   async create(body: Partial<Lead>) {

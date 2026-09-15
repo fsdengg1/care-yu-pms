@@ -162,6 +162,23 @@ export async function loadRelationalCollections(
   return out;
 }
 
+function tableDef(collection: CollectionName): TableDef | undefined {
+  return RELATIONAL_TABLES.find((item) => item.collection === collection);
+}
+
+export async function loadRelationalRows(
+  client: pg.Pool | pg.PoolClient,
+  collection: CollectionName,
+  whereSql?: string,
+  params: unknown[] = []
+): Promise<Record<string, unknown>[]> {
+  const def = tableDef(collection);
+  if (!def) return [];
+  const sql = whereSql ? `SELECT * FROM ${def.table} WHERE ${whereSql}` : `SELECT * FROM ${def.table}`;
+  const result = await client.query<Record<string, unknown>>(sql, params);
+  return result.rows.map((row) => rowToRecord(def, row));
+}
+
 export async function saveRelationalCollections(
   client: pg.PoolClient,
   collections: Partial<Record<CollectionName, unknown[]>>,
@@ -185,8 +202,13 @@ export async function saveRelationalCollections(
       continue;
     }
     if (!touchedKeys?.size) {
-      const keepKeys = allRecords.map((record) => String(record.id));
-      await client.query(`DELETE FROM ${def.table} WHERE NOT (record_key = ANY($1::text[]))`, [keepKeys]);
+      // On Cloudflare Workers, multiple isolates each hold a partial in-memory cache.
+      // Reconciling with DELETE ... WHERE NOT IN keepKeys lets a stale isolate wipe
+      // leads/assignments another isolate just wrote (assign 200 → GET still SUBMITTED_TO_PM).
+      if (process.env.CLOUDFLARE_WORKER !== '1') {
+        const keepKeys = allRecords.map((record) => String(record.id));
+        await client.query(`DELETE FROM ${def.table} WHERE NOT (record_key = ANY($1::text[]))`, [keepKeys]);
+      }
     }
     const sql = insertSql(def);
     for (const record of records) {

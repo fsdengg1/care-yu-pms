@@ -700,8 +700,11 @@ export function assignTeamToLead(
     updated_at: new Date().toISOString(),
   };
 
-  const assignments = store.getFeasibilityTeamAssignments().filter(
-    (item) => !(item.lead_id === lead.id && item.team_id === team.id && item.status !== 'CANCELLED')
+  const now = new Date().toISOString();
+  const assignments = store.getFeasibilityTeamAssignments().map((item) =>
+    item.lead_id === lead.id && item.team_id === team.id && item.status !== 'CANCELLED'
+      ? { ...item, status: 'CANCELLED' as const, updated_at: now }
+      : item
   );
   assignments.unshift(assignment);
   store.saveFeasibilityTeamAssignments(assignments);
@@ -710,7 +713,6 @@ export function assignTeamToLead(
     lead.status === 'ACCEPTED_FOR_FEASIBILITY' || lead.status === 'FEASIBILITY_IN_PROGRESS'
       ? lead
       : approveLeadForAssignment(lead, user, notes);
-  const now = new Date().toISOString();
   const existingIds = [...new Set([...(working.assigned_team_ids || []), ...(working.assigned_team_id ? [working.assigned_team_id] : []), team.id])];
   const existingNames = [...new Set([...(working.assigned_team_names || []), ...(working.assigned_team_name ? [working.assigned_team_name] : []), team.name])];
   const pending = store

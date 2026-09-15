@@ -42,6 +42,9 @@ import {
   closePool,
   ensureSchema,
   loadAllCollections,
+  loadAssignmentsForLead,
+  loadLeadRowById,
+  loadSelectedCollections,
   pingDatabase,
   saveAllCollections,
 } from './postgres.js';
@@ -708,8 +711,14 @@ function schedulePersist(db: DbShape, dirty: DirtySnapshot, options?: { backgrou
   writeChain = promise.catch((error) => {
     console.error('[store] Failed to persist to Postgres:', error);
   });
-  if (options?.background && workerWaitUntil) {
+  // Always extend the Worker lifetime for pending Postgres writes. Without this,
+  // fire-and-forget saves from saveDb()/enqueuePersist() can be dropped when the
+  // isolate freezes after the HTTP response — causing approve/assign to look
+  // successful in-memory while GET reloads the old SUBMITTED_TO_PM row.
+  if (workerWaitUntil) {
     workerWaitUntil(promise);
+  }
+  if (options?.background && workerWaitUntil) {
     return promise;
   }
   return promise;
@@ -756,9 +765,10 @@ export async function transact<T>(fn: () => T | Promise<T>): Promise<T> {
       const result = await fn();
       persistPaused = false;
       const dirty = takeDirty();
-      if (workerWaitUntil) {
-        schedulePersist(loadDb(), dirty, { background: true });
-      } else {
+      if (dirty.collections.length) {
+        // Always await Postgres durability before returning. waitUntil-only background
+        // flushes were dropped across Worker isolates, so approve/assign looked successful
+        // then GET reloaded the previous SUBMITTED_TO_PM row.
         await schedulePersist(loadDb(), dirty);
       }
       return result;
@@ -776,6 +786,159 @@ export async function transact<T>(fn: () => T | Promise<T>): Promise<T> {
     () => undefined
   );
   return run;
+}
+
+function rowTimestamp(row: { updated_at?: string; created_at?: string } | undefined): number {
+  if (!row) return 0;
+  return Date.parse(row.updated_at || row.created_at || '') || 0;
+}
+
+const LEAD_STATUS_RANK: Record<string, number> = {
+  DRAFT: 0,
+  SUBMITTED_TO_PM: 1,
+  UNDER_PM_REVIEW: 1,
+  RESUBMITTED_TO_PM: 1,
+  RETURNED_TO_SALES: 1,
+  ADDITIONAL_INFORMATION_REQUIRED: 1,
+  ACCEPTED_FOR_FEASIBILITY: 2,
+  FEASIBILITY_IN_PROGRESS: 3,
+  FEASIBILITY_RETURNED: 3,
+  FEASIBILITY_SUBMITTED: 4,
+  FEASIBILITY_REJECTED: 4,
+  COSTING_IN_PROGRESS: 5,
+  COSTING_SUBMITTED: 6,
+  COSTING_RETURNED: 5,
+  QUOTATION: 7,
+  NEGOTIATION: 8,
+  ORDER_CONVERTED: 9,
+  WON: 9,
+  LOST: 9,
+  CANCELLED: 9,
+};
+
+function preferLeadRow(local: Lead | undefined, remote: Lead | undefined): Lead | undefined {
+  if (!remote) return local;
+  if (!local) return remote;
+  const localRank = LEAD_STATUS_RANK[local.status] ?? 0;
+  const remoteRank = LEAD_STATUS_RANK[remote.status] ?? 0;
+  if (localRank !== remoteRank) return localRank > remoteRank ? local : remote;
+  return rowTimestamp(local) >= rowTimestamp(remote) ? local : remote;
+}
+
+function mergeRowsById<T extends { id?: string; updated_at?: string; created_at?: string }>(
+  remoteRows: T[],
+  localRows: T[]
+): T[] {
+  const byId = new Map<string, T>();
+  for (const row of remoteRows) {
+    if (row?.id) byId.set(String(row.id), row);
+  }
+  for (const row of localRows) {
+    if (!row?.id) continue;
+    const id = String(row.id);
+    const existing = byId.get(id);
+    if (!existing || rowTimestamp(row) >= rowTimestamp(existing)) {
+      byId.set(id, row);
+    }
+  }
+  return [...byId.values()];
+}
+
+/** Pull selected collections from Postgres into the in-memory cache (after pending writes). */
+/** Replace in-memory collections from Postgres without merging stale isolate rows. */
+export async function replaceCollectionsFromPostgres(names: CollectionName[]): Promise<void> {
+  if (!cache) {
+    throw new Error('Store not initialized. Call initStore() before handling requests.');
+  }
+  if (!names.length) return;
+  await writeChain;
+  const remote = await loadSelectedCollections(names);
+  const db = loadDb();
+  for (const name of names) {
+    (db as unknown as Record<string, unknown[]>)[name] = (remote[name] || []) as unknown[];
+  }
+  cache = db;
+}
+
+export async function refreshCollectionsFromPostgres(names?: CollectionName[]): Promise<void> {
+  if (!cache) {
+    throw new Error('Store not initialized. Call initStore() before handling requests.');
+  }
+  if (names && !names.length) return;
+  await writeChain;
+  const selected = names?.length ? names : [...COLLECTION_NAMES];
+  const remote = await loadSelectedCollections(selected);
+  const db = loadDb();
+  for (const name of selected) {
+    const remoteRows = (remote[name] || []) as Array<{ id?: string; updated_at?: string; created_at?: string; status?: string }>;
+    const localRows = ((db[name] as Array<{ id?: string; updated_at?: string; created_at?: string; status?: string }> | undefined) || []);
+    if (name === 'leads') {
+      const byId = new Map<string, Lead>();
+      for (const row of remoteRows as Lead[]) {
+        if (row?.id) byId.set(String(row.id), row);
+      }
+      for (const row of localRows as Lead[]) {
+        if (!row?.id) continue;
+        const preferred = preferLeadRow(row, byId.get(String(row.id)));
+        if (preferred) byId.set(String(row.id), preferred);
+      }
+      db.leads = [...byId.values()];
+      continue;
+    }
+    (db as unknown as Record<string, unknown>)[name] = mergeRowsById(remoteRows, localRows);
+  }
+  if (!names?.length || names.includes('teams')) {
+    refreshTeamCounts(db);
+  }
+  cache = db;
+}
+
+function matchLead(id: string): Lead | undefined {
+  return loadDb().leads.find((item) => item.id === id || item.lead_number === id);
+}
+
+function upsertCachedLead(lead: Lead) {
+  const db = loadDb();
+  const leads = db.leads ?? [];
+  const index = leads.findIndex((item) => item.id === lead.id || item.lead_number === lead.lead_number);
+  if (index === -1) leads.unshift(lead);
+  else leads[index] = { ...leads[index], ...lead };
+  db.leads = leads;
+  cache = db;
+}
+
+function upsertCachedAssignments(leadId: string, incoming: FeasibilityTeamAssignment[]) {
+  const db = loadDb();
+  const current = db.feasibilityTeamAssignments ?? [];
+  const retained = current.filter((item) => item.lead_id !== leadId);
+  const forLead = current.filter((item) => item.lead_id === leadId);
+  db.feasibilityTeamAssignments = [...mergeRowsById(incoming, forLead), ...retained];
+  cache = db;
+}
+
+/**
+ * Load one lead (and its feasibility assignments) from Postgres into this isolate.
+ * Other Worker isolates only see assign/approve after this merge.
+ */
+export async function ensureLeadLoaded(id: string, attempts = 8): Promise<Lead | undefined> {
+  await writeChain;
+  for (let attempt = 0; attempt < attempts; attempt += 1) {
+    const direct = await loadLeadRowById(id);
+    if (direct?.id) {
+      const asLead = direct as unknown as Lead;
+      const preferred = preferLeadRow(matchLead(asLead.id) || matchLead(id), asLead);
+      if (preferred) upsertCachedLead(preferred);
+      const assignmentRows = (await loadAssignmentsForLead(String(direct.id))) as unknown as FeasibilityTeamAssignment[];
+      upsertCachedAssignments(String(direct.id), assignmentRows);
+      const found = matchLead(String(direct.id)) || matchLead(id);
+      if (found) return found;
+    }
+    await refreshCollectionsFromPostgres(['leads', 'feasibilityTeamAssignments']);
+    const found = matchLead(id);
+    if (found) return found;
+    await new Promise((resolve) => setTimeout(resolve, Math.min(2000, 400 * (attempt + 1))));
+  }
+  return matchLead(id);
 }
 
 export async function initStore(options?: { forceImportLocal?: boolean }): Promise<{
@@ -843,6 +1006,21 @@ export async function initStore(options?: { forceImportLocal?: boolean }): Promi
 export async function flushStore(): Promise<void> {
   await writeChain;
 }
+
+/** Lead workflow collections that must stay consistent across Worker isolates. */
+export const LEAD_SYNC_COLLECTIONS: CollectionName[] = [
+  'leads',
+  'feasibilityTeamAssignments',
+  'feasibilityEmployeeAllocations',
+  'leadDocuments',
+  'leadComments',
+  'leadActivities',
+  'leadStatusHistory',
+  'assignmentHistory',
+  'entityDocuments',
+  'tasks',
+  'notifications',
+];
 
 export async function shutdownStore(): Promise<void> {
   await flushStore();
@@ -1042,7 +1220,10 @@ export const store = {
   saveFeasibilityTeamAssignments(feasibilityTeamAssignments: FeasibilityTeamAssignment[]) {
     const db = loadDb();
     db.feasibilityTeamAssignments = feasibilityTeamAssignments;
-    markDirty('feasibilityTeamAssignments');
+    markDirtyRecords(
+      'feasibilityTeamAssignments',
+      ...feasibilityTeamAssignments.map((item) => item.id).filter(Boolean)
+    );
     saveDb(db);
   },
   getFeasibilityEmployeeAllocations(): FeasibilityEmployeeAllocation[] {

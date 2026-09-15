@@ -21,7 +21,8 @@ import { projectStageFlowSummary } from '@/lib/projectStageFlow';
 import { canCreateLead, canCreateLeadTask } from '@/lib/rbac';
 import {
   Lead, LeadActivity, LeadComment, LeadDocument, LeadStatusHistory,
-  FeasibilityTeamAssignment, FeasibilityEmployeeAllocation, Team, User, PriorityLevel, AssignmentType, AssignmentHistory, EntityDocument, Task
+  FeasibilityTeamAssignment, FeasibilityEmployeeAllocation, Team, User, PriorityLevel, AssignmentType, AssignmentHistory, EntityDocument, Task,
+  LeadWorkflowPayload,
 } from '@/lib/types';
 import { resolveLeadIdFromLocation, leadDetailHref } from '@/lib/leadRoutes';
 import {
@@ -115,7 +116,26 @@ export default function LeadDetailPage() {
   const [suggestionComment, setSuggestionComment] = useState('');
   const [clarificationComment, setClarificationComment] = useState('');
 
-  const loadData = useCallback(async () => {
+  const applyPayload = useCallback((payload: LeadWorkflowPayload) => {
+    setLead(payload.lead);
+    setActivities(payload.activities || StorageService.getLeadActivities(payload.lead.id));
+    setComments(payload.comments || StorageService.getLeadComments(payload.lead.id));
+    setDocuments(payload.documents || StorageService.getLeadDocuments(payload.lead.id));
+    setAdditionalDocuments(payload.additionalDocuments || []);
+    setHistory(payload.history || StorageService.getLeadStatusHistory(payload.lead.id));
+    setTeamAssignments(
+      payload.assignments !== undefined
+        ? payload.assignments
+        : StorageService.getFeasibilityTeamAssignmentsByLeadId(payload.lead.id)
+    );
+    setResubmitTechInput(payload.lead.technical_specifications || '');
+    setAllTeams(payload.teams?.length ? payload.teams : StorageService.getTeams());
+    setAllUsers(payload.users?.length ? payload.users : StorageService.getUsers());
+    setAssignmentHistory(payload.assignmentHistory || []);
+    setLeadTasks(payload.tasks || []);
+  }, []);
+
+  const loadData = useCallback(async (preferred?: LeadWorkflowPayload) => {
     if (!leadId) {
       setLoadError('Lead not found. The link may be invalid or expired.');
       setLoading(false);
@@ -123,24 +143,25 @@ export default function LeadDetailPage() {
     }
     setLoading(true);
     setLoadError(null);
+    if (preferred?.lead) applyPayload(preferred);
     const payload = await LeadApi.get(leadId);
     if (payload) {
-      setLead(payload.lead);
-      setActivities(payload.activities || StorageService.getLeadActivities(payload.lead.id));
-      setComments(payload.comments || StorageService.getLeadComments(payload.lead.id));
-      setDocuments(payload.documents || StorageService.getLeadDocuments(payload.lead.id));
-      setAdditionalDocuments(payload.additionalDocuments || []);
-      setHistory(payload.history || StorageService.getLeadStatusHistory(payload.lead.id));
-      setTeamAssignments(
-        payload.assignments !== undefined
-          ? payload.assignments
-          : StorageService.getFeasibilityTeamAssignmentsByLeadId(payload.lead.id)
+      const preferredStatus = preferred?.lead?.status;
+      const preferredAssigned = (preferred?.assignments || []).filter((item) => item.status !== 'CANCELLED').length;
+      const incomingAssigned = (payload.assignments || []).filter((item) => item.status !== 'CANCELLED').length;
+      const preferredAdvanced = Boolean(
+        preferredStatus && ['ACCEPTED_FOR_FEASIBILITY', 'FEASIBILITY_IN_PROGRESS'].includes(preferredStatus)
       );
-      setResubmitTechInput(payload.lead.technical_specifications || '');
-      setAllTeams(payload.teams?.length ? payload.teams : StorageService.getTeams());
-      setAllUsers(payload.users?.length ? payload.users : StorageService.getUsers());
-      setAssignmentHistory(payload.assignmentHistory || []);
-      setLeadTasks(payload.tasks || []);
+      const incomingIntake = ['SUBMITTED_TO_PM', 'UNDER_PM_REVIEW', 'RESUBMITTED_TO_PM'].includes(payload.lead.status);
+      const keepPreferred =
+        Boolean(preferred?.lead) &&
+        preferredAdvanced &&
+        (incomingIntake || preferredAssigned > incomingAssigned);
+      if (!keepPreferred) applyPayload(payload);
+      setLoading(false);
+      return;
+    }
+    if (preferred?.lead) {
       setLoading(false);
       return;
     }
@@ -148,7 +169,7 @@ export default function LeadDetailPage() {
     setAllUsers(StorageService.getUsers());
     setLoadError('Unable to load this lead. It may have been removed or you may not have access.');
     setLoading(false);
-  }, [leadId]);
+  }, [applyPayload, leadId]);
 
   useEffect(() => {
     if (authLoading) return;
@@ -244,12 +265,12 @@ export default function LeadDetailPage() {
   const canPmDecide = isResponsible && ['SUBMITTED_TO_PM', 'UNDER_PM_REVIEW', 'RESUBMITTED_TO_PM'].includes(lead.status);
   const canForward = isResponsible && !['DRAFT', 'ORDER_CONVERTED', 'LOST', 'CANCELLED'].includes(lead.status);
 
-  const handleWorkflowUpdated = async (feedback?: WorkflowActionFeedback) => {
+  const handleWorkflowUpdated = async (feedback?: WorkflowActionFeedback, payload?: LeadWorkflowPayload | null) => {
     if (feedback) {
       setActionError(null);
       setWorkflowFeedback(feedback);
     }
-    await loadData();
+    await loadData(payload || undefined);
   };
 
   const handleForwardLead = async () => {
@@ -359,7 +380,10 @@ export default function LeadDetailPage() {
       }
       setShowAddTeamModal(false);
       setAddTeamForm({ teamIds: [], assignmentType: 'NORMAL', priority: 'High', dueDate: '', pmInstructions: '', expectedOutput: '', criticalReason: '', employeeId: '', bypassConfirmed: false });
-      await loadData();
+      await handleWorkflowUpdated(
+        { kind: 'approve', message: 'Assigned to feasibility team successfully.', previousStatus: lead.status },
+        result.payload
+      );
       return;
     }
 
@@ -393,7 +417,10 @@ export default function LeadDetailPage() {
     }
     setShowAddTeamModal(false);
     setAddTeamForm({ teamIds: [], assignmentType: 'NORMAL', priority: 'High', dueDate: '', pmInstructions: '', expectedOutput: '', criticalReason: '', employeeId: '', bypassConfirmed: false });
-    await loadData();
+    await handleWorkflowUpdated(
+      { kind: 'approve', message: 'Assigned to feasibility team successfully.', previousStatus: lead.status },
+      result.payload
+    );
   };
 
   // ---- TL Actions ----
@@ -488,7 +515,7 @@ export default function LeadDetailPage() {
     { key: 'requirement', label: 'Requirement' },
     { key: 'technical', label: 'Technical Inputs' },
     { key: 'commercial', label: 'Commercial' },
-    { key: 'feasibility', label: `Feasibility Teams (${teamAssignments.length})` },
+    { key: 'feasibility', label: `Feasibility Teams (${teamAssignments.filter((a) => a.status !== 'CANCELLED').length})` },
     { key: 'costing', label: 'Solution & Costing' },
     { key: 'documents', label: `Documents (${documents.length + additionalDocuments.length})` },
     { key: 'communication', label: `Customer Comm. (${activities.length})` },

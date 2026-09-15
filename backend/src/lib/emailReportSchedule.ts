@@ -4,6 +4,7 @@ import { User } from '../types.js';
 import {
   COMPANY_LEAVE_MESSAGE,
   isCompanyLeaveDay,
+  isMorningStatusLocked,
   persistDailyStatusSnapshot,
   renderDailyStatusEmailHtml,
   rowsForEmailReport,
@@ -464,8 +465,11 @@ export async function sendConfiguredEmailReport(params: {
   const preferLive = params.force === true || params.source === 'test' || params.source === 'manual';
   const packed = rowsForEmailReport(actor, meta.period, date, { preferLive });
   // Freeze mailed rows for Compare (Task Description / Current Updates).
-  // Test/manual/force may refresh today's morning snapshot so Email Reports matches the sheet.
-  persistDailyStatusSnapshot(date, meta.period, packed.rows, actor.id, { force: preferLive });
+  // Never overwrite a locked morning snapshot from a later test/manual send.
+  const morningAlreadyLocked = meta.period === 'morning' && isMorningStatusLocked(date);
+  persistDailyStatusSnapshot(date, meta.period, packed.rows, actor.id, {
+    force: preferLive && !morningAlreadyLocked,
+  });
   const rendered = renderDailyStatusEmailHtml({
     period: meta.period,
     date,

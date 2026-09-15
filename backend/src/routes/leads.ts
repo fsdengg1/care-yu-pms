@@ -1,7 +1,7 @@
 import { Router } from 'express';
 import { AuthedRequest, requireAuth } from '../middleware/auth.js';
 import { requirePermission } from '../lib/rbac.js';
-import { store } from '../store/db.js';
+import { ensureLeadLoaded, flushStore, LEAD_SYNC_COLLECTIONS, refreshCollectionsFromPostgres, store, transact } from '../store/db.js';
 import {
   CostingRecord,
   FeasibilityStudy,
@@ -58,7 +58,6 @@ import {
   sanitizeLeadPatch,
   validateLeadPayload,
 } from '../lib/leadValidation.js';
-import { transact } from '../store/db.js';
 import { documentNamesForLead, emitLeadWorkflow, emitLeadWorkflowAsync, emitWorkflowEvent } from '../lib/workflowEngine.js';
 import { fileTypeError, isAllowedFileType, MAX_FILE_SIZE } from '../config/files.js';
 import { canAccessEntity } from '../lib/documents.js';
@@ -278,11 +277,22 @@ function comment(
   store.saveLeadComments(comments);
 }
 
-router.get('/', requireAuth, requirePermission('view:leads', 'create:lead'), (req: AuthedRequest, res) => {
+router.get('/', requireAuth, requirePermission('view:leads', 'create:lead'), async (req: AuthedRequest, res) => {
+  await refreshCollectionsFromPostgres(LEAD_SYNC_COLLECTIONS);
   const user = req.user!;
   const allAssignments = store.getFeasibilityTeamAssignments();
+  const assignedLeadIds = new Set(
+    allAssignments
+      .filter(
+        (item) =>
+          item.status !== 'CANCELLED' &&
+          (item.team_lead_id === user.id || Boolean(user.team_id && item.team_id === user.team_id))
+      )
+      .map((item) => item.lead_id)
+  );
   const leads = store.getLeads().map(hydrateLead).filter((lead) => {
     if (['CEO', 'CTO', 'SYSTEM_ADMIN'].includes(user.role_code)) return true;
+    if (assignedLeadIds.has(lead.id)) return true;
     return canOwnLead(user, lead);
   });
   const leadIds = new Set(leads.map((lead) => lead.id));
@@ -301,18 +311,25 @@ router.get(
   '/my-work',
   requireAuth,
   requirePermission('view:leads', 'create:lead', 'create:feasibility', 'create:costing'),
-  (req: AuthedRequest, res) => {
+  async (req: AuthedRequest, res) => {
+    await refreshCollectionsFromPostgres(LEAD_SYNC_COLLECTIONS);
     res.json(buildMyWork(req.user!));
   }
 );
 
-router.get('/:id', requireAuth, requirePermission('view:leads', 'create:lead', 'create:feasibility', 'create:costing'), (req: AuthedRequest, res) => {
-  const lead = findLead(paramId(req));
+router.get('/:id', requireAuth, requirePermission('view:leads', 'create:lead', 'create:feasibility', 'create:costing'), async (req: AuthedRequest, res) => {
+  const lead = await ensureLeadLoaded(paramId(req));
   if (!lead) return res.status(404).json({ message: 'Lead not found.' });
   const user = req.user!;
   const hydrated = hydrateLead(lead);
   if (!canOwnLead(user, hydrated) && user.role_code !== 'CEO' && user.role_code !== 'CTO') {
-    if (!isProcurementUser(user)) return forbidden(res);
+    const assignedHere = store.getFeasibilityTeamAssignments().some(
+      (item) =>
+        item.lead_id === hydrated.id &&
+        item.status !== 'CANCELLED' &&
+        (item.team_lead_id === user.id || Boolean(user.team_id && item.team_id === user.team_id))
+    );
+    if (!assignedHere && !isProcurementUser(user)) return forbidden(res);
   }
   return res.json(payloadFor(lead));
 });
@@ -548,14 +565,17 @@ router.post('/:id/accept', requireAuth, async (req: AuthedRequest, res) => {
     assignees[String(req.body.team_id)] = String(req.body.team_lead_id);
   }
   try {
-    const result = assignTeamsToLead(lead, user, teamIds, assignees, req.body?.notes);
-    comment(result.lead, user, req.body?.notes || 'Accepted and assigned to team.', 'PM Review');
-    audit(
-      user,
-      result.lead,
-      'LEAD_ACCEPTED',
-      `${user.name} accepted ${lead.lead_number} and assigned ${result.lead.assigned_team_name}.`
-    );
+    const result = await transact(() => {
+      const assigned = assignTeamsToLead(lead, user, teamIds, assignees, req.body?.notes);
+      comment(assigned.lead, user, req.body?.notes || 'Accepted and assigned to team.', 'PM Review');
+      audit(
+        user,
+        assigned.lead,
+        'LEAD_ACCEPTED',
+        `${user.name} accepted ${lead.lead_number} and assigned ${assigned.lead.assigned_team_name}.`
+      );
+      return assigned;
+    });
     emitLeadWorkflow({
       event: 'PROJECT_ASSIGNED',
       lead: result.lead,
@@ -564,7 +584,7 @@ router.post('/:id/accept', requireAuth, async (req: AuthedRequest, res) => {
       extraRecipientIds: assignedTeamRecipientIds(result.lead),
       message: `${user.name} accepted "${lead.title}" and assigned ${result.lead.assigned_team_name}.`,
     });
-    return res.json({ ...payloadFor(result.lead), assignments: result.assignments, assignment: result.assignments[0] });
+    return res.json({ ...payloadFor(result.lead), assignment: result.assignments[0] });
   } catch (error) {
     return workflowError(res, error);
   }
@@ -651,6 +671,7 @@ router.post('/:id/forward', requireAuth, async (req: AuthedRequest, res) => {
 });
 
 router.post('/:id/pm-review', requireAuth, requirePermission('review:lead', 'assign:lead'), async (req: AuthedRequest, res) => {
+  await refreshCollectionsFromPostgres(LEAD_SYNC_COLLECTIONS);
   const user = req.user!;
   if (!isPm(user)) return forbidden(res);
   const lead = findLead(paramId(req));
@@ -698,6 +719,7 @@ router.post('/:id/pm-review', requireAuth, requirePermission('review:lead', 'ass
         comments: reason,
         message: `${user.name} sent "${lead.title}" back for correction.`,
       });
+      await flushStore();
       return res.json(payloadFor(updated));
     } catch (error) {
       return workflowError(res, error);
@@ -705,9 +727,12 @@ router.post('/:id/pm-review', requireAuth, requirePermission('review:lead', 'ass
   }
 
   if (action === 'approve') {
-    const updated = approveLeadForAssignment(lead, user, req.body?.notes);
-    comment(updated, user, req.body?.notes || 'PM review completed — ready for assignment.', 'PM Review');
-    audit(user, updated, 'LEAD_APPROVED', `${user.name} approved ${lead.lead_number} for assignment.`);
+    const updated = await transact(() => {
+      const next = approveLeadForAssignment(lead, user, req.body?.notes);
+      comment(next, user, req.body?.notes || 'PM review completed — ready for assignment.', 'PM Review');
+      audit(user, next, 'LEAD_APPROVED', `${user.name} approved ${lead.lead_number} for assignment.`);
+      return next;
+    });
     emitLeadWorkflow({
       event: 'PROJECT_APPROVED',
       lead: updated,
@@ -715,6 +740,7 @@ router.post('/:id/pm-review', requireAuth, requirePermission('review:lead', 'ass
       comments: req.body?.notes,
       message: `${user.name} approved "${lead.title}". Ready for team assignment.`,
     });
+    await flushStore();
     return res.json(payloadFor(updated));
   }
 
@@ -731,14 +757,17 @@ router.post('/:id/pm-review', requireAuth, requirePermission('review:lead', 'ass
     assignees[String(req.body.team_id)] = String(req.body.team_lead_id);
   }
   try {
-    const result = assignTeamsToLead(lead, user, teamIds, assignees, req.body?.notes);
-    comment(result.lead, user, req.body?.notes || 'Approved and assigned to team.', 'PM Review');
-    audit(
-      user,
-      result.lead,
-      'LEAD_ASSIGNED_TO_TEAM',
-      `${user.name} assigned ${lead.lead_number} to ${(result.lead.assigned_team_names || [result.lead.assigned_team_name]).filter(Boolean).join(', ')}.`
-    );
+    const result = await transact(() => {
+      const assigned = assignTeamsToLead(lead, user, teamIds, assignees, req.body?.notes);
+      comment(assigned.lead, user, req.body?.notes || 'Approved and assigned to team.', 'PM Review');
+      audit(
+        user,
+        assigned.lead,
+        'LEAD_ASSIGNED_TO_TEAM',
+        `${user.name} assigned ${lead.lead_number} to ${(assigned.lead.assigned_team_names || [assigned.lead.assigned_team_name]).filter(Boolean).join(', ')}.`
+      );
+      return assigned;
+    });
     emitLeadWorkflow({
       event: 'PROJECT_ASSIGNED',
       lead: result.lead,
@@ -747,7 +776,8 @@ router.post('/:id/pm-review', requireAuth, requirePermission('review:lead', 'ass
       extraRecipientIds: assignedTeamRecipientIds(result.lead),
       message: `${user.name} assigned "${lead.title}" to ${(result.lead.assigned_team_names || [result.lead.assigned_team_name]).filter(Boolean).join(', ')}.`,
     });
-    return res.json({ ...payloadFor(result.lead), assignments: result.assignments, assignment: result.assignments[0] });
+    await flushStore();
+    return res.json({ ...payloadFor(result.lead), assignment: result.assignments[0] });
   } catch (error) {
     const err = error as Error & { status?: number };
     return res.status(err.status || 400).json({ message: err.message });
@@ -755,6 +785,7 @@ router.post('/:id/pm-review', requireAuth, requirePermission('review:lead', 'ass
 });
 
 router.post('/:id/assign', requireAuth, requirePermission('assign:lead'), async (req: AuthedRequest, res) => {
+  await refreshCollectionsFromPostgres(LEAD_SYNC_COLLECTIONS);
   const user = req.user!;
   if (!isPm(user)) return forbidden(res);
   const lead = findLead(paramId(req));
@@ -769,12 +800,14 @@ router.post('/:id/assign', requireAuth, requirePermission('assign:lead'), async 
     assignees[String(req.body.team_id || req.body.assigned_to)] = String(req.body.team_lead_id);
   }
   try {
-    const result = assignTeamsToLead(
-      lead,
-      user,
-      teamIds,
-      assignees,
-      req.body?.notes || req.body?.pm_instructions
+    const result = await transact(() =>
+      assignTeamsToLead(
+        lead,
+        user,
+        teamIds,
+        assignees,
+        req.body?.notes || req.body?.pm_instructions
+      )
     );
     emitLeadWorkflow({
       event: 'PROJECT_ASSIGNED',
@@ -784,7 +817,8 @@ router.post('/:id/assign', requireAuth, requirePermission('assign:lead'), async 
       extraRecipientIds: assignedTeamRecipientIds(result.lead),
       message: `${user.name} assigned "${lead.title}" to ${(result.lead.assigned_team_names || [result.lead.assigned_team_name]).filter(Boolean).join(', ')}.`,
     });
-    return res.json({ ...payloadFor(result.lead), assignments: result.assignments, assignment: result.assignments[0] });
+    await flushStore();
+    return res.json({ ...payloadFor(result.lead), assignment: result.assignments[0] });
   } catch (error) {
     const err = error as Error & { status?: number };
     return res.status(err.status || 400).json({ message: err.message });
@@ -797,13 +831,16 @@ router.post('/:id/team-intake', requireAuth, async (req: AuthedRequest, res) => 
   if (!lead) return res.status(404).json({ message: 'Lead not found.' });
   const action = String(req.body?.action || '').toLowerCase() === 'return' ? 'return' : 'accept';
   try {
-    const updated = reviewLeadTeamIntake(lead, user, action, req.body?.comments);
-    comment(
-      updated,
-      user,
-      req.body?.comments || (action === 'accept' ? 'Team Lead accepted the project.' : 'Returned to PM'),
-      'PM Review'
-    );
+    const updated = await transact(() => {
+      const next = reviewLeadTeamIntake(lead, user, action, req.body?.comments);
+      comment(
+        next,
+        user,
+        req.body?.comments || (action === 'accept' ? 'Team Lead accepted the project.' : 'Returned to PM'),
+        'PM Review'
+      );
+      return next;
+    });
     audit(
       user,
       updated,
