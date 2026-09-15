@@ -687,12 +687,27 @@ async function persistDb(
 }
 
 function schedulePersist(db: DbShape, dirty: DirtySnapshot, options?: { background?: boolean }): Promise<void> {
-  const promise = persistDb(db, dirty.collections, dirty.recordKeys);
-  writeChain = writeChain
-    .then(() => promise)
-    .catch((error) => {
-      console.error('[store] Failed to persist to Postgres:', error);
-    });
+  const names = [...dirty.collections];
+  const recordKeys = new Map(dirty.recordKeys);
+  // Capture dirty collection payloads immediately. Previously persistDb() started in
+  // parallel with the prior write, so an older tasks flush could finish last and
+  // wipe newer Morning Stats edits from Postgres while snapshots still looked correct.
+  const base = toCollections(db);
+  const captured: Partial<Record<CollectionName, unknown[]>> = {};
+  for (const name of names) {
+    const rows = base[name] || [];
+    captured[name] = rows.map((row) => (row && typeof row === 'object' ? structuredClone(row) : row));
+  }
+
+  const run = async () => {
+    const payload = { ...toCollections(loadDb()), ...captured } as Record<CollectionName, unknown[]>;
+    await saveAllCollections(payload, names, recordKeys);
+  };
+
+  const promise = writeChain.then(run, run);
+  writeChain = promise.catch((error) => {
+    console.error('[store] Failed to persist to Postgres:', error);
+  });
   if (options?.background && workerWaitUntil) {
     workerWaitUntil(promise);
     return promise;

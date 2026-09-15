@@ -1,6 +1,6 @@
 import { Router } from 'express';
 import { AuthedRequest, requireAuth } from '../middleware/auth.js';
-import { store } from '../store/db.js';
+import { flushStore, store } from '../store/db.js';
 import {
   acceptWorkTask,
   addTaskComment,
@@ -36,7 +36,7 @@ router.get('/', requireAuth, (req: AuthedRequest, res) => {
   return res.json({ tasks });
 });
 
-router.post('/', requireAuth, (req: AuthedRequest, res) => {
+router.post('/', requireAuth, async (req: AuthedRequest, res) => {
   const body = { ...(req.body || {}) } as Record<string, unknown>;
   const period = String(body.period || '').toLowerCase();
   const workDate = String(body.work_date || dateInAppTimezone()).slice(0, 10);
@@ -48,6 +48,7 @@ router.post('/', requireAuth, (req: AuthedRequest, res) => {
   }
   const result = createWorkTask(req.user!, body);
   if ('error' in result) return res.status(result.status || 400).json({ message: result.error });
+  await flushStore();
   return res.status(201).json({ task: result.task, tasks: result.tasks || [result.task] });
 });
 

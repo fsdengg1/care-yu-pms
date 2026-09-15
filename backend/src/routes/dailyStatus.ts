@@ -20,6 +20,7 @@ import {
   sheetPhase,
   renderDailyStatusEmailHtml,
   restoreDailyStatusReport,
+  rehydrateTasksFromSnapshot,
   rejectMorningBaselinePatch,
   rowsForEmailReport,
   rowsForPeriod,
@@ -46,7 +47,7 @@ import {
 import { attendanceForUsers } from '../lib/leaveRequests.js';
 import { normalizeDelayReason } from '../lib/workCalendar.js';
 import { env } from '../config/env.js';
-import { store } from '../store/db.js';
+import { flushStore, store } from '../store/db.js';
 
 const router = Router();
 
@@ -78,20 +79,32 @@ router.get(
     const period = typeof req.query.period === 'string' && req.query.period ? readPeriod(req.query.period) : undefined;
     ensureMorningSnapshot(user, date);
     const phase = sheetPhase(date);
+    // Restore missing live tasks from the saved morning snapshot before building rows.
+    if (period === 'morning' || !period) {
+      const savedMorning = loadDailyStatusSnapshot(date, 'morning');
+      if (savedMorning?.length) rehydrateTasksFromSnapshot(savedMorning);
+    }
     let rows = buildDailyStatusRows(user, { date, period });
-    if (period === 'morning' && phase.morningLocked) {
+    if (period === 'morning') {
       const snap = loadDailyStatusSnapshot(date, 'morning');
-      if (snap?.length) {
+      const liveTaskCount = rows.filter((row) => row.rowKind !== 'leave' && row.rowKind !== 'permission').length;
+      if (snap?.length && (phase.morningLocked || liveTaskCount === 0)) {
         const liveById = new Map(rows.map((row) => [row.id, row]));
         rows = snap.map((row) => {
           const live = liveById.get(row.id);
-          return live ? { ...row, canEdit: false, canEditBaseline: false, eveningSubmitted: live.eveningSubmitted } : { ...row, canEdit: false, canEditBaseline: false };
+          return live
+            ? {
+                ...row,
+                canEdit: phase.morningLocked ? false : live.canEdit,
+                canEditBaseline: phase.morningLocked ? false : live.canEditBaseline,
+                eveningSubmitted: live.eveningSubmitted,
+              }
+            : {
+                ...row,
+                canEdit: phase.morningLocked ? false : Boolean(row.canEdit),
+                canEditBaseline: phase.morningLocked ? false : Boolean(row.canEditBaseline),
+              };
         });
-        for (const row of rows) {
-          if (row.rowKind === 'leave' && !snap.some((item) => item.id === row.id)) {
-            /* keep */
-          }
-        }
         const snapIds = new Set(rows.map((row) => row.id));
         for (const row of buildDailyStatusRows(user, { date, period: 'morning' })) {
           if (row.rowKind === 'leave' && !snapIds.has(row.id)) rows.unshift(row);
@@ -151,7 +164,7 @@ router.post(
 router.post(
   '/snapshot',
   requirePermission('view:daily-updates', 'submit:daily-update'),
-  (req: AuthedRequest, res) => {
+  async (req: AuthedRequest, res) => {
     if (!canSeeAllDailyStatusRows(req.user!)) {
       return res.status(403).json({
         message:
@@ -164,6 +177,7 @@ router.post(
       return res.status(400).json({ message: COMPANY_LEAVE_MESSAGE });
     }
     const result = saveDailyStatusSnapshot(req.user!, period, date);
+    await flushStore();
     return res.json({
       message: `${period === 'morning' ? 'Morning' : 'Evening'} snapshot saved.`,
       ...result,
@@ -368,7 +382,7 @@ router.post(
 router.patch(
   '/rows/:id',
   requirePermission('view:daily-updates', 'create:task', 'submit:daily-update'),
-  (req: AuthedRequest, res) => {
+  async (req: AuthedRequest, res) => {
     const date = readIsoDate(req.query.date || req.body?.work_date);
     const period = typeof req.body?.period === 'string' && req.body.period ? readPeriod(req.body.period) : undefined;
     const taskId = String(req.params.id);
@@ -492,6 +506,7 @@ router.patch(
       delete body.hours_worked;
       delete body.work_date;
       if (Object.keys(body).length === 0) {
+        await flushStore();
         return res.json({ update: hoursResult.update, rows: rebuildRows() });
       }
     }
@@ -499,6 +514,7 @@ router.patch(
     delete body.evening_update;
 
     if (Object.keys(body).length === 0) {
+      await flushStore();
       return res.json({ rows: rebuildRows() });
     }
 
@@ -510,6 +526,7 @@ router.patch(
       if ('error' in hiddenResult) {
         return res.status(hiddenResult.status || 403).json({ message: 'You do not have permission to hide this task.' });
       }
+      await flushStore();
       return res.json({ task: hiddenResult.task, rows: rebuildRows() });
     }
 
@@ -542,6 +559,7 @@ router.patch(
         });
       }
     }
+    await flushStore();
     return res.json({ task: result.task, rows: rebuildRows() });
   }
 );

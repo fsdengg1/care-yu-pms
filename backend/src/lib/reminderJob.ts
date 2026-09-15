@@ -193,7 +193,10 @@ function pendingCountsFor(user: User) {
     return ownerId === user.id && taskNeedsReminder(task);
   });
   const today = todayKey();
-  const newCount = [...leads, ...tasks].filter((item) => (item as Lead).assigned_at?.slice(0, 10) === today || item.created_at.slice(0, 10) === today).length;
+  const newCount = [...leads, ...tasks].filter(
+    (item) =>
+      (item as Lead).assigned_at?.slice(0, 10) === today || item.created_at.slice(0, 10) === today
+  ).length;
   const overdue = [
     ...leads.filter((lead) => lead.expected_decision_date && lead.expected_decision_date < today),
     ...tasks.filter((task) => task.due_date && task.due_date < today),
@@ -201,12 +204,25 @@ function pendingCountsFor(user: User) {
   return { newCount, pendingCount: leads.length + tasks.length, overdueCount: overdue };
 }
 
+/**
+ * Daily Work Summary is only for newly assigned/created actionable work today.
+ * Existing pending/overdue queues are handled by runPendingReminders (15m) with
+ * reminder_count / next_reminder_at — not by re-mailing the digest every morning.
+ */
+export function shouldSendDailyDigest(counts: {
+  newCount: number;
+  pendingCount: number;
+  overdueCount: number;
+}): boolean {
+  return counts.newCount > 0;
+}
+
 export async function runDailyDigests() {
   if (!env.dailyDigestEnabled) return;
   const dayKey = todayKey();
   for (const user of store.getUsers().filter((item) => item.status === 'ACTIVE')) {
     const counts = pendingCountsFor(user);
-    if (counts.pendingCount <= 0 && counts.overdueCount <= 0) continue;
+    if (!shouldSendDailyDigest(counts)) continue;
     try {
       await notificationService.notifyDigest({
         recipientUserId: user.id,

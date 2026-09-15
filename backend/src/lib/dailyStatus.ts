@@ -242,7 +242,9 @@ export function applyScheduledMorningLock(date = todayIso()) {
     };
   }
   const existingSnap = loadDailyStatusSnapshot(date, 'morning');
-  if (existingState?.locked === true && Array.isArray(existingSnap)) {
+  // Only treat a non-empty snapshot as the locked baseline. An empty [] must not
+  // permanently block re-capture after tasks are restored.
+  if (existingState?.locked === true && Array.isArray(existingSnap) && existingSnap.length > 0) {
     return { applied: false, skipped: true, reason: 'already-locked', locked: true, date, phase: sheetPhase(date) };
   }
   const actor = globalSheetActor();
@@ -979,7 +981,9 @@ function snapshotId(date: string, period: SnapshotPeriod) {
 
 export function saveDailyStatusSnapshot(user: User, period: SnapshotPeriod, date = todayIso()) {
   const rows = visibleSheetRows(buildDailyStatusRows(user, { date, period }));
-  return persistDailyStatusSnapshot(date, period, rows, user.id);
+  // Prefer force when unlocked so Save always refreshes the shared Email Reports source.
+  const force = period !== 'morning' || loadMorningLockState(date)?.locked !== true;
+  return persistDailyStatusSnapshot(date, period, rows, user.id, { force });
 }
 
 /** Persist the exact rows that were (or will be) mailed for morning/evening compare. */
@@ -992,10 +996,11 @@ export function persistDailyStatusSnapshot(
 ) {
   const records = store.getSystemMeta();
   const id = snapshotId(date, period);
+  const existing = records.find((item) => item.id === id);
+  const existingRows = (existing?.payload as { rows?: DailyStatusRow[] } | undefined)?.rows;
   if (period === 'morning' && !options?.force) {
-    const existing = records.find((item) => item.id === id);
-    const existingRows = (existing?.payload as { rows?: DailyStatusRow[] } | undefined)?.rows;
-    const frozen = loadMorningLockState(date)?.locked === true && Array.isArray(existingRows);
+    const frozen =
+      loadMorningLockState(date)?.locked === true && Array.isArray(existingRows) && existingRows.length > 0;
     if (frozen) {
       return {
         date,
@@ -1004,6 +1009,15 @@ export function persistDailyStatusSnapshot(
         captured_at: String((existing?.payload as { captured_at?: string } | undefined)?.captured_at || ''),
       };
     }
+  }
+  // Never replace a non-empty saved sheet with an empty capture during init/refresh.
+  if (!options?.force && Array.isArray(existingRows) && existingRows.length > 0 && rows.length === 0) {
+    return {
+      date,
+      period,
+      rows: existingRows,
+      captured_at: String((existing?.payload as { captured_at?: string } | undefined)?.captured_at || ''),
+    };
   }
   const next = records.filter((item) => item.id !== id);
   const captured_at = new Date().toISOString();
@@ -1158,14 +1172,87 @@ function eveningRowsFromDayUpdates(date: string, morningRows: DailyStatusRow[]):
   return applied > 0 ? rows : null;
 }
 
+/**
+ * Recreate missing task records from a saved morning/evening snapshot so the live
+ * Daily Work Updates sheet can render the same rows after refresh/restart.
+ */
+export function rehydrateTasksFromSnapshot(rows: DailyStatusRow[] | null | undefined): number {
+  if (!Array.isArray(rows) || !rows.length) return 0;
+  const tasks = store.getTasks().slice();
+  const users = store.getUsers();
+  const now = new Date().toISOString();
+  let changed = 0;
+  for (const row of rows) {
+    if (!row?.id || row.rowKind === 'leave' || row.rowKind === 'permission') continue;
+    const description = String(row.taskDescription || '').trim();
+    const existingIndex = tasks.findIndex((task) => task.id === row.id);
+    if (existingIndex >= 0) {
+      const existing = tasks[existingIndex];
+      const currentText = String(existing.description || existing.title || '').trim();
+      if (!currentText && description) {
+        tasks[existingIndex] = {
+          ...existing,
+          description,
+          title: description.slice(0, 120) || existing.title,
+          updated_at: now,
+        };
+        changed += 1;
+      }
+      continue;
+    }
+    const assignee =
+      users.find((item) => item.id === row.personId) ||
+      users.find((item) => item.name === row.person || formatEmployeeDisplayName(item) === row.person);
+    const status = fromSheetStatus(row.status);
+    const task = {
+      id: row.id,
+      title: description.slice(0, 120) || 'Restored task',
+      description: description || undefined,
+      status,
+      priority: 'Medium' as const,
+      start_date: row.startDateIso || parseSheetDate(row.startDate) || undefined,
+      due_date: row.deadlineIso || parseSheetDate(row.deadline) || undefined,
+      assigned_to: assignee?.name || row.person,
+      assigned_to_id: row.personId || assignee?.id || '',
+      created_by: row.createdByName || 'Snapshot restore',
+      created_by_id: row.createdById || 'snapshot-restore',
+      project_id: row.projectId,
+      project_name: row.project && row.project !== '—' ? row.project : undefined,
+      task_type: row.taskType || (row.isLeadTask ? 'LEAD_TASK' : row.projectId ? 'PROJECT_TASK' : 'NON_PROJECT_TASK'),
+      is_additional: Boolean(row.isAdditional),
+      sheet_hidden: Boolean(row.sheetHidden),
+      progress_percent: progressForSheetStatus(row.status, row.progressPercent),
+      delay_reason: row.reasonForDelay && row.reasonForDelay !== 'No delay' ? row.reasonForDelay : undefined,
+      depends_on_ids: Array.isArray(row.dependencyIds) ? row.dependencyIds : undefined,
+      acceptance_status: row.acceptanceStatus,
+      lead_name: row.leadName,
+      comments: [],
+      created_at: now,
+      updated_at: now,
+    } as Task;
+    tasks.unshift(task);
+    changed += 1;
+  }
+  if (changed) store.saveTasks(tasks);
+  return changed;
+}
+
 export function ensureMorningSnapshot(user: User, date = todayIso()) {
   if (!isMorningStatusLocked(date)) return null;
   applyScheduledMorningLock(date);
   const existing = loadDailyStatusSnapshot(date, 'morning');
-  if (Array.isArray(existing)) return existing;
   const actor = globalSheetActor() || user;
-  const rows = visibleSheetRows(buildDailyStatusRows(actor, { date, period: 'morning' }));
-  return persistDailyStatusSnapshot(date, 'morning', rows, 'morning-lock').rows;
+  const live = visibleSheetRows(buildDailyStatusRows(actor, { date, period: 'morning' }));
+  if (Array.isArray(existing) && existing.length > 0) {
+    // Snapshot is the locked source of truth — restore any missing tasks into live store.
+    rehydrateTasksFromSnapshot(existing);
+    return existing;
+  }
+  // Empty or missing snapshot: capture from live when possible (do not freeze []).
+  if (live.length) {
+    return persistDailyStatusSnapshot(date, 'morning', live, 'morning-lock', { force: true }).rows;
+  }
+  return existing;
 }
 
 export function sheetPhase(date = todayIso()) {
@@ -1210,6 +1297,16 @@ export function rowsForPeriod(user: User, period: SnapshotPeriod, date = todayIs
     if (frozen?.length && isMorningStatusLocked(date)) {
       return { rows: scopedDailyStatusRows(user, frozen), source: 'snapshot', available: true };
     }
+    // Unlocked (or pre-lock): if live tasks were lost but a saved snapshot exists, restore it.
+    const saved = loadDailyStatusSnapshot(date, 'morning');
+    if (saved?.length) {
+      rehydrateTasksFromSnapshot(saved);
+      const live = visibleSheetRows(buildDailyStatusRows(user, { date, period: 'morning' }));
+      if (live.length) {
+        return { rows: live, source: 'live', available: true };
+      }
+      return { rows: scopedDailyStatusRows(user, saved), source: 'snapshot', available: true };
+    }
   }
   if (period === 'evening' && isMorningStatusLocked(date)) {
     ensureMorningSnapshot(user, date);
@@ -1244,8 +1341,17 @@ export function rowsForEmailReport(
   }
   if (period === 'morning' && !options?.preferLive) {
     const frozen = ensureMorningSnapshot(user, date);
-    if (frozen && isMorningStatusLocked(date)) {
+    if (frozen?.length && isMorningStatusLocked(date)) {
       return { rows: scopedDailyStatusRows(user, frozen), source: 'snapshot', available: true };
+    }
+    const saved = loadDailyStatusSnapshot(date, 'morning');
+    if (saved?.length) {
+      rehydrateTasksFromSnapshot(saved);
+      const live = visibleSheetRows(buildDailyStatusRows(user, { date, period: 'morning' }));
+      if (live.length) {
+        return { rows: live, source: 'live', available: true };
+      }
+      return { rows: scopedDailyStatusRows(user, saved), source: 'snapshot', available: true };
     }
   }
   if (period === 'evening' && isMorningStatusLocked(date)) {

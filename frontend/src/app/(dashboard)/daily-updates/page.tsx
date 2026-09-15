@@ -515,7 +515,7 @@ function DailyWorkUpdatesInner() {
             const result = await DailyStatusApi.updateRow(id, { sheet_hidden: true, work_date: workDate });
             if (!result.ok) {
               setError(result.message || 'Unable to hide this task.');
-              await loadSheet(workDate);
+              await loadSheet(workDate, period);
               return;
             }
             setRows(result.data.rows.map((item) => (item.id === id ? { ...item, sheetHidden: true } : item)));
@@ -531,7 +531,7 @@ function DailyWorkUpdatesInner() {
               const result = await DailyStatusApi.updateRow(id, { sheet_hidden: true, work_date: workDate });
               if (!result.ok) {
                 setError(result.message || 'Unable to hide selected tasks.');
-                await loadSheet(workDate);
+                await loadSheet(workDate, period);
                 return;
               }
             }
@@ -549,7 +549,7 @@ function DailyWorkUpdatesInner() {
             const result = await DailyStatusApi.updateRow(id, { sheet_hidden: false, work_date: workDate });
             if (!result.ok) {
               setError(result.message || 'Unable to restore this task.');
-              await loadSheet(workDate);
+              await loadSheet(workDate, period);
               return;
             }
             setRows(result.data.rows.map((item) => (item.id === id ? { ...item, sheetHidden: false } : item)));

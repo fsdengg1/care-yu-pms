@@ -179,9 +179,9 @@ export async function saveRelationalCollections(
       ? allRecords.filter((record) => touchedKeys.has(String(record.id)))
       : allRecords;
     if (!records.length) {
-      if (!touchedKeys?.size && !allRecords.length) {
-        await client.query(`DELETE FROM ${def.table}`);
-      }
+      // Never wipe a whole relational table when the in-memory collection is empty.
+      // That race (boot/partial dirty flush) previously deleted all Daily Work tasks
+      // while email snapshots still had the saved Morning Stats rows.
       continue;
     }
     if (!touchedKeys?.size) {
