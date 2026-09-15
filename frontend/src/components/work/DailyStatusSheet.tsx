@@ -143,6 +143,8 @@ export default function DailyStatusSheet({
     morningLocked?: boolean;
     eveningOpen?: boolean;
     timezone?: string;
+    companyLeave?: boolean;
+    companyLeaveMessage?: string;
     lockSource?: 'manual' | 'schedule' | null;
     lockedAt?: string;
     lockedByName?: string;
@@ -289,7 +291,11 @@ export default function DailyStatusSheet({
     <section className={`daily-status-workspace min-w-0 overflow-hidden rounded-xl ${readOnly ? 'daily-status-workspace-readonly' : ''}`}>
       <div className="flex shrink-0 flex-wrap items-center gap-2 border-b border-[#e2e8f0] px-3 py-2">
         <SheetDateFilter value={workDate} onChange={onWorkDateChange} />
-        {period === 'morning' ? (
+        {phase?.companyLeave ? (
+          <span className="rounded-full border border-amber-300 bg-amber-50 px-2 py-0.5 text-[10px] font-bold text-amber-800">
+            Company leave — no Daily Work Updates
+          </span>
+        ) : period === 'morning' ? (
           phase?.morningLocked ? (
             <span className="inline-flex items-center gap-1 rounded-full border border-amber-300 bg-amber-50 px-2 py-0.5 text-[10px] font-bold text-amber-800">
               <Lock className="h-3 w-3" aria-hidden />
@@ -453,7 +459,9 @@ export default function DailyStatusSheet({
             {visible.length === 0 && (
               <tr>
                 <td colSpan={(showSelect ? 10 : 9) + (readOnly ? 0 : 1)} className="py-10 text-center text-[#64748b]">
-                  No tasks found.
+                  {phase?.companyLeave
+                    ? 'Company leave day — Daily Work Updates are not shown (Sunday or 2nd/4th Saturday).'
+                    : 'No tasks found.'}
                 </td>
               </tr>
             )}

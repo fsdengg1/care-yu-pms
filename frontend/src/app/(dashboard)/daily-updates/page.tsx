@@ -94,6 +94,8 @@ function DailyWorkUpdatesInner() {
     morningLocked?: boolean;
     eveningOpen?: boolean;
     timezone?: string;
+    companyLeave?: boolean;
+    companyLeaveMessage?: string;
     lockSource?: 'manual' | 'schedule' | null;
     lockedAt?: string;
     lockedByName?: string;
@@ -107,8 +109,9 @@ function DailyWorkUpdatesInner() {
   const canEditSheet = canEditDailySheet(user);
   const canAddTask = canAddDailyWorkTask(user);
   const canManageMorningLock = canPerformPmOperations(user);
+  const companyLeave = Boolean(phase?.companyLeave);
   const morningLocked = Boolean(phase?.morningLocked);
-  const morningAddBlocked = period === 'morning' && morningLocked;
+  const morningAddBlocked = companyLeave || (period === 'morning' && morningLocked);
   const pickerPeople = activePeople.length ? activePeople : people;
 
   const selectedEmployeeIds = () =>
@@ -337,6 +340,7 @@ function DailyWorkUpdatesInner() {
             <h1 className="mt-0.5 text-lg font-bold text-slate-100">Project team updates</h1>
             <p className="mt-0.5 text-[11px] text-slate-400">
               Manage daily task updates and status. Click Save so Email Reports shows the latest sheet.
+              Sundays and 2nd/4th Saturdays are company leave — no sheet data and no email.
             </p>
           </div>
           <div className="flex flex-wrap gap-1.5">
@@ -384,7 +388,7 @@ function DailyWorkUpdatesInner() {
                 <Plus className="h-3.5 w-3.5" /> Additional Task
               </button>
             )}
-            {canManageMorningLock && (
+            {canManageMorningLock && !companyLeave && (
               <button
                 type="button"
                 disabled={busy}
@@ -404,6 +408,8 @@ function DailyWorkUpdatesInner() {
                 {phase?.morningLocked ? 'Unlock Morning Status' : 'Lock Morning Status'}
               </button>
             )}
+            {!companyLeave && (
+              <>
             <button
               type="button"
               disabled={busy}
@@ -436,9 +442,11 @@ function DailyWorkUpdatesInner() {
             >
               <Moon className="h-3.5 w-3.5" /> Evening
             </button>
+              </>
+            )}
             <button
               type="button"
-              disabled={compareBusy}
+              disabled={compareBusy || companyLeave}
               onClick={() => void loadCompare(workDate)}
               className="inline-flex items-center gap-1 rounded-md border border-slate-700 px-2.5 py-1.5 font-bold text-slate-100 hover:border-cyan-600 disabled:opacity-50"
             >
@@ -464,6 +472,12 @@ function DailyWorkUpdatesInner() {
 
       {error && <div className="mb-3 shrink-0 rounded-lg border border-rose-900 bg-rose-950/40 px-3 py-2 text-rose-300">{error}</div>}
       {notice && <div className="mb-3 shrink-0 rounded-lg border border-emerald-800 bg-emerald-950/40 px-3 py-2 text-emerald-200">{notice}</div>}
+      {companyLeave && (
+        <div className="mb-3 shrink-0 rounded-lg border border-amber-700 bg-amber-950/40 px-3 py-2 text-amber-100">
+          {phase?.companyLeaveMessage ||
+            'Company leave day (Sunday or 2nd/4th Saturday). Daily Work Updates are hidden and email reports are not sent.'}
+        </div>
+      )}
 
       <DailyStatusSheet
           rows={rows}

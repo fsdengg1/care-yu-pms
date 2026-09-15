@@ -7,10 +7,12 @@ import {
   canManageMorningLock,
   canSeeAllDailyStatusRows,
   compareSnapshots,
+  COMPANY_LEAVE_MESSAGE,
   dateInAppTimezone,
   delayReasonMissingForTask,
   peopleForDailySheet,
   fromSheetStatus,
+  isCompanyLeaveDay,
   loadDailyStatusSnapshot,
   ensureMorningSnapshot,
   lockMorningStatus,
@@ -128,6 +130,13 @@ router.post(
     if ('error' in result && result.error) {
       return res.status(result.status || 400).json({ message: result.error, ...result });
     }
+    if ('skipped' in result && result.skipped && result.reason === 'company-leave') {
+      return res.status(400).json({
+        message: COMPANY_LEAVE_MESSAGE,
+        ...result,
+        rows: [],
+      });
+    }
     return res.json({
       message:
         action === 'unlock'
@@ -151,6 +160,9 @@ router.post(
     }
     const period = readPeriod(req.body?.period);
     const date = readIsoDate(req.body?.date);
+    if (isCompanyLeaveDay(date)) {
+      return res.status(400).json({ message: COMPANY_LEAVE_MESSAGE });
+    }
     const result = saveDailyStatusSnapshot(req.user!, period, date);
     return res.json({
       message: `${period === 'morning' ? 'Morning' : 'Evening'} snapshot saved.`,
@@ -207,11 +219,12 @@ router.get(
     });
     res.setHeader('Cache-Control', 'no-store');
     return res.json({
-      available: true,
+      available: packed.available,
+      message: packed.message,
       source: packed.source,
-      html: rendered.html,
-      text: rendered.text,
-      subject: rendered.subject,
+      html: packed.available ? rendered.html : '',
+      text: packed.available ? rendered.text : '',
+      subject: packed.available ? rendered.subject : '',
       rows: packed.rows,
       period,
       date,
@@ -359,6 +372,9 @@ router.patch(
     const date = readIsoDate(req.query.date || req.body?.work_date);
     const period = typeof req.body?.period === 'string' && req.body.period ? readPeriod(req.body.period) : undefined;
     const taskId = String(req.params.id);
+    if (isCompanyLeaveDay(date)) {
+      return res.status(400).json({ message: COMPANY_LEAVE_MESSAGE });
+    }
     if (taskId.startsWith('leave:') || taskId.startsWith('permission:')) {
       return res.status(400).json({ message: 'Leave and permission rows are not editable task records.' });
     }

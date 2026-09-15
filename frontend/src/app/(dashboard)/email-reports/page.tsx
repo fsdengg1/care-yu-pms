@@ -168,9 +168,10 @@ export default function EmailReportsPage() {
           Mail reports use the same Daily Work Updates sheet (Person, Project, Task Description, and related
           columns). Use <span className="font-semibold text-slate-300">Save</span> on Daily Work Updates so
           this preview picks up the latest edits. Morning email is the locked 11:00 AM snapshot. Evening
-          preview always reflects the latest saved evening updates. Morning locks automatically at 11:00 AM
+          preview always reflects the latest saved evening updates. No mail on Sundays or 2nd/4th Saturdays
+          (company leave). Morning locks automatically at 11:00 AM
           ({schedule.timezone || 'Asia/Kolkata'}); evening stays editable after that. Automatic sends run on
-          the server at 11:00 AM and 7:15 PM.
+          working days at 11:00 AM and 7:15 PM.
         </p>
 
         <div className="mt-4 grid gap-3 rounded-xl border border-cyan-800/60 bg-slate-950/70 p-4 md:grid-cols-2">

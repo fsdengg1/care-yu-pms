@@ -64,7 +64,13 @@ function inRange(date: string | undefined, from: string, to: string) {
 
 function isWeekday(ymd: string) {
   const day = new Date(`${ymd}T00:00:00Z`).getUTCDay();
-  return day !== 0 && day !== 6;
+  if (day === 0) return false;
+  if (day === 6) {
+    // Align with CareYu working Saturdays: 1st / 3rd / 5th only.
+    const nth = Math.floor((Number(ymd.slice(8, 10)) - 1) / 7) + 1;
+    return nth !== 2 && nth !== 4;
+  }
+  return true;
 }
 
 function workingDaysInPeriod(from: string, to: string, capToday: boolean) {

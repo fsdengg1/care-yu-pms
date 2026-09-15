@@ -2,6 +2,8 @@ import { env } from '../config/env.js';
 import { store } from '../store/db.js';
 import { User } from '../types.js';
 import {
+  COMPANY_LEAVE_MESSAGE,
+  isCompanyLeaveDay,
   persistDailyStatusSnapshot,
   renderDailyStatusEmailHtml,
   rowsForEmailReport,
@@ -276,6 +278,30 @@ export async function sendConfiguredEmailReport(params: {
   const id =
     params.source === 'schedule' ? historyId(date, params.slot) : `${HISTORY_PREFIX}adhoc:${newId('run')}`;
   const existing = params.source === 'schedule' ? readHistoryEntry(id) : null;
+
+  if (isCompanyLeaveDay(date) && params.source === 'schedule' && !params.force) {
+    return {
+      ok: true,
+      skipped: true,
+      entry:
+        existing ||
+        ({
+          id,
+          date,
+          time: meta.timeLabel,
+          slot: params.slot,
+          fromEmail: config.fromEmail,
+          toEmail: config.toEmail,
+          subject: config.subject,
+          status: 'Pending',
+          error: COMPANY_LEAVE_MESSAGE,
+          createdAt: new Date().toISOString(),
+          updatedAt: new Date().toISOString(),
+          source: params.source,
+        } satisfies EmailReportHistoryEntry),
+      message: COMPANY_LEAVE_MESSAGE,
+    };
+  }
 
   if (params.source === 'schedule' && !params.force && existing) {
     if (existing.status === 'Sent') {

@@ -9,12 +9,16 @@ import {
   clockInAppTimezone,
   dateInAppTimezone,
   delayReasonRequired,
+  isCompanyLeaveDay,
   isMorningPhaseLocked,
   isOverdueOnDate,
   normalizeDelayReason,
 } from './workCalendar.js';
-export { dateInAppTimezone } from './workCalendar.js';
+export { dateInAppTimezone, isCompanyLeaveDay } from './workCalendar.js';
 import { attendanceForUsers, fullDayLeaveOnDate, leaveNonWorkingDays } from './leaveRequests.js';
+
+export const COMPANY_LEAVE_MESSAGE =
+  'Company leave day (Sunday or 2nd/4th Saturday). Daily Work Updates and email reports are not sent.';
 
 export type DailySheetStatus = 'Yet to Start' | 'In Progress' | 'Waiting' | 'Completed' | 'Hold';
 export type SnapshotPeriod = 'morning' | 'evening';
@@ -174,6 +178,9 @@ function captureMorningSnapshot(date: string, actor: User, capturedBy: string, f
 }
 
 export function lockMorningStatus(user: User, date = todayIso()) {
+  if (isCompanyLeaveDay(date)) {
+    return { date, locked: false, rows: [], phase: sheetPhase(date), skipped: true, reason: 'company-leave' as const };
+  }
   const snapshot = captureMorningSnapshot(date, user, user.id, !isMorningPhaseLocked(date));
   const existing = loadMorningLockState(date);
   if (existing?.locked !== true) {
@@ -217,6 +224,9 @@ export function unlockMorningStatus(user: User, date = todayIso()) {
  * Safe for overlapping cron ticks and page loads after the lock hour.
  */
 export function applyScheduledMorningLock(date = todayIso()) {
+  if (isCompanyLeaveDay(date)) {
+    return { applied: false, skipped: true, reason: 'company-leave', locked: false, date };
+  }
   if (!isMorningPhaseLocked(date)) {
     return { applied: false, skipped: true, reason: 'before-lock-hour', locked: false, date };
   }
@@ -688,6 +698,8 @@ export function buildDailyStatusRows(
   options?: { date?: string; period?: SnapshotPeriod; includeHistoricalCompleted?: boolean }
 ): DailyStatusRow[] {
   const workDate = options?.date && /^\d{4}-\d{2}-\d{2}$/.test(options.date) ? options.date : todayIso();
+  // Sundays + 2nd/4th Saturdays: no sheet content and no mail (do not carry weekday tasks).
+  if (isCompanyLeaveDay(workDate)) return [];
   const period = options?.period;
   const morningLocked = isMorningStatusLocked(workDate);
   const users = visibleUsers(user);
@@ -1159,8 +1171,9 @@ export function ensureMorningSnapshot(user: User, date = todayIso()) {
 export function sheetPhase(date = todayIso()) {
   const clock = clockInAppTimezone();
   const lockState = loadMorningLockState(date);
-  const morningLocked = isMorningStatusLocked(date);
-  const scheduledLocked = isMorningPhaseLocked(date);
+  const companyLeave = isCompanyLeaveDay(date);
+  const morningLocked = !companyLeave && isMorningStatusLocked(date);
+  const scheduledLocked = !companyLeave && isMorningPhaseLocked(date);
   let lockSource: MorningLockSource | null = null;
   if (morningLocked) {
     lockSource = lockState?.locked === true && lockState.lock_source === 'manual' ? 'manual' : 'schedule';
@@ -1169,7 +1182,9 @@ export function sheetPhase(date = todayIso()) {
     date,
     timezone: clock.timezone,
     morningLocked,
-    eveningOpen: isEveningStatusOpen(date),
+    eveningOpen: !companyLeave && isEveningStatusOpen(date),
+    companyLeave,
+    companyLeaveMessage: companyLeave ? COMPANY_LEAVE_MESSAGE : undefined,
     lockHour: 11,
     lockSource,
     lockedAt: lockState?.locked_at,
@@ -1185,7 +1200,11 @@ export function rowsForPeriod(user: User, period: SnapshotPeriod, date = todayIs
   rows: DailyStatusRow[];
   source: 'snapshot' | 'live';
   available: boolean;
+  message?: string;
 } {
+  if (isCompanyLeaveDay(date)) {
+    return { rows: [], source: 'live', available: false, message: COMPANY_LEAVE_MESSAGE };
+  }
   if (period === 'morning') {
     const frozen = ensureMorningSnapshot(user, date);
     if (frozen?.length && isMorningStatusLocked(date)) {
@@ -1213,7 +1232,16 @@ export function rowsForEmailReport(
   rows: DailyStatusRow[];
   source: 'snapshot' | 'live';
   available: boolean;
+  message?: string;
 } {
+  if (isCompanyLeaveDay(date)) {
+    return {
+      rows: [],
+      source: 'live',
+      available: false,
+      message: COMPANY_LEAVE_MESSAGE,
+    };
+  }
   if (period === 'morning' && !options?.preferLive) {
     const frozen = ensureMorningSnapshot(user, date);
     if (frozen && isMorningStatusLocked(date)) {

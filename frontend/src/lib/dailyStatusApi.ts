@@ -58,6 +58,8 @@ export const DailyStatusApi = {
         eveningOpen: boolean;
         timezone: string;
         lockHour: number;
+        companyLeave?: boolean;
+        companyLeaveMessage?: string;
         lockSource?: 'manual' | 'schedule' | null;
         lockedAt?: string;
         lockedByName?: string;

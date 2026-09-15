@@ -64,6 +64,33 @@ export function isWeekendYmd(ymd: string) {
   return day === 0 || day === 6;
 }
 
+/** 1 = first Saturday of the month, 2 = second, … or null if not a Saturday. */
+export function saturdayOrdinalInMonth(ymd: string): number | null {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(ymd)) return null;
+  const [y, m, d] = ymd.split('-').map(Number);
+  const utc = new Date(Date.UTC(y, (m || 1) - 1, d || 1));
+  if (utc.getUTCDay() !== 6) return null;
+  return Math.floor(((d || 1) - 1) / 7) + 1;
+}
+
+/**
+ * CareYu company leave for Daily Work Updates / mail:
+ * Sundays, plus 2nd and 4th Saturdays. 1st / 3rd / 5th Saturdays are working days.
+ */
+export function isCompanyLeaveDay(ymd: string) {
+  const day = new Date(`${ymd}T00:00:00Z`).getUTCDay();
+  if (day === 0) return true;
+  if (day === 6) {
+    const nth = saturdayOrdinalInMonth(ymd);
+    return nth === 2 || nth === 4;
+  }
+  return false;
+}
+
+export function isWorkingDayYmd(ymd: string) {
+  return !isCompanyLeaveDay(ymd);
+}
+
 export function isMorningPhaseLocked(workDate: string, when = new Date(), timezone = appTimezone()) {
   const clock = clockInAppTimezone(when, timezone);
   if (workDate < clock.date) return true;
@@ -78,12 +105,12 @@ export function isEveningPhaseOpen(workDate: string, when = new Date(), timezone
   return clock.hour >= MORNING_LOCK_HOUR;
 }
 
-/** Working days strictly after `dueDate` through `asOf`, excluding weekends and provided non-working dates. */
+/** Working days strictly after `dueDate` through `asOf`, excluding company leave and provided non-working dates. */
 export function delayWorkingDays(dueDate: string | undefined, asOf: string, nonWorking = new Set<string>()) {
   if (!dueDate || dueDate >= asOf) return 0;
   let count = 0;
   for (const day of enumerateDates(addDaysYmd(dueDate, 1), asOf)) {
-    if (isWeekendYmd(day) || nonWorking.has(day)) continue;
+    if (isCompanyLeaveDay(day) || nonWorking.has(day)) continue;
     count += 1;
   }
   return count;

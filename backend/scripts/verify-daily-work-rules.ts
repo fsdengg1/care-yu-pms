@@ -1,9 +1,12 @@
 import {
   delayReasonRequired,
   delayWorkingDays,
+  isCompanyLeaveDay,
   isOverdueOnDate,
+  isWorkingDayYmd,
   normalizeDelayReason,
   addDaysYmd,
+  saturdayOrdinalInMonth,
 } from '../src/lib/workCalendar.ts';
 
 function assert(cond: unknown, message: string) {
@@ -21,4 +24,16 @@ assert(delayReasonRequired('', true, false), 'missing reason required when overd
 assert(!delayReasonRequired('', true, true), 'completed does not need delay reason');
 assert(normalizeDelayReason('Other', 'Vendor delay') === 'Other: Vendor delay', 'other reason format');
 assert(addDaysYmd('2026-09-08', 1) === '2026-09-09', 'date add');
+
+// September 2026: Sun=6, 2nd Sat=12, 4th Sat=26; 1st Sat=5 and 3rd Sat=19 are working.
+assert(isCompanyLeaveDay('2026-09-06'), 'Sunday is company leave');
+assert(isCompanyLeaveDay('2026-09-12'), '2nd Saturday is company leave');
+assert(isCompanyLeaveDay('2026-09-26'), '4th Saturday is company leave');
+assert(!isCompanyLeaveDay('2026-09-05'), '1st Saturday is a working day');
+assert(!isCompanyLeaveDay('2026-09-19'), '3rd Saturday is a working day');
+assert(!isCompanyLeaveDay('2026-09-15'), 'weekday is a working day');
+assert(isWorkingDayYmd('2026-09-05'), '1st Saturday counts as working');
+assert(saturdayOrdinalInMonth('2026-09-12') === 2, 'ordinal 2');
+assert(saturdayOrdinalInMonth('2026-09-26') === 4, 'ordinal 4');
+assert(saturdayOrdinalInMonth('2026-09-15') === null, 'weekday has no Saturday ordinal');
 console.log('workCalendar rules ok');

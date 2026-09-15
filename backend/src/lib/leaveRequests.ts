@@ -2,7 +2,7 @@ import { store } from '../store/db.js';
 import { LeaveRequest, LeaveRequestStatus, User } from '../types.js';
 import { hasPermission } from './rbac.js';
 import { formatEmployeeDisplayName } from './people.js';
-import { enumerateDates, isWeekendYmd } from './workCalendar.js';
+import { enumerateDates, isCompanyLeaveDay } from './workCalendar.js';
 
 export const LEAVE_TYPES = [
   'Casual Leave',
@@ -194,7 +194,7 @@ export function leaveNonWorkingDays(userId: string, from: string, to: string) {
     const start = item.from_date > from ? item.from_date : from;
     const end = item.to_date < to ? item.to_date : to;
     for (const day of enumerateDates(start, end)) {
-      if (!isWeekendYmd(day)) days.add(day);
+      if (!isCompanyLeaveDay(day)) days.add(day);
     }
   }
   return days;
@@ -211,7 +211,7 @@ export function leaveAndPermissionStats(userId: string, from: string, to: string
     for (const day of enumerateDates(start, end)) {
       if (item.kind === 'PERMISSION') permissionDays.add(day);
       else if (item.day_portion === 'FULL') {
-        if (!isWeekendYmd(day)) leaveDays.add(day);
+        if (!isCompanyLeaveDay(day)) leaveDays.add(day);
       } else leaveDays.add(`${day}:${item.day_portion}`);
     }
   }
