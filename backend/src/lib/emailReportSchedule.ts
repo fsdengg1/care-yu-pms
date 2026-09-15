@@ -435,9 +435,11 @@ export async function sendConfiguredEmailReport(params: {
   };
   writeHistoryEntry(pending);
 
-  const packed = rowsForEmailReport(actor, meta.period, date);
+  const preferLive = params.force === true || params.source === 'test' || params.source === 'manual';
+  const packed = rowsForEmailReport(actor, meta.period, date, { preferLive });
   // Freeze mailed rows for Compare (Task Description / Current Updates).
-  persistDailyStatusSnapshot(date, meta.period, packed.rows, actor.id);
+  // Test/manual/force may refresh today's morning snapshot so Email Reports matches the sheet.
+  persistDailyStatusSnapshot(date, meta.period, packed.rows, actor.id, { force: preferLive });
   const rendered = renderDailyStatusEmailHtml({
     period: meta.period,
     date,

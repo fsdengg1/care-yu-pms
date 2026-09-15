@@ -405,10 +405,16 @@ router.patch(
         delay_reason: typeof body.delay_reason === 'string' ? body.delay_reason : existingTask.delay_reason,
       };
       if (delayReasonMissingForTask(probe, date, typeof body.delay_reason === 'string' ? body.delay_reason : undefined)) {
-        return res.status(400).json({
-          message: 'Reason for Delay is required because this task is overdue.',
-          delayReasonRequired: true,
-        });
+        // Morning edits were getting lost when overdue rows still showed "No delay".
+        // Keep the save, but force a delay reason so Email Reports can pick up the update.
+        if (period === 'morning') {
+          body.delay_reason = 'Other: Morning update — delay reason pending';
+        } else {
+          return res.status(400).json({
+            message: 'Reason for Delay is required because this task is overdue.',
+            delayReasonRequired: true,
+          });
+        }
       }
     }
     if (

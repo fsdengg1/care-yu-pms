@@ -980,7 +980,7 @@ export function persistDailyStatusSnapshot(
 ) {
   const records = store.getSystemMeta();
   const id = snapshotId(date, period);
-  if (period === 'morning') {
+  if (period === 'morning' && !options?.force) {
     const existing = records.find((item) => item.id === id);
     const existingRows = (existing?.payload as { rows?: DailyStatusRow[] } | undefined)?.rows;
     const frozen = loadMorningLockState(date)?.locked === true && Array.isArray(existingRows);
@@ -1204,12 +1204,17 @@ export function rowsForPeriod(user: User, period: SnapshotPeriod, date = todayIs
 }
 
 /** Morning email uses the locked snapshot; evening email uses live Daily Work Updates. */
-export function rowsForEmailReport(user: User, period: SnapshotPeriod, date = todayIso()): {
+export function rowsForEmailReport(
+  user: User,
+  period: SnapshotPeriod,
+  date = todayIso(),
+  options?: { preferLive?: boolean }
+): {
   rows: DailyStatusRow[];
   source: 'snapshot' | 'live';
   available: boolean;
 } {
-  if (period === 'morning') {
+  if (period === 'morning' && !options?.preferLive) {
     const frozen = ensureMorningSnapshot(user, date);
     if (frozen && isMorningStatusLocked(date)) {
       return { rows: scopedDailyStatusRows(user, frozen), source: 'snapshot', available: true };
@@ -1888,7 +1893,12 @@ export function restoreDailyStatusReport(): {
 } | null {
   const latest = store
     .getOutboundEmails()
-    .find((item) => item.email_type === 'DAILY_STATUS_REPORT');
+    .find(
+      (item) =>
+        item.email_type === 'DAILY_STATUS_REPORT_SCHEDULED' ||
+        item.email_type === 'DAILY_STATUS_REPORT_TEST' ||
+        item.email_type === 'DAILY_STATUS_REPORT'
+    );
   if (!latest) return null;
   try {
     const parsed = JSON.parse(latest.body || '{}') as {
