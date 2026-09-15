@@ -1204,12 +1204,23 @@ export function rehydrateTasksFromSnapshot(rows: DailyStatusRow[] | null | undef
       users.find((item) => item.id === row.personId) ||
       users.find((item) => item.name === row.person || formatEmployeeDisplayName(item) === row.person);
     const status = fromSheetStatus(row.status);
-    const task = {
+    const project = row.projectId
+      ? store.getProjects().find((item) => item.id === row.projectId)
+      : undefined;
+    const lead =
+      (row.leadNumber
+        ? store.getLeads().find((item) => item.lead_number === row.leadNumber)
+        : undefined) ||
+      (row.leadName
+        ? store.getLeads().find((item) => item.title === row.leadName)
+        : undefined);
+    const task: Task = {
       id: row.id,
+      lead_id: lead?.id || project?.lead_id || '',
       title: description.slice(0, 120) || 'Restored task',
       description: description || undefined,
       status,
-      priority: 'Medium' as const,
+      priority: 'Medium',
       start_date: row.startDateIso || parseSheetDate(row.startDate) || undefined,
       due_date: row.deadlineIso || parseSheetDate(row.deadline) || undefined,
       assigned_to: assignee?.name || row.person,
@@ -1229,7 +1240,7 @@ export function rehydrateTasksFromSnapshot(rows: DailyStatusRow[] | null | undef
       comments: [],
       created_at: now,
       updated_at: now,
-    } as Task;
+    };
     tasks.unshift(task);
     changed += 1;
   }

@@ -27,9 +27,11 @@ function syncPayload(payload: LeadWorkflowPayload) {
   if (payload.documents) {
     StorageService.replaceLeadDocuments(payload.lead.id, payload.documents);
   }
-  if (payload.assignments?.length) {
-    const existing = StorageService.getFeasibilityTeamAssignments().filter((item) => item.lead_id !== payload.lead.id);
-    StorageService.saveFeasibilityTeamAssignments([...payload.assignments, ...existing]);
+  // Always replace this lead's assignments from the API (including empty) so the UI
+  // cannot keep stale local rows or miss a successful approve_assign.
+  if (payload.assignments !== undefined) {
+    const rest = StorageService.getFeasibilityTeamAssignments().filter((item) => item.lead_id !== payload.lead.id);
+    StorageService.saveFeasibilityTeamAssignments([...payload.assignments, ...rest]);
   }
   return payload;
 }
@@ -44,7 +46,10 @@ export const LeadApi = {
     if (!result.ok) return [];
     StorageService.saveLeads(result.data.leads);
     if (result.data.assignments) {
-      StorageService.saveFeasibilityTeamAssignments(result.data.assignments);
+      // Merge API assignments with any other local rows for leads not in this response.
+      const incomingLeadIds = new Set(result.data.assignments.map((item) => item.lead_id));
+      const retained = StorageService.getFeasibilityTeamAssignments().filter((item) => !incomingLeadIds.has(item.lead_id));
+      StorageService.saveFeasibilityTeamAssignments([...result.data.assignments, ...retained]);
     }
     return result.data.leads;
   },

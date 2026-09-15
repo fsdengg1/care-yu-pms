@@ -190,7 +190,7 @@ router.post('/create-password', requirePasswordSetupOrInitialPassword, async (re
 });
 
 router.post('/login', async (req, res) => {
-  const limited = rateLimit({ key: clientKey(req, 'login'), limit: 20, windowMs: 15 * 60 * 1000 });
+  const limited = rateLimit({ key: clientKey(req, 'login'), limit: 60, windowMs: 15 * 60 * 1000 });
   if (!limited.ok) return tooMany(res, limited.retryAfterSec);
 
   const email = readString(req.body?.workEmail || req.body?.email).trim();

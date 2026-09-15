@@ -378,9 +378,18 @@ export function canOwnLead(user: User, lead: Lead): boolean {
   const ownerId = leadOwnerId(lead);
   if (ownerId === user.id) return true;
   if (lead.created_by_id === user.id || lead.sales_owner_id === user.id) return true;
-  if (user.role_code === 'PROJECT_MANAGER' && lead.pm_id === user.id) return true;
+  if (user.role_code === 'PROJECT_MANAGER') {
+    if (lead.pm_id === user.id || !lead.pm_id) return true;
+  }
   if (user.role_code === 'ENG_DIRECTOR' && lead.business_vertical === 'Engineering Director') return true;
   if (userIsOnAssignedLeadTeam(user, lead)) return true;
+  if (
+    store.getFeasibilityEmployeeAllocations().some(
+      (allocation) => allocation.lead_id === lead.id && allocation.employee_id === user.id
+    )
+  ) {
+    return true;
+  }
   if ((lead.visit_assigned_user_ids || []).includes(user.id)) return true;
   if (isProcurementUser(user) && ['COSTING_IN_PROGRESS', 'COSTING_SUBMITTED', 'COSTING_RETURNED', 'COSTING_REJECTED'].includes(lead.status)) {
     return true;
@@ -410,6 +419,9 @@ const PROTECTED_LEAD_STATUSES: LeadStatus[] = ['ORDER_CONVERTED', 'WON'];
 
 export function canDeleteLead(user: User, lead: Lead): boolean {
   if (PROTECTED_LEAD_STATUSES.includes(lead.status)) return false;
+  if (!['DRAFT', 'RETURNED_TO_SALES', 'ADDITIONAL_INFORMATION_REQUIRED'].includes(lead.status)) {
+    return false;
+  }
   if (user.role_code === 'SYSTEM_ADMIN') return true;
   if (!['BUSINESS_HEAD', 'ENG_DIRECTOR'].includes(user.role_code)) return false;
   if (lead.created_by_id === user.id || lead.sales_owner_id === user.id) return true;

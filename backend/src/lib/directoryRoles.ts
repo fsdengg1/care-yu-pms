@@ -281,8 +281,22 @@ export function knownLoginPasswords(emailRaw: string, roleCode?: string): string
     add(env.fsdEngg1Password);
     add(env.demoPassword);
   }
+  // Software / live Team Lead accounts used in QA and production demos
+  if (
+    email === ARUN_LIVE_EMAIL ||
+    email === ARUN_EMAIL ||
+    emailLocal(email) === 'fsdlead1' ||
+    roleCode === 'TEAM_LEAD'
+  ) {
+    add(env.demoPassword);
+    add(env.robotLeadPassword);
+  }
   if (email === 'businesshead@careyu.ai') {
     add(env.businessHeadPassword);
+    add(env.demoPassword);
+    add(env.robotLeadPassword);
+  }
+  if (email === 'procure@careyu.ai' || email === SANJAY_EMAIL || roleCode === 'PROCUREMENT') {
     add(env.demoPassword);
     add(env.robotLeadPassword);
   }

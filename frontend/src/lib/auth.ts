@@ -40,19 +40,29 @@ export async function loginWithApi(
   password: string,
   rememberMe = true
 ): Promise<{ ok: true; user: User; token: string } | { ok: false; error: string; code?: string }> {
-  const result = await apiRequest<{ user: User; token: string }>('/api/auth/login', {
-    method: 'POST',
-    body: JSON.stringify({ workEmail: email.trim(), email: email.trim(), password, rememberMe }),
-  });
+  let lastError = 'Unable to sign in. Please check the backend server.';
+  // Brief retries help when the Cloudflare Worker returns transient 503s under load.
+  for (let attempt = 0; attempt < 3; attempt++) {
+    const result = await apiRequest<{ user: User; token: string }>('/api/auth/login', {
+      method: 'POST',
+      body: JSON.stringify({ workEmail: email.trim(), email: email.trim(), password, rememberMe }),
+    });
 
-  if (!result.ok) {
-    return { ok: false, error: result.message, code: result.code };
-  }
-  if (!result.data?.token || !result.data?.user) {
-    return { ok: false, error: 'Unable to sign in. Please check the backend server.' };
-  }
+    if (result.ok) {
+      if (!result.data?.token || !result.data?.user) {
+        return { ok: false, error: 'Unable to sign in. Please check the backend server.' };
+      }
+      return { ok: true, user: result.data.user, token: result.data.token };
+    }
 
-  return { ok: true, user: result.data.user, token: result.data.token };
+    lastError = result.message;
+    const retryable = result.status === 0 || result.status === 502 || result.status === 503 || result.status === 504;
+    if (!retryable || attempt === 2) {
+      return { ok: false, error: result.message, code: result.code };
+    }
+    await new Promise((resolve) => setTimeout(resolve, 400 * (attempt + 1)));
+  }
+  return { ok: false, error: lastError };
 }
 
 export async function lookupLoginModeWithApi(

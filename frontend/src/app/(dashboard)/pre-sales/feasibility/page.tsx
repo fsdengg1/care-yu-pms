@@ -21,13 +21,14 @@ export default function FeasibilityStudiesPage() {
     setCurrentUser(u);
     void (async () => {
       const apiLeads = await LeadApi.list();
+      // Prefer API assignments returned with the list (already synced into StorageService by LeadApi.list).
       const storedAssignments = StorageService.getFeasibilityTeamAssignments();
       const fromLeads: FeasibilityTeamAssignment[] = [];
       for (const lead of apiLeads) {
         if (!['ACCEPTED_FOR_FEASIBILITY', 'FEASIBILITY_IN_PROGRESS', 'FEASIBILITY_SUBMITTED', 'FEASIBILITY_RETURNED'].includes(lead.status)) continue;
         const teamIds = [...new Set([...(lead.assigned_team_ids || []), ...(lead.assigned_team_id ? [lead.assigned_team_id] : [])].filter(Boolean))];
         teamIds.forEach((teamId, index) => {
-          if (storedAssignments.some((item) => item.lead_id === lead.id && item.team_id === teamId)) return;
+          if (storedAssignments.some((item) => item.lead_id === lead.id && item.team_id === teamId && item.status !== 'CANCELLED')) return;
           fromLeads.push({
             id: `fta-${lead.id}-${teamId}`,
             lead_id: lead.id,
@@ -47,7 +48,16 @@ export default function FeasibilityStudiesPage() {
           });
         });
       }
-      setAssignments([...storedAssignments, ...fromLeads]);
+      // Deduplicate by lead+team preferring real stored rows
+      const merged = new Map<string, FeasibilityTeamAssignment>();
+      for (const row of [...fromLeads, ...storedAssignments]) {
+        if (row.status === 'CANCELLED') continue;
+        const key = `${row.lead_id}:${row.team_id}`;
+        const existing = merged.get(key);
+        if (!existing || !String(existing.id).startsWith('fta-')) merged.set(key, row);
+        else if (!String(row.id).startsWith('fta-')) merged.set(key, row);
+      }
+      setAssignments([...merged.values()]);
       const map: Record<string, Lead> = {};
       apiLeads.forEach((l) => { map[l.id] = l; });
       setLeadsMap(map);

@@ -172,9 +172,9 @@ export default function Navbar({ user }: NavbarProps) {
             <div className="w-8 h-8 rounded-full bg-cyan-600/30 border border-cyan-500/50 flex items-center justify-center text-cyan-300 font-bold text-xs">
               {initials(user.name)}
             </div>
-            <div className="hidden sm:block text-left">
-              <div className="text-xs font-semibold text-slate-100 leading-tight">{user.name}</div>
-              <div className="text-[10px] text-slate-400 leading-tight">{user.role_name}</div>
+            <div className="hidden sm:block min-w-0 max-w-[9.5rem] text-left">
+              <div className="truncate text-xs font-semibold text-slate-100 leading-tight">{user.name}</div>
+              <div className="truncate text-[10px] text-slate-400 leading-tight">{user.role_name}</div>
             </div>
             <ChevronDown className="w-3.5 h-3.5 text-slate-400" />
           </button>

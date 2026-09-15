@@ -5,12 +5,11 @@ import React, { useState, useEffect } from 'react';
 
 
 import { StorageService } from '@/lib/storage';
-import { Lead, LeadStatus, User } from '@/lib/types';
+import { Lead, User } from '@/lib/types';
 import { canCreateLead, canManageLeadRecord, isCeoViewOnly, userIsOnLeadTeam } from '@/lib/rbac';
 import { LeadApi } from '@/lib/leadApi';
-import { formatInrCompact, formatLongDate, PIPELINE_STAGE_LABELS } from '@/lib/format';
+import { formatInrCompact, formatLongDate, PIPELINE_STAGE_LABELS, workflowStatusPresentation } from '@/lib/format';
 import { leadDetailHref, leadEditHref } from '@/lib/leadRoutes';
-import { workflowActionLabel } from '@/lib/workflowActionLabel';
 import ConfirmDialog from '@/components/work/ConfirmDialog';
 import { 
   Building2, 
@@ -27,30 +26,11 @@ import {
   Trash2
 } from 'lucide-react';
 
-const STATUS_BADGES: Record<LeadStatus, { label: string; style: string }> = {
-  DRAFT: { label: 'Draft', style: 'bg-slate-800 text-slate-300 border-slate-700' },
-  SUBMITTED_TO_PM: { label: 'Submitted to PM', style: 'bg-cyan-950 text-cyan-300 border-cyan-700' },
-  UNDER_PM_REVIEW: { label: 'Submitted to PM', style: 'bg-cyan-950 text-cyan-300 border-cyan-700' },
-  RETURNED_TO_SALES: { label: 'Returned for Clarification', style: 'bg-amber-950 text-amber-300 border-amber-800' },
-  ADDITIONAL_INFORMATION_REQUIRED: { label: 'Returned for Clarification', style: 'bg-amber-950 text-amber-300 border-amber-800' },
-  RESUBMITTED_TO_PM: { label: 'Submitted to PM', style: 'bg-cyan-950 text-cyan-300 border-cyan-700' },
-  ACCEPTED_FOR_FEASIBILITY: { label: 'Approved', style: 'bg-emerald-950 text-emerald-300 border-emerald-700' },
-  FEASIBILITY_IN_PROGRESS: { label: 'Submitted to Vision Team', style: 'bg-indigo-950 text-indigo-300 border-indigo-800' },
-  FEASIBILITY_SUBMITTED: { label: 'Submitted to PM', style: 'bg-cyan-950 text-cyan-300 border-cyan-700' },
-  FEASIBILITY_RETURNED: { label: 'Returned for Clarification', style: 'bg-amber-950 text-amber-300 border-amber-800' },
-  FEASIBILITY_REJECTED: { label: 'Rejected', style: 'bg-rose-950 text-rose-300 border-rose-700' },
-  COSTING_IN_PROGRESS: { label: 'Submitted to IP Team', style: 'bg-violet-950 text-violet-300 border-violet-800' },
-  COSTING_SUBMITTED: { label: 'Submitted to PM', style: 'bg-cyan-950 text-cyan-300 border-cyan-700' },
-  COSTING_RETURNED: { label: 'Returned for Clarification', style: 'bg-amber-950 text-amber-300 border-amber-800' },
-  COSTING_REJECTED: { label: 'Rejected', style: 'bg-rose-950 text-rose-300 border-rose-700' },
-  QUOTATION: { label: 'Submitted to Business Head', style: 'bg-cyan-950 text-cyan-300 border-cyan-800' },
-  NEGOTIATION: { label: 'Submitted to Customer', style: 'bg-orange-950 text-orange-300 border-orange-800' },
-  ORDER_CONVERTED: { label: 'Approved', style: 'bg-emerald-950 text-emerald-300 border-emerald-800' },
-  WON: { label: 'Approved', style: 'bg-emerald-950 text-emerald-300 border-emerald-800' },
-  LOST: { label: 'Lost', style: 'bg-rose-950 text-rose-300 border-rose-800' },
-  ON_HOLD: { label: 'On Hold', style: 'bg-slate-800 text-slate-400 border-slate-700' },
-  CANCELLED: { label: 'Rejected', style: 'bg-rose-950 text-rose-300 border-rose-700' }
-};
+const EDITABLE_LEAD_STATUSES = new Set(['DRAFT', 'RETURNED_TO_SALES', 'ADDITIONAL_INFORMATION_REQUIRED']);
+
+function isIncompleteDraft(lead: Lead) {
+  return lead.status === 'DRAFT' && !(lead.title || '').trim() && !(lead.customer_name || '').trim();
+}
 
 export default function LeadsListPage() {
   const router = useRouter();
@@ -88,6 +68,9 @@ export default function LeadsListPage() {
   const isEmployee = currentUser.role_code === 'EMPLOYEE' || currentUser.role_code === 'PROJECT_ENGINEER' || currentUser.role_code === 'EXECUTION';
 
   const visibleLeads = leads.filter(lead => {
+    // Hide empty untitled drafts from the default pipeline table (still findable via search).
+    if (!search.trim() && isIncompleteDraft(lead)) return false;
+
     if (isCEO || isAdmin || isPM || isCTO) {
       // Leadership / PM see the full pipeline
     } else if (isBH) {
@@ -402,8 +385,10 @@ export default function LeadsListPage() {
                 </tr>
               ) : (
                 visibleLeads.map(lead => {
-                  const statusInfo = STATUS_BADGES[lead.status] || { label: lead.status, style: 'bg-slate-800 text-slate-300' };
-                  const statusLabel = workflowActionLabel(lead);
+                  const presentation = workflowStatusPresentation(lead.status, lead);
+                  const statusLabel = presentation.label;
+                  const canMutateLead =
+                    canManageLeadRecord(currentUser) && EDITABLE_LEAD_STATUSES.has(lead.status);
 
                   return (
                     <tr key={lead.id} className="hover:bg-slate-800/40 transition-colors">
@@ -414,8 +399,8 @@ export default function LeadsListPage() {
                           <td className="p-3 font-semibold text-slate-200">{lead.title}</td>
                           <td className="p-3">{formatInrCompact(lead.expected_value ?? 0)}</td>
                           <td className="p-3 max-w-[12rem]">
-                            <span title={workflowActionLabel(lead)} className="inline-block whitespace-normal break-words">
-                              {workflowActionLabel(lead)}
+                            <span title={statusLabel} className="inline-block whitespace-normal break-words">
+                              {statusLabel}
                             </span>
                           </td>
                           <td className="p-3 text-slate-400">{lead.sales_owner}</td>
@@ -439,7 +424,7 @@ export default function LeadsListPage() {
                         </span>
                       </td>
                       <td className="p-3 max-w-[12rem]">
-                        <span title={statusLabel} className={`inline-block max-w-full whitespace-normal break-words px-2.5 py-0.5 rounded text-[10px] font-bold border ${statusInfo.style}`}>
+                        <span title={statusLabel} className={`inline-block max-w-full whitespace-normal break-words px-2.5 py-0.5 rounded text-[10px] font-bold border ${presentation.badgeClass}`}>
                           {statusLabel}
                         </span>
                       </td>
@@ -453,7 +438,7 @@ export default function LeadsListPage() {
                           >
                             <Eye className="w-3.5 h-3.5" /> View
                           </a>
-                          {canManageLeadRecord(currentUser) && (
+                          {canMutateLead && (
                             <>
                               <a
                                 href={leadEditHref(lead.id)}

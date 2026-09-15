@@ -1,0 +1,255 @@
+{
+  "startedAt": "2026-09-15T10:19:18.350Z",
+  "base": "https://careyu-backend-api.aicareyuautomation.workers.dev",
+  "title": "QA E2E Brake Disc Vision 2026-09-15 10:19:18",
+  "overall": "FAIL",
+  "stages": [
+    {
+      "stage": "Login",
+      "action": "Business Head login",
+      "result": "Logged in as businesshead@careyu.ai",
+      "status": "PASS",
+      "detail": ""
+    },
+    {
+      "stage": "Scratch Pad",
+      "action": "Open Scratch Pad",
+      "result": "Screen does not exist — used Leads & Pipeline",
+      "status": "FAIL",
+      "detail": ""
+    },
+    {
+      "stage": "Business Head",
+      "action": "Open leads list",
+      "result": "List loaded",
+      "status": "PASS",
+      "detail": ""
+    },
+    {
+      "stage": "Scratch Pad / Lead Create",
+      "action": "Validation on empty submit",
+      "result": "Blocked with required-field messaging",
+      "status": "PASS",
+      "detail": ""
+    },
+    {
+      "stage": "Business Head",
+      "action": "Save Draft",
+      "result": "Draft persisted",
+      "status": "PASS",
+      "detail": "url=https://careyu-backend-api.aicareyuautomation.workers.dev/pre-sales/leads/create?id=lead-1789467573924-zb59 id=lead-1789467573924-zb59"
+    },
+    {
+      "stage": "Business Head",
+      "action": "Persistence after refresh",
+      "result": "Lead data retained",
+      "status": "PASS",
+      "detail": ""
+    },
+    {
+      "stage": "Business Head",
+      "action": "Submit to PM",
+      "result": "Submission succeeded",
+      "status": "PASS",
+      "detail": ""
+    },
+    {
+      "stage": "Business Head",
+      "action": "Lead appears in list",
+      "result": "Visible after submit",
+      "status": "PASS",
+      "detail": ""
+    },
+    {
+      "stage": "Permissions",
+      "action": "BH cannot use PM actions",
+      "result": "PM action buttons not shown",
+      "status": "PASS",
+      "detail": ""
+    },
+    {
+      "stage": "Login",
+      "action": "PM login",
+      "result": "Logged in as robotlead1@careyu.ai",
+      "status": "PASS",
+      "detail": ""
+    },
+    {
+      "stage": "PM",
+      "action": "Receive Lead",
+      "result": "Lead visible in PM context",
+      "status": "PASS",
+      "detail": ""
+    },
+    {
+      "stage": "PM",
+      "action": "Lead details intact",
+      "result": "Title missing on detail",
+      "status": "FAIL",
+      "detail": ""
+    },
+    {
+      "stage": "PM",
+      "action": "Approve for feasibility intake",
+      "result": "Approve button missing",
+      "status": "FAIL",
+      "detail": ""
+    },
+    {
+      "stage": "PM",
+      "action": "Assign Team",
+      "result": "No assignment UI",
+      "status": "FAIL",
+      "detail": ""
+    },
+    {
+      "stage": "Team",
+      "action": "Accept",
+      "result": "Accept button missing",
+      "status": "FAIL",
+      "detail": ""
+    },
+    {
+      "stage": "Team",
+      "action": "Complete Feasibility",
+      "result": "Submit control not found on this screen",
+      "status": "FAIL",
+      "detail": ""
+    }
+  ],
+  "bugs": [
+    {
+      "id": 1,
+      "severity": "High",
+      "role": "Business Head",
+      "screen": "Navigation",
+      "action": "Open Scratch Pad",
+      "expected": "Scratch Pad menu/page available as workflow entry",
+      "actual": "No Scratch Pad link/page found in UI",
+      "rootCause": "Feature naming / missing module",
+      "recommendedFix": "Either add Scratch Pad or update process docs to Leads & Pipeline"
+    },
+    {
+      "id": 2,
+      "severity": "High",
+      "role": "PM",
+      "screen": "Lead detail",
+      "action": "View BH data",
+      "expected": "Title and details shown",
+      "actual": "Title not visible",
+      "rootCause": "Data mapping",
+      "recommendedFix": "Check lead detail rendering"
+    },
+    {
+      "id": 3,
+      "severity": "Critical",
+      "role": "PM",
+      "screen": "Lead detail",
+      "action": "Approve",
+      "expected": "Approve button available for SUBMITTED_TO_PM",
+      "actual": "Approve button not found",
+      "rootCause": "Status/RBAC",
+      "recommendedFix": "Check lead status and PM panel conditions"
+    },
+    {
+      "id": 4,
+      "severity": "Critical",
+      "role": "PM",
+      "screen": "Team Assignment",
+      "action": "Select team",
+      "expected": "Team checkboxes after approve",
+      "actual": "No team assignment UI",
+      "rootCause": "Workflow state",
+      "recommendedFix": "Confirm approve moved lead to ACCEPTED_FOR_FEASIBILITY"
+    },
+    {
+      "id": 5,
+      "severity": "High",
+      "role": "Team Lead",
+      "screen": "Lead detail",
+      "action": "Accept",
+      "expected": "Accept Project visible for assignee",
+      "actual": "Accept button not found",
+      "rootCause": "Assignment/RBAC",
+      "recommendedFix": "Verify assignment targets this user"
+    },
+    {
+      "id": 6,
+      "severity": "High",
+      "role": "Team",
+      "screen": "Feasibility",
+      "action": "Complete/Submit",
+      "expected": "Completion controls available after accept",
+      "actual": "No submit feasibility control",
+      "rootCause": "UI state",
+      "recommendedFix": "Check feasibility form gating"
+    },
+    {
+      "id": 7,
+      "severity": "Critical",
+      "role": "System",
+      "screen": "Runtime",
+      "action": "E2E run",
+      "expected": "Script completes workflow",
+      "actual": "Login API 503",
+      "rootCause": "Test harness / app error",
+      "recommendedFix": "Investigate screenshot fatal-error.png"
+    }
+  ],
+  "visual": [],
+  "permissions": [],
+  "statusMap": [
+    {
+      "after": "Save Draft",
+      "status": "DRAFT (expected)"
+    },
+    {
+      "after": "Submit to PM",
+      "status": "SUBMITTED_TO_PM / Pending PM Review"
+    }
+  ],
+  "breakpoints": [
+    "FLOW BREAKS HERE → Scratch Pad (screen missing; continued via Leads create)",
+    "FLOW BREAKS HERE → PM Approve",
+    "FLOW BREAKS HERE → PM Assign Team UI missing",
+    "FLOW BREAKS HERE → Team Accept",
+    "FLOW BREAKS HERE → Runtime error: Login API 503"
+  ],
+  "notes": [
+    "Artifacts: C:\\Users\\Kabitha\\Desktop\\care-yu-project-hub\\frontend\\qa-artifacts\\run-1789467558350",
+    "No screen named \"Scratch Pad\" exists in the SPA routes; using Leads & Pipeline / Create Lead as the start of the documented workflow.",
+    "Logged in via API token injection for businesshead@careyu.ai (UI login unavailable/flaky)",
+    "BH list row: LD-013 Bharat Forge QA Automotive QA E2E Brake Disc Vision 2026-09-15 10:19:18 Automotive Shradha Patil 15 Sept 2026 Medium Submitted to PM View Edit Delete",
+    "Logged in via API token injection for robotlead1@careyu.ai (UI login unavailable/flaky)",
+    "Login failed for fsdlead1@careyu.ai",
+    "Login failed for fsdlead1@careyu.ai",
+    "Logged in as Team Member (fsdengg1@careyu.ai)",
+    "Login failed for robottech@careyu.ai",
+    "Login failed for robottech@careyu.ai",
+    "Login failed for projects@careyu.ai",
+    "Login failed for projects@careyu.ai",
+    "Login failed for procure@careyu.ai",
+    "Login failed for procure@careyu.ai",
+    "API token login failed for robotlead1@careyu.ai: API login 503; trying UI login",
+    "UI login attempt 1/1 for robotlead1@careyu.ai failed: Login API 503",
+    "Fatal: Login API 503"
+  ],
+  "screenshots": [
+    "C:\\Users\\Kabitha\\Desktop\\care-yu-project-hub\\frontend\\qa-artifacts\\run-1789467558350\\01-bh-dashboard.png",
+    "C:\\Users\\Kabitha\\Desktop\\care-yu-project-hub\\frontend\\qa-artifacts\\run-1789467558350\\02-bh-leads-list.png",
+    "C:\\Users\\Kabitha\\Desktop\\care-yu-project-hub\\frontend\\qa-artifacts\\run-1789467558350\\03-bh-create-form.png",
+    "C:\\Users\\Kabitha\\Desktop\\care-yu-project-hub\\frontend\\qa-artifacts\\run-1789467558350\\04-bh-validation.png",
+    "C:\\Users\\Kabitha\\Desktop\\care-yu-project-hub\\frontend\\qa-artifacts\\run-1789467558350\\05-bh-form-filled.png",
+    "C:\\Users\\Kabitha\\Desktop\\care-yu-project-hub\\frontend\\qa-artifacts\\run-1789467558350\\06-bh-after-submit.png",
+    "C:\\Users\\Kabitha\\Desktop\\care-yu-project-hub\\frontend\\qa-artifacts\\run-1789467558350\\07-bh-list-with-new-lead.png",
+    "C:\\Users\\Kabitha\\Desktop\\care-yu-project-hub\\frontend\\qa-artifacts\\run-1789467558350\\08-bh-lead-detail-after-submit.png",
+    "C:\\Users\\Kabitha\\Desktop\\care-yu-project-hub\\frontend\\qa-artifacts\\run-1789467558350\\09-pm-dashboard.png",
+    "C:\\Users\\Kabitha\\Desktop\\care-yu-project-hub\\frontend\\qa-artifacts\\run-1789467558350\\10-pm-leads-list.png",
+    "C:\\Users\\Kabitha\\Desktop\\care-yu-project-hub\\frontend\\qa-artifacts\\run-1789467558350\\11-pm-lead-detail.png",
+    "C:\\Users\\Kabitha\\Desktop\\care-yu-project-hub\\frontend\\qa-artifacts\\run-1789467558350\\12-role-fsdengg1-home.png",
+    "C:\\Users\\Kabitha\\Desktop\\care-yu-project-hub\\frontend\\qa-artifacts\\run-1789467558350\\13-team-lead-detail.png",
+    "C:\\Users\\Kabitha\\Desktop\\care-yu-project-hub\\frontend\\qa-artifacts\\run-1789467558350\\14-fatal-error.png"
+  ],
+  "finishedAt": "2026-09-15T10:20:30.798Z",
+  "recommendation": "MAJOR WORKFLOW FIX REQUIRED"
+}

@@ -131,7 +131,11 @@ export default function LeadDetailPage() {
       setDocuments(payload.documents || StorageService.getLeadDocuments(payload.lead.id));
       setAdditionalDocuments(payload.additionalDocuments || []);
       setHistory(payload.history || StorageService.getLeadStatusHistory(payload.lead.id));
-      setTeamAssignments(payload.assignments?.length ? payload.assignments : StorageService.getFeasibilityTeamAssignmentsByLeadId(payload.lead.id));
+      setTeamAssignments(
+        payload.assignments !== undefined
+          ? payload.assignments
+          : StorageService.getFeasibilityTeamAssignmentsByLeadId(payload.lead.id)
+      );
       setResubmitTechInput(payload.lead.technical_specifications || '');
       setAllTeams(payload.teams?.length ? payload.teams : StorageService.getTeams());
       setAllUsers(payload.users?.length ? payload.users : StorageService.getUsers());
@@ -218,9 +222,13 @@ export default function LeadDetailPage() {
   const canEditLeadForm = canCreateLead(currentUser);
   const canViewRestricted = isPM || isSalesOwner || isCEO || isAdmin || isBH;
 
-  // TL can access this lead only if assigned
+  // TL can access this lead if they are the assignment TL or lead a team on the assignment
   const myTLAssignment = isTL
-    ? teamAssignments.find(a => a.team_lead_id === currentUser.id && a.status !== 'CANCELLED')
+    ? teamAssignments.find(
+        (a) =>
+          a.status !== 'CANCELLED' &&
+          (a.team_lead_id === currentUser.id || (Boolean(currentUser.team_id) && a.team_id === currentUser.team_id))
+      )
     : null;
 
   // Employee can access if allocated
@@ -355,51 +363,37 @@ export default function LeadDetailPage() {
       return;
     }
 
-    const newAssignment = StorageService.createFeasibilityTeamAssignment({
-      lead_id: lead.id,
-      team_id: selectedAddTeam!.id,
-      team_name: selectedAddTeam!.name,
-      team_lead_id: selectedAddTeam!.team_lead_id,
-      team_lead_name: selectedAddTeam!.team_lead_name || tlForSelectedTeam?.name,
-      assignment_type: addTeamForm.assignmentType,
-      priority: addTeamForm.priority,
-      due_date: addTeamForm.dueDate,
-      pm_instructions: addTeamForm.pmInstructions,
-      expected_output: addTeamForm.expectedOutput || undefined,
-      critical_reason: addTeamForm.criticalReason,
-      status: 'CRITICAL_DIRECT_ASSIGNED',
-      created_by: currentUser.name,
-      created_by_id: currentUser.id,
+    // Critical Direct: still go through the API so server state (status + assignments) stays authoritative.
+    const assignees: Record<string, string> = {};
+    if (addTeamForm.employeeId && selectedAddTeam) {
+      assignees[selectedAddTeam.id] = addTeamForm.employeeId;
+    }
+    const result = await LeadApi.pmReview(lead.id, {
+      action: 'approve_assign',
+      team_ids: addTeamForm.teamIds,
+      assignees,
+      notes: `[CRITICAL DIRECT] ${addTeamForm.pmInstructions}${addTeamForm.criticalReason ? ` Reason: ${addTeamForm.criticalReason}` : ''}`,
     });
-
-    const emp = allUsers.find(u => u.id === addTeamForm.employeeId);
-    if (emp) {
-      StorageService.addFeasibilityEmployeeAllocation({
-        feasibility_team_assignment_id: newAssignment.id,
-        lead_id: lead.id,
-        team_id: selectedAddTeam!.id,
-        team_lead_id: selectedAddTeam?.team_lead_id,
-        employee_id: emp.id,
-        employee_name: emp.name,
-        responsibility: `[CRITICAL DIRECT] ${addTeamForm.pmInstructions}`,
-        approval_status: 'BYPASSED_CRITICAL',
-        allocated_by: currentUser.name,
-        allocated_at: new Date().toISOString(),
-      });
-      StorageService.sendNotification({ recipient_id: emp.id, type: 'CRITICAL_DIRECT_ASSIGNMENT_TO_EMPLOYEE', title: `🔴 CRITICAL DIRECT: ${lead.lead_number}`, message: `PM ${currentUser.name} assigned feasibility work on "${lead.title}" (${lead.customer_name}) directly to you. Reason: ${addTeamForm.criticalReason}. Start immediately.`, entity_type: 'FEASIBILITY', entity_id: newAssignment.id });
+    if (!result.ok) {
+      setAddTeamError(result.message || 'Unable to assign teams.');
+      return;
     }
-    if (selectedAddTeam?.team_lead_id) {
-      StorageService.sendNotification({ recipient_id: selectedAddTeam.team_lead_id, type: 'CRITICAL_ASSIGNMENT_TEAM_LEAD_NOTICE', title: `🔴 Critical Notice: ${lead.lead_number} → ${selectedAddTeam.name}`, message: `PM ${currentUser.name} directly assigned feasibility for "${lead.title}" to ${emp?.name}. No approval required from you.`, entity_type: 'FEASIBILITY', entity_id: newAssignment.id });
+    if (addTeamForm.employeeId) {
+      const emp = allUsers.find((u) => u.id === addTeamForm.employeeId);
+      if (emp) {
+        StorageService.sendNotification({
+          recipient_id: emp.id,
+          type: 'CRITICAL_DIRECT_ASSIGNMENT_TO_EMPLOYEE',
+          title: `CRITICAL DIRECT: ${lead.lead_number}`,
+          message: `PM ${currentUser.name} assigned feasibility work on "${lead.title}" (${lead.customer_name}) directly to you. Reason: ${addTeamForm.criticalReason}. Start immediately.`,
+          entity_type: 'FEASIBILITY',
+          entity_id: lead.id,
+        });
+      }
     }
-    StorageService.logAudit({ user_id: currentUser.id, user_name: currentUser.name, user_role: currentUser.role_name, entity_type: 'FEASIBILITY', entity_id: newAssignment.id, action: 'CRITICAL_DIRECT_ASSIGNMENT_CREATED', description: `[CRITICAL DIRECT] PM ${currentUser.name} assigned ${lead.lead_number} (${selectedAddTeam?.name}) directly to ${allUsers.find(u => u.id === addTeamForm.employeeId)?.name}. Reason: "${addTeamForm.criticalReason}".` });
-
-    if (lead.status === 'ACCEPTED_FOR_FEASIBILITY') {
-      StorageService.updateLead(lead.id, { status: 'FEASIBILITY_IN_PROGRESS' }, currentUser.id, currentUser.name);
-    }
-
     setShowAddTeamModal(false);
     setAddTeamForm({ teamIds: [], assignmentType: 'NORMAL', priority: 'High', dueDate: '', pmInstructions: '', expectedOutput: '', criticalReason: '', employeeId: '', bypassConfirmed: false });
-    loadData();
+    await loadData();
   };
 
   // ---- TL Actions ----
@@ -528,7 +522,7 @@ export default function LeadDetailPage() {
                 onClick={() => setShowForwardModal(true)}
                 className="inline-flex items-center gap-1 rounded-lg border border-cyan-700 px-3 py-1.5 text-xs font-bold text-cyan-300 hover:bg-cyan-950"
               >
-                Forward / Assign
+                Forward
               </button>
             )}
             {isCEO && (
@@ -740,15 +734,13 @@ export default function LeadDetailPage() {
                   <CheckCircle2 className="w-4 h-4 text-cyan-400" /> Action Required
                 </div>
                 <div className="space-y-2 pt-1">
-                  <p className="text-xs text-slate-300">If the details are complete, use <strong>Accept &amp; Assign Team</strong> above. Feasibility starts as soon as a team is assigned.</p>
+                  <p className="text-xs text-slate-300">
+                    If the details are complete, use <strong>Approve</strong> in the PM Review panel, then <strong>Assign project</strong> to select teams.
+                    Use <strong>Forward</strong> only to hand responsibility to another person (not for team feasibility assignment).
+                  </p>
                   {isPM && (
                     <button onClick={() => setShowReturnModal(true)} className="w-full py-2.5 bg-amber-600 hover:bg-amber-500 text-slate-950 font-bold rounded-lg flex items-center justify-center gap-2">
                       <RotateCcw className="w-4 h-4" /> Return to Sales
-                    </button>
-                  )}
-                  {isPM && (
-                    <button onClick={() => setShowCancelModal(true)} className="w-full py-2.5 bg-rose-700 hover:bg-rose-600 text-white font-bold rounded-lg flex items-center justify-center gap-2">
-                      Cancel / Reject
                     </button>
                   )}
                   <button

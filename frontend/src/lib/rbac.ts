@@ -32,6 +32,13 @@ export const NAVIGATION_ITEMS: NavItem[] = [
     category: 'pre_sales'
   },
   {
+    name: 'Scratch Pad',
+    href: '/pre-sales/leads/create',
+    iconName: 'FileText',
+    category: 'pre_sales',
+    allowedRoles: ['BUSINESS_HEAD', 'ENG_DIRECTOR', 'SYSTEM_ADMIN'],
+  },
+  {
     name: 'Feasibility Studies',
     href: '/pre-sales/feasibility',
     iconName: 'Scan',
