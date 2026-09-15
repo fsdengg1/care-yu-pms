@@ -2,7 +2,7 @@
 
 import { useRouter } from '@/lib/navigation';
 import React, { Suspense, useEffect, useState } from 'react';
-import { FileText, GitCompare, ListPlus, Lock, LockOpen, Moon, Plus, RefreshCw, Sun, X } from 'lucide-react';
+import { FileText, GitCompare, ListPlus, Lock, LockOpen, Moon, Plus, RefreshCw, Save, Sun, X } from 'lucide-react';
 import { StorageService } from '@/lib/storage';
 import { DailyStatusApi } from '@/lib/dailyStatusApi';
 import { TasksApi } from '@/lib/tasksApi';
@@ -18,6 +18,12 @@ import AdditionalTaskForm from '@/components/work/AdditionalTaskForm';
 import AddSubtaskForm, { EditableSubtask, subtaskToEditable } from '@/components/work/AddSubtaskForm';
 import CreateTaskForm from '@/components/work/CreateTaskForm';
 import UserDropdown from '@/components/work/UserDropdown';
+
+/** Matches backend canSeeAllDailyStatusRows — who may persist the shared email snapshot. */
+function canSaveEmailSnapshot(user: User | null | undefined) {
+  if (!user) return false;
+  return ['CEO', 'ENG_DIRECTOR', 'PROJECT_MANAGER', 'SYSTEM_ADMIN'].includes(user.role_code);
+}
 
 function friendlyError(error: unknown, fallback: string) {
   const text = error instanceof Error ? error.message : String(error || '');
@@ -74,6 +80,7 @@ function DailyWorkUpdatesInner() {
   } | null>(null);
   const [busy, setBusy] = useState(false);
   const [saved, setSaved] = useState(false);
+  const pendingPatchesRef = React.useRef<Promise<unknown>[]>([]);
   const [additionalOpen, setAdditionalOpen] = useState(false);
   const [createOpen, setCreateOpen] = useState(false);
   const [subtaskOpen, setSubtaskOpen] = useState(false);
@@ -190,6 +197,43 @@ function DailyWorkUpdatesInner() {
     window.dispatchEvent(new CustomEvent('careyu-daily-update-saved', { detail: { workDate, period } }));
   };
 
+  /** Flush focused cell edits, persist snapshot for email/compare, refresh Email Reports. */
+  const saveForEmailReports = async () => {
+    setError(null);
+    setNotice(null);
+    setBusy(true);
+    try {
+      const active = document.activeElement;
+      if (active instanceof HTMLElement) active.blur();
+      // Let onBlur enqueue PATCHes, then wait for them to finish.
+      await new Promise((resolve) => window.setTimeout(resolve, 50));
+      const pending = pendingPatchesRef.current.splice(0, pendingPatchesRef.current.length);
+      if (pending.length) await Promise.all(pending);
+
+      if (canSaveEmailSnapshot(user)) {
+        const result = await DailyStatusApi.snapshot(period, workDate);
+        if (!result.ok) {
+          setError(result.message || 'Unable to save for Email Reports.');
+          return;
+        }
+        setRows(result.data.rows);
+        setNotice(
+          result.data.message ||
+            `${period === 'morning' ? 'Morning' : 'Evening'} updates saved. Email Reports will show this sheet.`
+        );
+      } else {
+        await loadSheet(workDate, period);
+        setNotice('Updates saved. Email Reports will show your latest daily work updates.');
+      }
+      flashSaved();
+      notifyDailyUpdateSaved();
+    } catch (err) {
+      setError(friendlyError(err, 'Unable to save for Email Reports.'));
+    } finally {
+      setBusy(false);
+    }
+  };
+
   const toggleMorningLock = async (action: 'lock' | 'unlock') => {
     setBusy(true);
     setError(null);
@@ -291,7 +335,9 @@ function DailyWorkUpdatesInner() {
               <FileText className="h-3.5 w-3.5" /> Daily Work Updates
             </div>
             <h1 className="mt-0.5 text-lg font-bold text-slate-100">Project team updates</h1>
-            <p className="mt-0.5 text-[11px] text-slate-400">Manage daily task updates and status directly from the central task sheet.</p>
+            <p className="mt-0.5 text-[11px] text-slate-400">
+              Manage daily task updates and status. Click Save so Email Reports shows the latest sheet.
+            </p>
           </div>
           <div className="flex flex-wrap gap-1.5">
             {canAddTask && !morningAddBlocked && (
@@ -398,6 +444,17 @@ function DailyWorkUpdatesInner() {
             >
               <GitCompare className="h-3.5 w-3.5" /> Compare
             </button>
+            {!morningAddBlocked && (
+              <button
+                type="button"
+                disabled={busy}
+                onClick={() => void saveForEmailReports()}
+                className="inline-flex items-center gap-1 rounded-md bg-emerald-600 px-2.5 py-1.5 font-bold text-white hover:bg-emerald-500 disabled:opacity-60"
+                title="Save updates so Email Reports shows the latest sheet"
+              >
+                <Save className="h-3.5 w-3.5" /> Save
+              </button>
+            )}
             <button type="button" onClick={() => void refreshSheet()} className="rounded-md border border-slate-700 p-1.5 text-slate-300 hover:border-cyan-600" title="Refresh">
               <RefreshCw className="h-4 w-4" />
             </button>
@@ -416,6 +473,8 @@ function DailyWorkUpdatesInner() {
           canEditAll={canEditSheet}
           canDelete={(canEditSheet || canManageTasks) && !morningAddBlocked}
           saved={saved}
+          saveBusy={busy}
+          onSave={!morningAddBlocked ? () => void saveForEmailReports() : undefined}
           selectedIds={selectedIds}
           onSelectedIds={handleSelectedIds}
           workDate={workDate}
@@ -495,14 +554,22 @@ function DailyWorkUpdatesInner() {
           }}
           onPatch={async (id, body) => {
             setError(null);
-            const result = await DailyStatusApi.updateRow(id, { ...body, work_date: workDate, period });
-            if (!result.ok) {
-              setError(result.message || 'Unable to save this change.');
-              return;
+            const work = (async () => {
+              const result = await DailyStatusApi.updateRow(id, { ...body, work_date: workDate, period });
+              if (!result.ok) {
+                setError(result.message || 'Unable to save this change.');
+                return;
+              }
+              setRows(result.data.rows);
+              flashSaved();
+              notifyDailyUpdateSaved();
+            })();
+            pendingPatchesRef.current.push(work);
+            try {
+              await work;
+            } finally {
+              pendingPatchesRef.current = pendingPatchesRef.current.filter((item) => item !== work);
             }
-            setRows(result.data.rows);
-            flashSaved();
-            notifyDailyUpdateSaved();
           }}
           onExport={exportCsv}
           onDelete={() => setConfirmDelete(true)}

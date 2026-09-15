@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useEffect, useMemo, useRef, useState } from 'react';
-import { Download, EyeOff, Filter, ListPlus, Lock, LockOpen, Moon, Pencil, Search, Trash2 } from 'lucide-react';
+import { Download, EyeOff, Filter, ListPlus, Lock, LockOpen, Moon, Pencil, Save, Search, Trash2 } from 'lucide-react';
 import {
   DailyStatusPerson,
   DailyStatusRow,
@@ -89,6 +89,8 @@ export default function DailyStatusSheet({
   canEditAll,
   canDelete,
   saved,
+  saveBusy = false,
+  onSave,
   selectedIds,
   onSelectedIds,
   onPatch,
@@ -117,6 +119,8 @@ export default function DailyStatusSheet({
   canEditAll: boolean;
   canDelete: boolean;
   saved: boolean;
+  saveBusy?: boolean;
+  onSave?: () => void;
   selectedIds: string[];
   onSelectedIds: (ids: string[]) => void;
   onPatch: (id: string, body: PatchBody) => Promise<void>;
@@ -333,6 +337,17 @@ export default function DailyStatusSheet({
           ))}
         </div>
         <div className="ml-auto flex items-center gap-1.5">
+          {onSave && !readOnly && (
+            <button
+              type="button"
+              disabled={saveBusy}
+              onClick={onSave}
+              className="inline-flex items-center gap-1 rounded-md bg-[#059669] px-2.5 py-1.5 text-[11px] font-bold text-white hover:bg-[#047857] disabled:opacity-50"
+              title="Save updates for Email Reports"
+            >
+              <Save className="h-3.5 w-3.5" /> Save
+            </button>
+          )}
           <button type="button" className="rounded-md border border-[#cbd5e1] p-1.5 text-[#475569]" title="Filter">
             <Filter className="h-3.5 w-3.5" />
           </button>
@@ -388,7 +403,7 @@ export default function DailyStatusSheet({
           {!readOnly && selectedVisible ? `${selectedVisible} selected · ` : ''}
           {visible.length} rows
         </span>
-        {saved && <span className="font-semibold text-emerald-700">Saved</span>}
+        {saved && <span className="font-semibold text-emerald-700">Saved — Email Reports updated</span>}
       </div>
 
       <div className="daily-status-table-wrap">
