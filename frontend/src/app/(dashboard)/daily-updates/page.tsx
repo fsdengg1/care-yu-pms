@@ -2,12 +2,12 @@
 
 import { useRouter } from '@/lib/navigation';
 import React, { Suspense, useEffect, useState } from 'react';
-import { FileText, GitCompare, ListPlus, Lock, Moon, Plus, RefreshCw, Sun, X } from 'lucide-react';
+import { FileText, GitCompare, ListPlus, Lock, LockOpen, Moon, Plus, RefreshCw, Sun, X } from 'lucide-react';
 import { StorageService } from '@/lib/storage';
 import { DailyStatusApi } from '@/lib/dailyStatusApi';
 import { TasksApi } from '@/lib/tasksApi';
 import { UsersApi, directoryStatus } from '@/lib/usersApi';
-import { canAddDailyWorkTask, canCreateWorkTask, canEditDailySheet } from '@/lib/rbac';
+import { canAddDailyWorkTask, canCreateWorkTask, canEditDailySheet, canPerformPmOperations } from '@/lib/rbac';
 import { CompareItem, DailyStatusPerson, DailyStatusRow, DailyStatusSubtask, appTodayIso, readStoredWorkDate, writeStoredWorkDate } from '@/lib/dailyStatus';
 import { formatEmployeeDisplayName } from '@/lib/people';
 import { User } from '@/lib/types';
@@ -99,6 +99,7 @@ function DailyWorkUpdatesInner() {
   const canManageTasks = canCreateWorkTask(user);
   const canEditSheet = canEditDailySheet(user);
   const canAddTask = canAddDailyWorkTask(user);
+  const canManageMorningLock = canPerformPmOperations(user);
   const morningLocked = Boolean(phase?.morningLocked);
   const morningAddBlocked = period === 'morning' && morningLocked;
   const pickerPeople = activePeople.length ? activePeople : people;
@@ -187,6 +188,33 @@ function DailyWorkUpdatesInner() {
 
   const notifyDailyUpdateSaved = () => {
     window.dispatchEvent(new CustomEvent('careyu-daily-update-saved', { detail: { workDate, period } }));
+  };
+
+  const toggleMorningLock = async (action: 'lock' | 'unlock') => {
+    setBusy(true);
+    setError(null);
+    setNotice(null);
+    try {
+      const result = await DailyStatusApi.morningLock(action, workDate);
+      if (!result.ok) {
+        setError(result.message || 'Unable to update Morning Status lock.');
+        return;
+      }
+      setPhase(result.data.phase || null);
+      setRows(result.data.rows);
+      setNotice(result.data.message || (action === 'unlock' ? 'Morning Status unlocked.' : 'Morning Status locked.'));
+      if (action === 'lock' && period === 'morning') {
+        setPeriod('evening');
+        await loadSheet(workDate, 'evening');
+      } else if (action === 'unlock') {
+        setPeriod('morning');
+        await loadSheet(workDate, 'morning');
+      }
+    } catch (err) {
+      setError(friendlyError(err, 'Unable to update Morning Status lock.'));
+    } finally {
+      setBusy(false);
+    }
   };
 
   const openAddSubtask = (parentId?: string) => {
@@ -308,6 +336,26 @@ function DailyWorkUpdatesInner() {
                 className="inline-flex items-center gap-1 rounded-md border border-slate-700 px-2.5 py-1.5 font-bold text-slate-100 hover:border-cyan-600 disabled:opacity-60"
               >
                 <Plus className="h-3.5 w-3.5" /> Additional Task
+              </button>
+            )}
+            {canManageMorningLock && (
+              <button
+                type="button"
+                disabled={busy}
+                onClick={() => void toggleMorningLock(phase?.morningLocked ? 'unlock' : 'lock')}
+                className={`inline-flex items-center gap-1 rounded-md px-2.5 py-1.5 font-bold transition-colors ${
+                  phase?.morningLocked
+                    ? 'border border-amber-400 bg-amber-950/40 text-amber-200 hover:border-amber-300'
+                    : 'border border-emerald-700 bg-emerald-950/30 text-emerald-200 hover:border-emerald-500'
+                }`}
+                title={
+                  phase?.morningLocked
+                    ? 'Unlock morning task details for editing'
+                    : 'Lock morning task details and open evening updates'
+                }
+              >
+                {phase?.morningLocked ? <LockOpen className="h-3.5 w-3.5" /> : <Lock className="h-3.5 w-3.5" />}
+                {phase?.morningLocked ? 'Unlock Morning Status' : 'Lock Morning Status'}
               </button>
             )}
             <button

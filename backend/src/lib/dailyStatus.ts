@@ -136,14 +136,15 @@ function saveMorningLockState(date: string, state: MorningLockState) {
 export const MORNING_LOCKED_MESSAGE =
   'Morning Status is locked after 11:00 AM. Morning task changes are no longer allowed.';
 
-/** Morning is locked for past dates and automatically at 11:00 AM in the business timezone. */
+/** Morning is locked for past dates, manual lock, or scheduled 11:00 lock — unless PM/Admin unlocked today. */
 export function isMorningStatusLocked(workDate: string, when = new Date()): boolean {
   const clock = clockInAppTimezone(when);
   if (workDate < clock.date) return true;
   if (workDate > clock.date) return false;
-  if (isMorningPhaseLocked(workDate, when)) return true;
   const state = loadMorningLockState(workDate);
-  return state?.locked === true;
+  if (state?.locked === false) return false;
+  if (state?.locked === true) return true;
+  return isMorningPhaseLocked(workDate, when);
 }
 
 /** Evening opens once morning status is locked for the selected work date. */
@@ -191,8 +192,15 @@ export function lockMorningStatus(user: User, date = todayIso()) {
 }
 
 export function unlockMorningStatus(user: User, date = todayIso()) {
-  if (isMorningPhaseLocked(date)) {
-    return { error: MORNING_LOCKED_MESSAGE, status: 400 as const, date, locked: true, phase: sheetPhase(date) };
+  const clock = clockInAppTimezone();
+  if (date < clock.date) {
+    return {
+      error: 'Past Morning Status cannot be unlocked.',
+      status: 400 as const,
+      date,
+      locked: true,
+      phase: sheetPhase(date),
+    };
   }
   const now = new Date().toISOString();
   saveMorningLockState(date, {
@@ -213,6 +221,16 @@ export function applyScheduledMorningLock(date = todayIso()) {
     return { applied: false, skipped: true, reason: 'before-lock-hour', locked: false, date };
   }
   const existingState = loadMorningLockState(date);
+  if (existingState?.locked === false) {
+    return {
+      applied: false,
+      skipped: true,
+      reason: 'manually-unlocked',
+      locked: false,
+      date,
+      phase: sheetPhase(date),
+    };
+  }
   const existingSnap = loadDailyStatusSnapshot(date, 'morning');
   if (existingState?.locked === true && Array.isArray(existingSnap)) {
     return { applied: false, skipped: true, reason: 'already-locked', locked: true, date, phase: sheetPhase(date) };
