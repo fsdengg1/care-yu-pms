@@ -1,5 +1,5 @@
 import { env } from '../config/env.js';
-import { store } from '../store/db.js';
+import { flushStore, replaceCollectionsFromPostgres, store } from '../store/db.js';
 import { User } from '../types.js';
 import {
   COMPANY_LEAVE_MESSAGE,
@@ -461,13 +461,12 @@ export async function sendConfiguredEmailReport(params: {
   };
   writeHistoryEntry(pending);
 
-  const preferLive = params.force === true || params.source === 'test' || params.source === 'manual';
-  const packed = rowsForEmailReport(actor, meta.period, date, { preferLive });
-  // Freeze mailed rows for Compare (Task Description / Current Updates).
-  // Never overwrite a locked morning snapshot from a later test/manual send.
+  await replaceCollectionsFromPostgres(['tasks', 'systemMeta', 'dailyUpdates']);
+  const packed = rowsForEmailReport(actor, meta.period, date, { preferLive: true });
   persistDailyStatusSnapshot(date, meta.period, packed.rows, actor.id, {
-    force: preferLive,
+    force: true,
   });
+  await flushStore();
   const rendered = renderDailyStatusEmailHtml({
     period: meta.period,
     date,

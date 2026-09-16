@@ -165,12 +165,11 @@ export default function EmailReportsPage() {
         </div>
         <h1 className="mt-1 text-xl font-bold text-slate-100">Daily Work Updates email</h1>
         <p className="mt-1 text-slate-400">
-          Mail reports use the same Daily Work Updates sheet (Person, Project, Task Description, and related
-          columns). Use <span className="font-semibold text-slate-300">Save</span> on Daily Work Updates so
-          this preview picks up the latest edits. Morning email is captured at 11:00 AM from live Daily Work
-          Updates. Evening preview always reflects the latest saved evening updates. No mail on Sundays or 2nd/4th Saturdays
-          (company leave). Automatic sends run on
-          working days at 11:00 AM and 7:15 PM.
+          Mail reports use the same live Daily Work Updates sheet. After you click{' '}
+          <span className="font-semibold text-slate-300">Save</span>, this preview and the next scheduled
+          mail show those values (status, progress, hours, work completed). Morning preview uses Morning
+          updates; Evening preview uses Evening updates. No mail on Sundays or 2nd/4th Saturdays. Automatic
+          sends run on working days at 11:00 AM and 7:15 PM.
         </p>
 
         <div className="mt-4 grid gap-3 rounded-xl border border-cyan-800/60 bg-slate-950/70 p-4 md:grid-cols-2">

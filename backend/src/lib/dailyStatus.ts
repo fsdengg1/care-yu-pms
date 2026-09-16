@@ -1296,22 +1296,26 @@ export function rowsForEmailReport(
       message: COMPANY_LEAVE_MESSAGE,
     };
   }
-  if (period === 'morning' && !options?.preferLive) {
+  const live = visibleSheetRows(buildDailyStatusRows(user, { date, period }));
+  if (live.length || options?.preferLive !== false) {
+    return { rows: live, source: 'live', available: true };
+  }
+  if (period === 'morning') {
     const saved = loadDailyStatusSnapshot(date, 'morning');
     if (saved?.length) {
-      rehydrateTasksFromSnapshot(saved);
-      const live = visibleSheetRows(buildDailyStatusRows(user, { date, period: 'morning' }));
-      if (live.length) {
-        return { rows: live, source: 'live', available: true };
-      }
       return { rows: scopedDailyStatusRows(user, saved), source: 'snapshot', available: true };
     }
   }
-  return {
-    rows: visibleSheetRows(buildDailyStatusRows(user, { date, period })),
-    source: 'live',
-    available: true,
-  };
+  return { rows: live, source: 'live', available: true };
+}
+
+/** Keep the mailed/preview snapshot aligned with the live Daily Work Updates sheet. */
+export function syncEmailSnapshotFromLive(date: string, period: SnapshotPeriod, actor?: User) {
+  const viewer =
+    actor && canSeeAllDailyStatusRows(actor) ? actor : globalSheetActor() || actor;
+  if (!viewer || isCompanyLeaveDay(date)) return null;
+  const rows = visibleSheetRows(buildDailyStatusRows(viewer, { date, period }));
+  return persistDailyStatusSnapshot(date, period, rows, viewer.id, { force: true });
 }
 
 export type CompareKind =
@@ -1775,21 +1779,29 @@ function emailPeriodCopy(period: SnapshotPeriod, reportLabel?: string) {
   };
 }
 
-/** Evening reports keep the master task description and append submitted evening work below it. */
+function workCompletedForEmail(row: DailyStatusRow, period: SnapshotPeriod) {
+  const fromPeriod =
+    period === 'evening'
+      ? row.eveningWorkCompleted || row.currentUpdate
+      : row.morningWorkCompleted || row.currentUpdate;
+  return String(fromPeriod || '').trim();
+}
+
+/** Reports keep the master task description and append that period's work completed. */
 function emailTaskDescriptionText(row: DailyStatusRow, period: SnapshotPeriod): string {
   const master = (row.taskDescription || '').trim() || '—';
-  if (period !== 'evening') return master;
-  const evening = (row.currentUpdate || '').trim();
-  if (!evening) return master;
-  return `${master}\n\nEvening Work Completed:\n${evening}`;
+  const work = workCompletedForEmail(row, period);
+  if (!work) return master;
+  const label = period === 'evening' ? 'Evening Work Completed' : 'Morning Work Completed';
+  return `${master}\n\n${label}:\n${work}`;
 }
 
 function emailTaskDescriptionHtml(row: DailyStatusRow, period: SnapshotPeriod): string {
   const master = escapeHtml((row.taskDescription || '').trim() || '—');
-  if (period !== 'evening') return master;
-  const evening = (row.currentUpdate || '').trim();
-  if (!evening) return master;
-  return `${master}<div style="margin-top:8px;padding-top:8px;border-top:1px solid #e2e8f0;"><div style="font-size:10px;font-weight:800;text-transform:uppercase;letter-spacing:0.04em;color:#64748b;margin-bottom:4px;">Evening Work Completed</div><div>${escapeHtml(evening)}</div></div>`;
+  const work = workCompletedForEmail(row, period);
+  if (!work) return master;
+  const label = period === 'evening' ? 'Evening Work Completed' : 'Morning Work Completed';
+  return `${master}<div style="margin-top:8px;padding-top:8px;border-top:1px solid #e2e8f0;"><div style="font-size:10px;font-weight:800;text-transform:uppercase;letter-spacing:0.04em;color:#64748b;margin-bottom:4px;">${label}</div><div>${escapeHtml(work)}</div></div>`;
 }
 
 export function inferDefaultEmailPeriod(now = new Date()): SnapshotPeriod {
@@ -1954,9 +1966,8 @@ export async function sendDailyStatusReport(params: {
   bccEmails?: string[];
 }) {
   const date = params.date || todayIso();
-  const packed = rowsForEmailReport(params.actor, params.period, date);
-  // Freeze the exact mailed rows so Compare can show morning vs evening mail text.
-  persistDailyStatusSnapshot(date, params.period, packed.rows, params.actor.id);
+  const packed = rowsForEmailReport(params.actor, params.period, date, { preferLive: true });
+  persistDailyStatusSnapshot(date, params.period, packed.rows, params.actor.id, { force: true });
   const toEmail = (params.toEmail || params.actor.email || '').trim().toLowerCase();
   const rendered = renderDailyStatusEmailHtml({
     period: params.period,

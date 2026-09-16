@@ -146,12 +146,20 @@ export default function DailyStatusReportView({
                           </td>
                           <td className="task-desc-cell">
                             <span className="sheet-text sheet-task-field">{row.taskDescription || '—'}</span>
-                            {period === 'evening' && (row.currentUpdate || '').trim() ? (
+                            {period === 'evening' && (row.eveningWorkCompleted || row.currentUpdate || '').trim() ? (
                               <div className="mt-2 border-t border-[#e2e8f0] pt-2">
                                 <div className="text-[10px] font-bold uppercase tracking-wide text-[#64748b]">
                                   Evening Work Completed
                                 </div>
-                                <span className="sheet-text sheet-task-field">{row.currentUpdate}</span>
+                                <span className="sheet-text sheet-task-field">{row.eveningWorkCompleted || row.currentUpdate}</span>
+                              </div>
+                            ) : null}
+                            {period === 'morning' && (row.morningWorkCompleted || row.currentUpdate || '').trim() ? (
+                              <div className="mt-2 border-t border-[#e2e8f0] pt-2">
+                                <div className="text-[10px] font-bold uppercase tracking-wide text-[#64748b]">
+                                  Morning Work Completed
+                                </div>
+                                <span className="sheet-text sheet-task-field">{row.morningWorkCompleted || row.currentUpdate}</span>
                               </div>
                             ) : null}
                           </td>

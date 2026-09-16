@@ -24,6 +24,7 @@ import {
   SnapshotPeriod,
   upsertDailyPeriodRecord,
   syncPeriodRecordFromTask,
+  syncEmailSnapshotFromLive,
   workStatusFromSheet,
   visibleProjects,
 } from '../lib/dailyStatus.js';
@@ -124,6 +125,7 @@ router.post(
     if (isCompanyLeaveDay(date)) {
       return res.status(400).json({ message: COMPANY_LEAVE_MESSAGE });
     }
+    await replaceCollectionsFromPostgres(['tasks', 'systemMeta', 'dailyUpdates']);
     const result = saveDailyStatusSnapshot(req.user!, period, date);
     await flushStore();
     return res.json({
@@ -154,7 +156,8 @@ router.get(
 router.get(
   '/compare',
   requirePermission('view:daily-updates', 'submit:daily-update', 'view:dashboard:ceo'),
-  (req: AuthedRequest, res) => {
+  async (req: AuthedRequest, res) => {
+    await replaceCollectionsFromPostgres(['tasks', 'systemMeta', 'dailyUpdates']);
     const date = typeof req.query.date === 'string' && req.query.date ? req.query.date : undefined;
     const against = typeof req.query.against === 'string' && req.query.against ? req.query.against : undefined;
     const result = compareSnapshots(req.user!, date, against);
@@ -170,10 +173,11 @@ router.get(
 router.get(
   '/email-preview',
   requirePermission('view:daily-updates', 'view:dashboard:ceo'),
-  (req: AuthedRequest, res) => {
+  async (req: AuthedRequest, res) => {
+    await replaceCollectionsFromPostgres(['tasks', 'systemMeta', 'dailyUpdates']);
     const period = readPeriod(req.query.period);
     const date = readIsoDate(req.query.date);
-    const packed = rowsForEmailReport(req.user!, period, date);
+    const packed = rowsForEmailReport(req.user!, period, date, { preferLive: true });
     const rendered = renderDailyStatusEmailHtml({
       period,
       date,
@@ -199,6 +203,7 @@ router.post(
   '/email-send',
   requirePermission('view:daily-updates', 'view:dashboard:ceo'),
   async (req: AuthedRequest, res) => {
+    await replaceCollectionsFromPostgres(['tasks', 'systemMeta', 'dailyUpdates']);
     const period = readPeriod(req.body?.period);
     const configured = getEmailReportScheduleConfig();
     const toEmail =
@@ -425,6 +430,7 @@ router.patch(
     }
 
     if (Object.keys(body).length === 0) {
+      syncEmailSnapshotFromLive(date, period, req.user!);
       await flushStore();
       return res.json({ rows: rebuildRows() });
     }
@@ -447,6 +453,7 @@ router.patch(
     }
     if ('error' in result) {
       if (Object.keys(periodPatch).length && result.error === 'forbidden') {
+        syncEmailSnapshotFromLive(date, period, req.user!);
         await flushStore();
         return res.json({ rows: rebuildRows() });
       }
@@ -474,6 +481,7 @@ router.patch(
         });
       }
     }
+    syncEmailSnapshotFromLive(date, period, req.user!);
     await flushStore();
     return res.json({ task: result.task, rows: rebuildRows() });
   }
