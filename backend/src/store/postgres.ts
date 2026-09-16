@@ -346,9 +346,14 @@ export async function loadSelectedCollections(names: CollectionName[]): Promise<
   if (!names.length) return out;
   const { loadRelationalRows } = await import('./relationalStore.js');
   const pool = getPool();
+  const wantsUsers = names.includes('users');
   for (const name of names) {
     if (name === 'users') continue;
     out[name] = await loadRelationalRows(pool, name);
+  }
+  if (wantsUsers) {
+    const { loadUsersTable } = await import('./usersTable.js');
+    out.users = await loadUsersTable();
   }
   return out;
 }

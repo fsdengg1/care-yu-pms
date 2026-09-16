@@ -855,7 +855,9 @@ export async function replaceCollectionsFromPostgres(names: CollectionName[]): P
   const remote = await loadSelectedCollections(names);
   const db = loadDb();
   for (const name of names) {
-    (db as unknown as Record<string, unknown[]>)[name] = (remote[name] || []) as unknown[];
+    const rows = remote[name];
+    if (!Array.isArray(rows)) continue;
+    (db as unknown as Record<string, unknown[]>)[name] = rows;
   }
   cache = db;
 }

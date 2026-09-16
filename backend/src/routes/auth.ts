@@ -18,9 +18,15 @@ import { sendInvitationToManager, sendPasswordResetEmail } from '../lib/authEmai
 import { isFullyActivated, publicUser, resolveSignupReportingManager } from '../lib/authUser.js';
 import { clientKey, rateLimit } from '../lib/rateLimit.js';
 import { requireAuth, requirePasswordSetupOrInitialPassword, AuthedRequest } from '../middleware/auth.js';
-import { store } from '../store/db.js';
+import { replaceCollectionsFromPostgres, store } from '../store/db.js';
 
 const router = Router();
+
+const AUTH_SYNC_COLLECTIONS = ['users', 'pendingSignups'] as const;
+
+async function reloadAuthUsers() {
+  await replaceCollectionsFromPostgres([...AUTH_SYNC_COLLECTIONS]);
+}
 
 function issueToken(
   user: { id: string; role_code: string; email: string },
@@ -76,6 +82,7 @@ router.get('/config', (_req, res) => {
 router.post('/signup', async (req, res) => {
   const limited = rateLimit({ key: clientKey(req, 'signup'), limit: 8, windowMs: 15 * 60 * 1000 });
   if (!limited.ok) return tooMany(res, limited.retryAfterSec);
+  await reloadAuthUsers();
 
   const result = await signupUser({
     name: readString(req.body?.fullName || req.body?.name),
@@ -100,9 +107,10 @@ router.post('/signup', async (req, res) => {
   );
 });
 
-router.post('/login-mode', (req, res) => {
+router.post('/login-mode', async (req, res) => {
   const limited = rateLimit({ key: clientKey(req, 'login-mode'), limit: 40, windowMs: 15 * 60 * 1000 });
   if (!limited.ok) return tooMany(res, limited.retryAfterSec);
+  await reloadAuthUsers();
   const email = readString(req.body?.workEmail || req.body?.email);
   return res.json(lookupLoginMode(email));
 });
@@ -114,6 +122,7 @@ async function handleInvitationVerify(req: import('express').Request, res: impor
   const limited = rateLimit({ key: clientKey(req, 'invitation-login'), limit: 15, windowMs: 15 * 60 * 1000 });
   if (!limited.ok) return tooMany(res, limited.retryAfterSec);
 
+  await reloadAuthUsers();
   const result = await invitationLogin({
     email: readString(req.body?.workEmail || req.body?.email),
     invitationCode: readString(req.body?.invitationCode),
@@ -203,6 +212,7 @@ router.post('/login', async (req, res) => {
   }
   if (!password) return fail(res, 400, 'Password is required.');
 
+  await reloadAuthUsers();
   const result = await authenticateLogin({ email, password });
   if (!result.ok) {
     return fail(res, result.status, result.message, result.code);

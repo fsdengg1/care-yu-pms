@@ -15,7 +15,7 @@ import { maskEmail } from './emailDiagnostics.js';
 import { newId } from './leadWorkflow.js';
 import { hashPassword, validatePasswordPolicy, verifyPassword } from './password.js';
 import { applyDirectoryPlacement, ENGINEERING_DIRECTOR_EMAIL, knownLoginPasswords, resolveDirectoryRole } from './directoryRoles.js';
-import { isRobotLeadEmail } from './robotLead.js';
+import { isRobotLeadEmail, robotLeadEmail } from './robotLead.js';
 import {
   generateInvitationCode,
   generateSecureToken,
@@ -24,6 +24,24 @@ import {
   invitationCodesMatch,
   tokensMatch,
 } from './tokens.js';
+
+function findLoginUser(email: string): User | undefined {
+  const direct = store.findUserByEmail(email);
+  if (direct) return direct;
+  if (email === 'robotlead1@careyu.ai' || isRobotLeadEmail(email) || email === robotLeadEmail()) {
+    return (
+      store.findUserByEmail(robotLeadEmail()) ||
+      store.findUserByEmail('robottech@careyu.ai') ||
+      store.findUserByEmail('robotlead1@careyu.ai') ||
+      store.findUserById('u-tl-rob') ||
+      store.findUserById('u-robotlead1')
+    );
+  }
+  if (email === 'engg.director@careyu.ai' || email === ENGINEERING_DIRECTOR_EMAIL) {
+    return store.getUsers().find((item) => item.role_code === 'ENG_DIRECTOR');
+  }
+  return undefined;
+}
 
 function nextEmployeeId() {
   const numbers = [...store.getUsers(), ...store.getPendingSignups()]
@@ -286,7 +304,7 @@ export function lookupLoginMode(emailRaw: string): { loginMode: 'password' | 'in
     return { loginMode: 'password' };
   }
   if (store.findPendingSignupByEmail(email)) return { loginMode: 'invitation' };
-  const user = store.findUserByEmail(email);
+  const user = findLoginUser(email);
   if (!user) return { loginMode: 'password' };
   if (needsInvitationLogin(user)) return { loginMode: 'invitation' };
   return { loginMode: 'password' };
@@ -590,11 +608,7 @@ export async function authenticateLogin(input: {
   | { ok: false; status: number; message: string; code?: string }
 > {
   const email = input.email.trim().toLowerCase();
-  const user =
-    store.findUserByEmail(email) ||
-    ((email === 'engg.director@careyu.ai' || email === ENGINEERING_DIRECTOR_EMAIL)
-      ? store.getUsers().find((item) => item.role_code === 'ENG_DIRECTOR')
-      : undefined);
+  const user = findLoginUser(email);
 
   if (!user) {
     if (store.findPendingSignupByEmail(email)) {
@@ -636,7 +650,11 @@ export async function authenticateLogin(input: {
 
   let passwordOk = false;
   if (user.password_hash) {
-    passwordOk = await verifyPassword(input.password, user.password_hash);
+    try {
+      passwordOk = await verifyPassword(input.password, user.password_hash);
+    } catch {
+      passwordOk = false;
+    }
   }
   if (!passwordOk) {
     const known = knownLoginPasswords(user.email, user.role_code);
