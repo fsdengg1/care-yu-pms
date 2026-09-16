@@ -1,6 +1,6 @@
 import type { CSSProperties } from 'react';
 
-export type DailySheetStatus = 'Yet to Start' | 'In Progress' | 'Waiting' | 'Completed' | 'Hold';
+export type DailySheetStatus = 'Not Started' | 'In Progress' | 'Completed' | 'On Hold' | 'Cancelled';
 export type SnapshotPeriod = 'morning' | 'evening';
 
 export type DeadlineTone = 'completed' | 'hold' | 'delay-1' | 'delay-2plus' | 'normal';
@@ -67,6 +67,12 @@ export interface DailyStatusRow {
   attendanceLabel?: string;
   morningProgressPercent?: number;
   eveningProgressPercent?: number;
+  morningHoursWorked?: number;
+  eveningHoursWorked?: number;
+  morningLoggedHours?: string;
+  eveningLoggedHours?: string;
+  morningRemarks?: string;
+  eveningRemarks?: string;
 }
 
 export interface DailyStatusKpis {
@@ -86,28 +92,29 @@ export interface DailyStatusPerson {
 }
 
 export const SHEET_STATUSES: DailySheetStatus[] = [
-  'Yet to Start',
+  'Not Started',
   'In Progress',
-  'Waiting',
   'Completed',
-  'Hold',
+  'On Hold',
+  'Cancelled',
 ];
 
 export function toSheetStatus(status?: string): DailySheetStatus {
   const value = (status || '').toUpperCase().replace(/\s+/g, '_');
   if (value === 'DONE' || value === 'COMPLETED') return 'Completed';
   if (value === 'IN_PROGRESS' || value === 'WORK_IN_PROGRESS') return 'In Progress';
-  if (value === 'HOLD' || value === 'ON_HOLD') return 'Hold';
-  if (value === 'WAITING' || value === 'BLOCKED') return 'Waiting';
-  if (value === 'YET_TO_START' || value === 'TODO' || value === 'NOT_STARTED') return 'Yet to Start';
-  return 'Yet to Start';
+  if (value === 'CANCELLED' || value === 'CANCELED') return 'Cancelled';
+  if (value === 'HOLD' || value === 'ON_HOLD' || value === 'WAITING' || value === 'BLOCKED') return 'On Hold';
+  if (value === 'YET_TO_START' || value === 'TODO' || value === 'NOT_STARTED' || value === 'NOT STARTED') return 'Not Started';
+  return 'Not Started';
 }
 
-export function fromSheetStatus(status: string): 'TODO' | 'IN_PROGRESS' | 'DONE' | 'WAITING' | 'HOLD' {
-  if (status === 'Completed' || status === 'DONE' || status === 'COMPLETED') return 'DONE';
-  if (status === 'In Progress' || status === 'IN_PROGRESS') return 'IN_PROGRESS';
-  if (status === 'Hold' || status === 'HOLD') return 'HOLD';
-  if (status === 'Waiting' || status === 'WAITING' || status === 'BLOCKED') return 'WAITING';
+export function fromSheetStatus(status: string): 'TODO' | 'IN_PROGRESS' | 'DONE' | 'WAITING' | 'HOLD' | 'CANCELLED' {
+  const sheet = toSheetStatus(status);
+  if (sheet === 'Completed' || status === 'DONE' || status === 'COMPLETED') return 'DONE';
+  if (sheet === 'In Progress' || status === 'IN_PROGRESS') return 'IN_PROGRESS';
+  if (sheet === 'On Hold' || status === 'HOLD' || status === 'WAITING' || status === 'BLOCKED') return 'HOLD';
+  if (sheet === 'Cancelled' || status === 'CANCELLED') return 'CANCELLED';
   return 'TODO';
 }
 
@@ -122,15 +129,16 @@ export function progressForSheetStatus(status?: string, value?: unknown): number
   const sheet = SHEET_STATUSES.includes(status as DailySheetStatus) ? (status as DailySheetStatus) : toSheetStatus(status);
   const stored = clampProgressPercent(value);
   if (sheet === 'Completed') return 100;
-  if (sheet === 'Yet to Start') return 0;
+  if (sheet === 'Not Started') return 0;
+  if (sheet === 'Cancelled') return stored;
   return Math.min(99, stored);
 }
 
 export function sheetStatusClass(status: string): string {
   if (status === 'Completed') return 'border-[#86efac] bg-[#dcfce7] text-[#166534]';
   if (status === 'In Progress') return 'border-[#93c5fd] bg-[#dbeafe] text-[#1d4ed8]';
-  if (status === 'Waiting') return 'border-[#fdba74] bg-[#ffedd5] text-[#9a3412]';
-  if (status === 'Hold') return 'border-[#f59e0b] bg-[#fef3c7] text-[#92400e]';
+  if (status === 'On Hold') return 'border-[#f59e0b] bg-[#fef3c7] text-[#92400e]';
+  if (status === 'Cancelled') return 'border-[#fecaca] bg-[#fee2e2] text-[#991b1b]';
   return 'border-[#cbd5e1] bg-[#f8fafc] text-[#334155]';
 }
 
@@ -162,7 +170,7 @@ export function overdueDays(deadlineIso: string | undefined, today = new Date().
 export function deadlineTone(status: string, deadline?: string, today?: string): DeadlineTone {
   const sheet = SHEET_STATUSES.includes(status as DailySheetStatus) ? status : toSheetStatus(status);
   if (sheet === 'Completed') return 'completed';
-  if (sheet === 'Hold') return 'hold';
+  if (sheet === 'On Hold') return 'hold';
   const iso = parseSheetDate(deadline);
   const days = iso ? overdueDays(iso, today) : 0;
   if (days >= 2) return 'delay-2plus';
@@ -221,6 +229,24 @@ export interface CompareItem {
   loggedHours?: string;
   hoursWorked?: number;
   kinds: CompareKind[];
+  previousDate?: string;
+  currentDate?: string;
+  previousMorningStatus?: string;
+  previousEveningStatus?: string;
+  previousMorningProgressPercent?: number;
+  previousEveningProgressPercent?: number;
+  previousMorningHours?: string;
+  previousEveningHours?: string;
+  previousMorningRemarks?: string;
+  previousEveningRemarks?: string;
+  currentMorningStatus?: string;
+  currentEveningStatus?: string;
+  currentMorningProgressPercent?: number;
+  currentEveningProgressPercent?: number;
+  currentMorningHours?: string;
+  currentEveningHours?: string;
+  currentMorningRemarks?: string;
+  currentEveningRemarks?: string;
   morningUpdate?: string;
   eveningUpdate?: string;
   morningStatus?: string;
@@ -267,13 +293,15 @@ export function appTodayIso() {
 
 const WORK_DATE_KEY = 'careyu.dailyWorkDate';
 
+export function shiftWorkDate(iso: string, days: number) {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(iso)) return iso;
+  const [y, m, d] = iso.split('-').map(Number);
+  const utc = new Date(Date.UTC(y, m - 1, d));
+  utc.setUTCDate(utc.getUTCDate() + days);
+  return utc.toISOString().slice(0, 10);
+}
+
 export function readStoredWorkDate(): string {
-  try {
-    const stored = sessionStorage.getItem(WORK_DATE_KEY);
-    if (stored && /^\d{4}-\d{2}-\d{2}$/.test(stored)) return stored;
-  } catch {
-    /* ignore */
-  }
   return appTodayIso();
 }
 

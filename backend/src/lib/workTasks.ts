@@ -47,9 +47,10 @@ function taskStatusFromBody(value: unknown): Task['status'] {
   const upper = raw.toUpperCase().replace(/\s+/g, '_');
   if (raw === 'Completed' || upper === 'DONE' || upper === 'COMPLETED') return 'DONE';
   if (raw === 'In Progress' || upper === 'IN_PROGRESS' || upper === 'WORK_IN_PROGRESS') return 'IN_PROGRESS';
-  if (raw === 'Hold' || upper === 'HOLD' || upper === 'ON_HOLD') return 'HOLD';
+  if (raw === 'Hold' || raw === 'On Hold' || upper === 'HOLD' || upper === 'ON_HOLD') return 'HOLD';
   if (raw === 'Waiting' || upper === 'WAITING' || upper === 'BLOCKED') return 'WAITING';
-  if (raw === 'Yet to Start' || upper === 'TODO' || upper === 'YET_TO_START' || upper === 'NOT_STARTED') return 'TODO';
+  if (raw === 'Cancelled' || upper === 'CANCELLED' || upper === 'CANCELED') return 'CANCELLED';
+  if (raw === 'Yet to Start' || raw === 'Not Started' || upper === 'TODO' || upper === 'YET_TO_START' || upper === 'NOT_STARTED') return 'TODO';
   return 'TODO';
 }
 

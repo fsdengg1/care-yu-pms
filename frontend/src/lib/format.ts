@@ -41,13 +41,15 @@ export function formatClock(iso: string): string {
 }
 
 export const WORK_STATUS_LABELS: Record<string, string> = {
-  NOT_STARTED: 'Yet to Start',
+  NOT_STARTED: 'Not Started',
   IN_PROGRESS: 'In Progress',
-  BLOCKED: 'Waiting',
-  WAITING: 'Waiting',
+  BLOCKED: 'On Hold',
+  WAITING: 'On Hold',
   COMPLETED: 'Completed',
-  HOLD: 'Hold',
-  TODO: 'Yet to Start',
+  HOLD: 'On Hold',
+  ON_HOLD: 'On Hold',
+  CANCELLED: 'Cancelled',
+  TODO: 'Not Started',
   DONE: 'Completed',
   PENDING_TL_REVIEW: 'Pending Team Lead Review',
   CORRECTION_REQUIRED: 'Correction Required',
@@ -205,11 +207,12 @@ export function formatDateTime(value?: string): string {
 }
 
 export const TASK_STATUS_LABELS: Record<string, string> = {
-  TODO: 'Yet to Start',
+  TODO: 'Not Started',
   IN_PROGRESS: 'In Progress',
-  BLOCKED: 'Waiting',
-  WAITING: 'Waiting',
-  HOLD: 'Hold',
+  BLOCKED: 'On Hold',
+  WAITING: 'On Hold',
+  HOLD: 'On Hold',
+  CANCELLED: 'Cancelled',
   DONE: 'Completed',
   PENDING_TL_REVIEW: 'Pending Team Lead Review',
   CORRECTION_REQUIRED: 'Correction Required',

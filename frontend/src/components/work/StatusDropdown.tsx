@@ -60,7 +60,7 @@ export default function StatusDropdown({
         onClick={() => setOpen((value) => !value)}
         className={`inline-flex items-center gap-1 rounded border text-[10px] font-bold whitespace-nowrap hover:opacity-90 disabled:cursor-default disabled:opacity-80 ${sheetStatusClass(value)} ${variant === 'sheet' ? 'sheet-status-badge' : 'w-full rounded-full px-2 py-1'}`}
       >
-        <span className="min-w-0 truncate">{value || 'Yet to Start'}</span>
+        <span className="min-w-0 truncate">{value || 'Not Started'}</span>
         {!disabled && <ChevronDown className="h-3 w-3 shrink-0" />}
       </button>
       {open &&

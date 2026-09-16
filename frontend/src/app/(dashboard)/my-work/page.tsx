@@ -239,6 +239,7 @@ export default function MyAssignedWorkPage() {
         people={sheetPeople}
         projects={sheetProjects}
         currentUserId={currentUser.id}
+        canAssignOthers={canCreateWorkTask(currentUser)}
         onClose={() => setShowCreate(false)}
         onCreated={(message) => {
           setNotice(message);

@@ -29,9 +29,10 @@ export function assignmentStatusLabel(item: Pick<WorkAssignment, 'acceptance_sta
   if (item.acceptance_status === 'ACCEPTED') return 'Accepted';
   if (item.current_status === 'COMPLETED' || item.current_status === 'DONE') return 'Completed';
   if (item.current_status === 'IN_PROGRESS') return 'In Progress';
-  if (item.current_status === 'HOLD') return 'Hold';
-  if (item.current_status === 'WAITING' || item.current_status === 'BLOCKED') return 'Waiting';
-  return 'Yet to Start';
+  if (item.current_status === 'HOLD' || item.current_status === 'ON_HOLD') return 'On Hold';
+  if (item.current_status === 'WAITING' || item.current_status === 'BLOCKED') return 'On Hold';
+  if (item.current_status === 'CANCELLED') return 'Cancelled';
+  return 'Not Started';
 }
 
 export function createdByLabel(name?: string) {

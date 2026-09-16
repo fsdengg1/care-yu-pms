@@ -169,16 +169,16 @@ function assignmentFromTask(task: Task, project?: Project, lead?: Lead): WorkAss
       : lead?.pipeline_stage || (project && !isNonProject ? 'EXECUTION' : 'ASSIGNED'),
     due_date: task.due_date,
     priority: task.priority,
+    last_update_at: latest?.submitted_at || task.last_update_at || task.updated_at,
+    assigned_to_id: task.assigned_to_id,
+    assigned_to: task.assigned_to,
+    progress_percent: latest?.progress_percent ?? task.progress_percent ?? 0,
     current_status:
       task.review_status === 'PENDING_TL_REVIEW'
         ? 'PENDING_TL_REVIEW'
         : task.review_status === 'CORRECTION_REQUIRED'
           ? 'CORRECTION_REQUIRED'
-          : taskStatusToWork(task.status),
-    last_update_at: task.last_update_at || latest?.submitted_at || task.updated_at,
-    assigned_to_id: task.assigned_to_id,
-    assigned_to: task.assigned_to,
-    progress_percent: task.progress_percent ?? latest?.progress_percent ?? 0,
+          : latest?.work_status || taskStatusToWork(task.status),
     blocked: task.status === 'BLOCKED',
     blocker: task.blocked_reason || latest?.blocker,
     task_type: taskType,

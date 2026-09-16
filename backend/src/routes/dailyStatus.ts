@@ -14,26 +14,20 @@ import {
   fromSheetStatus,
   isCompanyLeaveDay,
   loadDailyStatusSnapshot,
-  ensureMorningSnapshot,
-  lockMorningStatus,
-  MORNING_LOCKED_MESSAGE,
   sheetPhase,
   renderDailyStatusEmailHtml,
   restoreDailyStatusReport,
-  rehydrateTasksFromSnapshot,
-  rejectMorningBaselinePatch,
   rowsForEmailReport,
   rowsForPeriod,
   saveDailyStatusSnapshot,
   sendDailyStatusReport,
   SnapshotPeriod,
-  unlockMorningStatus,
   upsertLoggedHoursForTask,
   upsertEveningWorkCompleted,
   syncPeriodRecordFromTask,
+  upsertDailyPeriodRecord,
+  workStatusFromSheet,
   visibleProjects,
-  isEveningStatusOpen,
-  isMorningStatusLocked,
 } from '../lib/dailyStatus.js';
 import { formatEmployeeDisplayName } from '../lib/people.js';
 import { updateWorkTask, setTaskSheetHidden } from '../lib/workTasks.js';
@@ -78,45 +72,13 @@ router.get(
     const user = req.user!;
     const date = readIsoDate(req.query.date);
     const period = typeof req.query.period === 'string' && req.query.period ? readPeriod(req.query.period) : undefined;
-    ensureMorningSnapshot(user, date);
     const phase = sheetPhase(date);
-    // Restore missing live tasks from the saved morning snapshot before building rows.
-    if (period === 'morning' || !period) {
-      const savedMorning = loadDailyStatusSnapshot(date, 'morning');
-      if (savedMorning?.length) rehydrateTasksFromSnapshot(savedMorning);
-    }
-    let rows = buildDailyStatusRows(user, { date, period });
-    if (period === 'morning') {
-      const snap = loadDailyStatusSnapshot(date, 'morning');
-      const liveTaskCount = rows.filter((row) => row.rowKind !== 'leave' && row.rowKind !== 'permission').length;
-      if (snap?.length && (phase.morningLocked || liveTaskCount === 0)) {
-        const liveById = new Map(rows.map((row) => [row.id, row]));
-        rows = snap.map((row) => {
-          const live = liveById.get(row.id);
-          return live
-            ? {
-                ...row,
-                canEdit: phase.morningLocked ? false : live.canEdit,
-                canEditBaseline: phase.morningLocked ? false : live.canEditBaseline,
-                eveningSubmitted: live.eveningSubmitted,
-              }
-            : {
-                ...row,
-                canEdit: phase.morningLocked ? false : Boolean(row.canEdit),
-                canEditBaseline: phase.morningLocked ? false : Boolean(row.canEditBaseline),
-              };
-        });
-        const snapIds = new Set(rows.map((row) => row.id));
-        for (const row of buildDailyStatusRows(user, { date, period: 'morning' })) {
-          if (row.rowKind === 'leave' && !snapIds.has(row.id)) rows.unshift(row);
-        }
-      }
-    }
+    const rows = buildDailyStatusRows(user, { date, period: period || 'morning' });
     const personIds = [...new Set(rows.map((row) => row.personId).filter(Boolean))];
     return res.json({
       rows,
       date,
-      period: period || (phase.eveningOpen ? 'evening' : 'morning'),
+      period: period || 'morning',
       phase,
       attendance: attendanceForUsers(personIds, date),
       kpis: buildDailyStatusKpis(user, rows.filter((row) => !row.sheetHidden && row.rowKind !== 'leave')),
@@ -139,25 +101,12 @@ router.post(
       return res.status(403).json({ message: 'Only a Project Manager or System Admin can lock or unlock Morning Status.' });
     }
     const date = readIsoDate(req.body?.date);
-    const action = String(req.body?.action || 'lock').toLowerCase() === 'unlock' ? 'unlock' : 'lock';
-    const result = action === 'unlock' ? unlockMorningStatus(user, date) : lockMorningStatus(user, date);
-    if ('error' in result && result.error) {
-      return res.status(result.status || 400).json({ message: result.error, ...result });
-    }
-    if ('skipped' in result && result.skipped && result.reason === 'company-leave') {
-      return res.status(400).json({
-        message: COMPANY_LEAVE_MESSAGE,
-        ...result,
-        rows: [],
-      });
-    }
     return res.json({
-      message:
-        action === 'unlock'
-          ? 'Morning Status unlocked. Team members can edit morning task details again.'
-          : 'Morning Status locked. Evening updates are now open for the same tasks.',
-      ...result,
-      rows: buildDailyStatusRows(user, { date, period: action === 'unlock' ? 'morning' : 'evening' }),
+      message: 'Morning and Evening are both editable. Locking is no longer used.',
+      date,
+      locked: false,
+      phase: sheetPhase(date),
+      rows: buildDailyStatusRows(user, { date, period: 'morning' }),
     });
   }
 );
@@ -209,7 +158,8 @@ router.get(
   requirePermission('view:daily-updates', 'submit:daily-update', 'view:dashboard:ceo'),
   (req: AuthedRequest, res) => {
     const date = typeof req.query.date === 'string' && req.query.date ? req.query.date : undefined;
-    const result = compareSnapshots(req.user!, date);
+    const against = typeof req.query.against === 'string' && req.query.against ? req.query.against : undefined;
+    const result = compareSnapshots(req.user!, date, against);
     return res.json({
       ...result,
       message: result.available
@@ -385,7 +335,7 @@ router.patch(
   requirePermission('view:daily-updates', 'create:task', 'submit:daily-update'),
   async (req: AuthedRequest, res) => {
     const date = readIsoDate(req.query.date || req.body?.work_date);
-    const period = typeof req.body?.period === 'string' && req.body.period ? readPeriod(req.body.period) : undefined;
+    const period = typeof req.body?.period === 'string' && req.body.period ? readPeriod(req.body.period) : 'morning';
     const taskId = String(req.params.id);
     if (isCompanyLeaveDay(date)) {
       return res.status(400).json({ message: COMPANY_LEAVE_MESSAGE });
@@ -393,25 +343,7 @@ router.patch(
     if (taskId.startsWith('leave:') || taskId.startsWith('permission:')) {
       return res.status(400).json({ message: 'Leave and permission rows are not editable task records.' });
     }
-    ensureMorningSnapshot(req.user!, date);
-    if (isMorningStatusLocked(date) && period !== 'evening') {
-      const mutatingKeys = Object.keys(req.body || {}).filter(
-        (key) => !['work_date', 'period', 'sheet_hidden'].includes(key)
-      );
-      if (period === 'morning' || mutatingKeys.length) {
-        return res.status(400).json({ message: MORNING_LOCKED_MESSAGE });
-      }
-    }
-    if (period === 'evening' && !isEveningStatusOpen(date)) {
-      return res.status(400).json({
-        message: 'Evening Status opens after Morning Status is locked for this date.',
-      });
-    }
     const body: Record<string, unknown> = { ...(req.body || {}) };
-    const baselineBlocked = rejectMorningBaselinePatch(period, date, body);
-    if (baselineBlocked) {
-      return res.status(400).json({ message: baselineBlocked });
-    }
     if (body.remarks !== undefined && body.delay_reason === undefined && body.reason_for_delay === undefined) {
       body.delay_reason = body.remarks;
     }
@@ -426,7 +358,7 @@ router.patch(
     if (existingTask) {
       const nextStatus =
         typeof body.status === 'string'
-          ? ['TODO', 'IN_PROGRESS', 'DONE', 'BLOCKED', 'WAITING', 'HOLD'].includes(body.status)
+          ? ['TODO', 'IN_PROGRESS', 'DONE', 'BLOCKED', 'WAITING', 'HOLD', 'CANCELLED'].includes(body.status)
             ? body.status
             : fromSheetStatus(body.status)
           : existingTask.status;
@@ -436,26 +368,47 @@ router.patch(
         delay_reason: typeof body.delay_reason === 'string' ? body.delay_reason : existingTask.delay_reason,
       };
       if (delayReasonMissingForTask(probe, date, typeof body.delay_reason === 'string' ? body.delay_reason : undefined)) {
-        // Morning edits were getting lost when overdue rows still showed "No delay".
-        // Keep the save, but force a delay reason so Email Reports can pick up the update.
-        if (period === 'morning') {
-          body.delay_reason = 'Other: Morning update — delay reason pending';
-        } else {
-          return res.status(400).json({
-            message: 'Reason for Delay is required because this task is overdue.',
-            delayReasonRequired: true,
-          });
-        }
+        if (!body.delay_reason) body.delay_reason = existingTask.delay_reason || 'Other: update pending';
       }
     }
     if (
       typeof body.status === 'string' &&
-      !['TODO', 'IN_PROGRESS', 'DONE', 'BLOCKED', 'WAITING', 'HOLD'].includes(body.status)
+      !['TODO', 'IN_PROGRESS', 'DONE', 'BLOCKED', 'WAITING', 'HOLD', 'CANCELLED'].includes(body.status)
     ) {
       body.status = fromSheetStatus(body.status);
     }
 
     const rebuildRows = () => buildDailyStatusRows(req.user!, { date, period });
+    const today = todayDate();
+    const periodPatch: {
+      work_completed?: string;
+      hours_worked?: number;
+      progress_percent?: number;
+      work_status?: ReturnType<typeof workStatusFromSheet>;
+      blocker?: string;
+    } = {};
+    if (typeof body.status === 'string') periodPatch.work_status = workStatusFromSheet(String(body.status));
+    if (body.progress_percent !== undefined) periodPatch.progress_percent = Math.max(0, Math.min(100, Number(body.progress_percent) || 0));
+    if (typeof body.delay_reason === 'string') periodPatch.blocker = body.delay_reason;
+    if (body.hours_worked !== undefined) periodPatch.hours_worked = Number(body.hours_worked);
+    if (Object.keys(periodPatch).length) {
+      const periodResult = upsertDailyPeriodRecord(req.user!, taskId, date, period, periodPatch);
+      if (!periodResult.ok) {
+        return res.status(periodResult.status || 400).json({
+          message:
+            periodResult.error === 'forbidden'
+              ? 'You do not have permission to save this update.'
+              : periodResult.error === 'not_found'
+                ? 'Task not found.'
+                : periodResult.error,
+        });
+      }
+    }
+    if (date !== today) {
+      delete body.status;
+      delete body.progress_percent;
+      delete body.delay_reason;
+    }
 
     const eveningNarrative =
       typeof body.evening_update === 'string'

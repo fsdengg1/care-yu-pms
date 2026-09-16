@@ -35,7 +35,7 @@ export default function CreateLeadTaskForm({
   const [description, setDescription] = useState('');
   const [assigneeId, setAssigneeId] = useState('');
   const [dependsOn, setDependsOn] = useState<string[]>([]);
-  const [status, setStatus] = useState<DailySheetStatus>('Yet to Start');
+  const [status, setStatus] = useState<DailySheetStatus>('Not Started');
   const [deadline, setDeadline] = useState('');
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
@@ -56,7 +56,7 @@ export default function CreateLeadTaskForm({
     setDescription('');
     setAssigneeId('');
     setDependsOn([]);
-    setStatus('Yet to Start');
+    setStatus('Not Started');
     setDeadline('');
     setError('');
   }, [open, editing]);
@@ -67,7 +67,7 @@ export default function CreateLeadTaskForm({
     setDescription('');
     setAssigneeId('');
     setDependsOn([]);
-    setStatus('Yet to Start');
+    setStatus('Not Started');
     setDeadline('');
     setError('');
   };

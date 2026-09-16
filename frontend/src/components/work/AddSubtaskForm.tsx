@@ -21,8 +21,8 @@ function statusToApi(status: string): Task['status'] {
   const sheet = toSheetStatus(status);
   if (sheet === 'Completed') return 'DONE';
   if (sheet === 'In Progress') return 'IN_PROGRESS';
-  if (sheet === 'Waiting') return 'WAITING';
-  if (sheet === 'Hold') return 'HOLD';
+  if (sheet === 'On Hold') return 'HOLD';
+  if (sheet === 'Cancelled') return 'CANCELLED';
   return 'TODO';
 }
 
@@ -237,11 +237,11 @@ export default function AddSubtaskForm({
                 }}
                 className="mt-1 w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-slate-100"
               >
-                <option value="TODO">Yet to Start</option>
+                <option value="TODO">Not Started</option>
                 <option value="IN_PROGRESS">In Progress</option>
                 <option value="DONE">Completed</option>
-                <option value="WAITING">Waiting</option>
-                <option value="HOLD">Hold</option>
+                <option value="HOLD">On Hold</option>
+                <option value="CANCELLED">Cancelled</option>
               </select>
             </label>
             <label className="block text-slate-300">

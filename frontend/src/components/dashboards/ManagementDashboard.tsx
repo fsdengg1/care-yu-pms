@@ -40,9 +40,9 @@ export default function ManagementDashboard({ user }: { user: User }) {
   const totals = useMemo(() => {
     const completed = rows.filter((row) => row.status === 'Completed').length;
     const inProgress = rows.filter((row) => row.status === 'In Progress').length;
-    const hold = rows.filter((row) => row.status === 'Hold').length;
+    const hold = rows.filter((row) => row.status === 'On Hold').length;
     const overdue = rows.filter((row) => row.overdue).length;
-    const critical = rows.filter((row) => row.overdue && (row.status === 'Waiting' || row.status === 'Hold')).length;
+    const critical = rows.filter((row) => row.overdue && (row.status === 'On Hold' || row.blocked)).length;
     return {
       overall: rows.length ? Math.round((completed / rows.length) * 100) : 0,
       tasks: rows.length,
@@ -57,8 +57,8 @@ export default function ManagementDashboard({ user }: { user: User }) {
 
   const attentionRows = useMemo(() => {
     if (attention === 'critical') return rows.filter((row) => row.overdue);
-    if (attention === 'action') return rows.filter((row) => row.status === 'Waiting' || row.status === 'Yet to Start');
-    if (attention === 'hold') return rows.filter((row) => row.status === 'Hold');
+    if (attention === 'action') return rows.filter((row) => row.status === 'On Hold' || row.status === 'Not Started');
+    if (attention === 'hold') return rows.filter((row) => row.status === 'On Hold');
     if (attention === 'upcoming') return rows.filter((row) => !row.overdue && row.status !== 'Completed').slice(0, 12);
     if (attention === 'completed') return rows.filter((row) => row.status === 'Completed');
     return [];
@@ -79,7 +79,7 @@ export default function ManagementDashboard({ user }: { user: User }) {
         total: value.rows.length,
         completed,
         inProgress: value.rows.filter((row) => row.status === 'In Progress').length,
-        hold: value.rows.filter((row) => row.status === 'Hold').length,
+        hold: value.rows.filter((row) => row.status === 'On Hold').length,
         overdue: value.rows.filter((row) => row.overdue).length,
         progress: value.rows.length ? Math.round((completed / value.rows.length) * 100) : 0,
       };
@@ -123,7 +123,7 @@ export default function ManagementDashboard({ user }: { user: User }) {
         <div className="mt-3 grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
           {[
             { key: 'critical' as const, label: 'Critical Delays', value: totals.overdue },
-            { key: 'action' as const, label: 'Tasks Need Action', value: rows.filter((row) => row.status === 'Waiting' || row.status === 'Yet to Start').length },
+            { key: 'action' as const, label: 'Tasks Need Action', value: rows.filter((row) => row.status === 'On Hold' || row.status === 'Not Started').length },
             { key: 'hold' as const, label: 'Tasks On Hold', value: totals.hold },
             { key: 'upcoming' as const, label: 'Upcoming Deadlines', value: rows.filter((row) => !row.overdue && row.status !== 'Completed').length },
             { key: 'completed' as const, label: 'Completed Today', value: totals.updatesToday },

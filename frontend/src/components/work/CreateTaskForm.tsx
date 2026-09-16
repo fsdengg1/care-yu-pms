@@ -1,15 +1,14 @@
 'use client';
 
-import React, { useEffect, useMemo, useState } from 'react';
-import { DailySheetStatus, DailyStatusPerson, SHEET_STATUSES, formatSheetDate } from '@/lib/dailyStatus';
+import React, { useEffect, useState } from 'react';
+import { DailySheetStatus, DailyStatusPerson, SHEET_STATUSES, appTodayIso, formatSheetDate } from '@/lib/dailyStatus';
 import { TasksApi } from '@/lib/tasksApi';
+import { PriorityLevel } from '@/lib/types';
 import DependencyMultiSelect from './DependencyMultiSelect';
 import StatusDropdown from './StatusDropdown';
 import UserDropdown from './UserDropdown';
 
-function todayIso() {
-  return new Date().toISOString().slice(0, 10);
-}
+const PRIORITIES: PriorityLevel[] = ['Low', 'Medium', 'High', 'Critical'];
 
 export default function CreateTaskForm({
   open,
@@ -20,6 +19,7 @@ export default function CreateTaskForm({
   period,
   workDate,
   isAdditional,
+  canAssignOthers = false,
   onClose,
   onCreated,
 }: {
@@ -31,14 +31,17 @@ export default function CreateTaskForm({
   period?: 'morning' | 'evening';
   workDate?: string;
   isAdditional?: boolean;
+  canAssignOthers?: boolean;
   onClose: () => void;
   onCreated: (message: string) => void;
 }) {
-  const today = useMemo(todayIso, [open]);
+  const defaultDate = workDate || appTodayIso();
   const [projectName, setProjectName] = useState('');
   const [description, setDescription] = useState('');
   const [dependsOn, setDependsOn] = useState<string[]>([]);
-  const [status, setStatus] = useState<DailySheetStatus>('Yet to Start');
+  const [status, setStatus] = useState<DailySheetStatus>('Not Started');
+  const [priority, setPriority] = useState<PriorityLevel>('Medium');
+  const [startDate, setStartDate] = useState(defaultDate);
   const [deadline, setDeadline] = useState('');
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
@@ -47,7 +50,8 @@ export default function CreateTaskForm({
   useEffect(() => {
     if (!open) return;
     setAssigneeId(assignedToId || currentUserId);
-  }, [open, assignedToId, currentUserId]);
+    setStartDate(workDate || appTodayIso());
+  }, [open, assignedToId, currentUserId, workDate]);
 
   if (!open) return null;
 
@@ -55,13 +59,24 @@ export default function CreateTaskForm({
     setProjectName('');
     setDescription('');
     setDependsOn([]);
-    setStatus('Yet to Start');
+    setStatus('Not Started');
+    setPriority('Medium');
+    setStartDate(workDate || appTodayIso());
     setDeadline('');
     setError('');
   };
 
   const submit = async () => {
     setError('');
+    const assignee = canAssignOthers ? assigneeId : currentUserId;
+    if (!assignee) {
+      setError('Select a person.');
+      return;
+    }
+    if (!projectName.trim()) {
+      setError('Project is required.');
+      return;
+    }
     if (!description.trim()) {
       setError('Please enter a task description.');
       return;
@@ -70,23 +85,18 @@ export default function CreateTaskForm({
       setError('Task deadline is required.');
       return;
     }
-    const assignee = assignedToId !== undefined ? assigneeId : currentUserId;
-    if (!assignee) {
-      setError('Select a person first.');
-      return;
-    }
-    const typedProject = projectName.trim();
     setBusy(true);
     const result = await TasksApi.create({
       title: description.trim().slice(0, 120),
       description: description.trim(),
-      task_type: typedProject ? 'PROJECT_TASK' : 'NON_PROJECT_TASK',
-      project_name: typedProject || undefined,
+      task_type: 'PROJECT_TASK',
+      project_name: projectName.trim(),
       assigned_to_id: assignee,
-      start_date: today,
+      start_date: startDate || defaultDate,
       due_date: deadline,
       depends_on_ids: dependsOn,
       status,
+      priority,
       period,
       work_date: workDate,
       is_additional: isAdditional,
@@ -97,33 +107,32 @@ export default function CreateTaskForm({
       return;
     }
     reset();
-    onCreated('Task created. It now appears in Daily Work Updates.');
+    onCreated('Task created. It now appears in Daily Work Updates and the assigned employee dashboard.');
     onClose();
   };
 
   return (
     <div className="modal-scrim fixed inset-0 z-50 flex items-center justify-center p-4">
       <div className="w-full max-w-lg rounded-2xl border border-slate-800 bg-slate-900 p-5 text-xs shadow-xl">
-        <h3 className="text-sm font-bold text-slate-100">Create Task</h3>
+        <h3 className="text-sm font-bold text-slate-100">Add Task</h3>
         <p className="mt-1 text-slate-400">
-          {assignedToId !== undefined
-            ? 'Uses the same columns as Daily Work Updates. The task is assigned to the selected person and uses the existing task record.'
-            : 'Uses the same columns as Daily Work Updates. This task is assigned to you and is visible to the CEO and Engineering Director.'}
+          Creates one shared task record. The assigned employee sees it in Daily Work Updates and their dashboard.
         </p>
         <div className="mt-4 space-y-3">
-          {assignedToId !== undefined && (
-            <div>
-              <div className="mb-1 font-semibold text-slate-300">Person</div>
-              <UserDropdown
-                people={people}
-                value={assigneeId}
-                onChange={setAssigneeId}
-                placeholder="Select person"
-              />
-            </div>
-          )}
           <div>
-            <div className="mb-1 font-semibold text-slate-300">Project</div>
+            <div className="mb-1 font-semibold text-slate-300">Person *</div>
+            {canAssignOthers ? (
+              <UserDropdown people={people} value={assigneeId} onChange={setAssigneeId} placeholder="Select person" />
+            ) : (
+              <input
+                readOnly
+                value={people.find((person) => person.id === currentUserId)?.displayName || 'You'}
+                className="w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-slate-400"
+              />
+            )}
+          </div>
+          <div>
+            <div className="mb-1 font-semibold text-slate-300">Project *</div>
             <input
               value={projectName}
               onChange={(event) => setProjectName(event.target.value)}
@@ -132,7 +141,7 @@ export default function CreateTaskForm({
             />
           </div>
           <div>
-            <div className="mb-1 font-semibold text-slate-300">Task Description</div>
+            <div className="mb-1 font-semibold text-slate-300">Task Description *</div>
             <textarea
               value={description}
               onChange={(event) => setDescription(event.target.value)}
@@ -149,23 +158,39 @@ export default function CreateTaskForm({
               onChange={setDependsOn}
             />
           </div>
-          <div>
-            <div className="mb-1 font-semibold text-slate-300">Status</div>
-            <StatusDropdown value={status} onChange={setStatus} />
-            <div className="mt-1 text-[10px] text-slate-500">{SHEET_STATUSES.join(' · ')}</div>
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+            <div>
+              <div className="mb-1 font-semibold text-slate-300">Status</div>
+              <StatusDropdown value={status} onChange={setStatus} />
+              <div className="mt-1 text-[10px] text-slate-500">{SHEET_STATUSES.join(' · ')}</div>
+            </div>
+            <div>
+              <div className="mb-1 font-semibold text-slate-300">Priority</div>
+              <select
+                value={priority}
+                onChange={(event) => setPriority(event.target.value as PriorityLevel)}
+                className="w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-slate-100"
+              >
+                {PRIORITIES.map((item) => (
+                  <option key={item} value={item}>
+                    {item}
+                  </option>
+                ))}
+              </select>
+            </div>
           </div>
           <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
             <div>
-              <div className="mb-1 font-semibold text-slate-300">Current Date</div>
+              <div className="mb-1 font-semibold text-slate-300">Start Date</div>
               <input
-                type="text"
-                readOnly
-                value={formatSheetDate(today)}
-                className="w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-slate-400"
+                type="date"
+                value={startDate}
+                onChange={(event) => setStartDate(event.target.value)}
+                className="w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-slate-100"
               />
             </div>
             <div>
-              <div className="mb-1 font-semibold text-slate-300">Task Deadline</div>
+              <div className="mb-1 font-semibold text-slate-300">Task Deadline *</div>
               <input
                 type="date"
                 value={deadline}
@@ -174,6 +199,7 @@ export default function CreateTaskForm({
               />
             </div>
           </div>
+          <div className="text-[10px] text-slate-500">Current working date: {formatSheetDate(workDate || defaultDate)}</div>
           {error && <div className="rounded-lg border border-rose-900 bg-rose-950/40 px-3 py-2 text-rose-300">{error}</div>}
         </div>
         <div className="mt-4 flex justify-end gap-2">
@@ -193,7 +219,7 @@ export default function CreateTaskForm({
             onClick={() => void submit()}
             className="rounded-lg bg-cyan-600 px-3 py-2 font-bold text-white hover:bg-cyan-500 disabled:opacity-60"
           >
-            Create
+            Save
           </button>
         </div>
       </div>

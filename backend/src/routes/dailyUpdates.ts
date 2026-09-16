@@ -24,7 +24,7 @@ import {
 
 const router = Router();
 
-const WORK_STATUSES: DailyWorkStatus[] = ['NOT_STARTED', 'IN_PROGRESS', 'BLOCKED', 'COMPLETED'];
+const WORK_STATUSES: DailyWorkStatus[] = ['NOT_STARTED', 'IN_PROGRESS', 'BLOCKED', 'COMPLETED', 'ON_HOLD', 'CANCELLED'];
 
 function paramId(req: AuthedRequest): string {
   const value = req.params.id;

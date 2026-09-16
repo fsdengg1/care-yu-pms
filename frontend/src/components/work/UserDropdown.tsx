@@ -15,6 +15,7 @@ export default function UserDropdown({
   fallbackLabel,
   disabled,
   variant = 'default',
+  allowEmpty = false,
 }: {
   people: DailyStatusPerson[];
   value: string;
@@ -23,6 +24,7 @@ export default function UserDropdown({
   fallbackLabel?: string;
   disabled?: boolean;
   variant?: 'default' | 'sheet';
+  allowEmpty?: boolean;
 }) {
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState('');
@@ -101,6 +103,21 @@ export default function UserDropdown({
               />
             </div>
             <div className="overflow-y-auto p-1" style={{ maxHeight: coords.maxHeight }}>
+              {allowEmpty && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    onChange('');
+                    setOpen(false);
+                    setQuery('');
+                  }}
+                  className={`flex w-full items-center rounded-lg px-3 py-2 text-left text-xs hover:bg-slate-800 ${
+                    !value ? 'bg-cyan-950 text-cyan-200' : 'text-slate-200'
+                  }`}
+                >
+                  {placeholder}
+                </button>
+              )}
               {filtered.map((person) => (
                 <button
                   key={person.id}

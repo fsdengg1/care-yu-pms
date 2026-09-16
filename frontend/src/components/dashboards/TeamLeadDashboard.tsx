@@ -331,6 +331,7 @@ export default function TeamLeadDashboard({ user }: { user: User }) {
         people={people}
         projects={projects}
         currentUserId={user.id}
+        canAssignOthers={canCreateWorkTask(user)}
         onClose={() => setCreateOpen(false)}
         onCreated={(message) => {
           setNotice(message);

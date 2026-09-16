@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useEffect, useMemo, useRef, useState } from 'react';
-import { Download, EyeOff, Filter, ListPlus, Lock, LockOpen, Moon, Pencil, Save, Search, Trash2 } from 'lucide-react';
+import { Download, EyeOff, ListPlus, Pencil, Search, Trash2 } from 'lucide-react';
 import {
   DailyStatusPerson,
   DailyStatusRow,
@@ -16,10 +16,9 @@ import {
 import UserDropdown from './UserDropdown';
 import DependencyMultiSelect from './DependencyMultiSelect';
 import StatusDropdown from './StatusDropdown';
-import SheetDateFilter from './SheetDateFilter';
 import RowMoreMenu from './RowMoreMenu';
 import TaskAccessBadges from './TaskAccessBadges';
-import LoggedHoursProgressCell from './LoggedHoursProgressCell';
+import { LoggedHoursCell, ProgressBarCell } from './LoggedHoursProgressCell';
 
 export type SheetChip = 'all' | 'mine' | 'overdue' | 'critical' | 'due-today' | 'completed' | 'hold' | 'additional' | 'lead' | 'hidden';
 
@@ -89,8 +88,6 @@ export default function DailyStatusSheet({
   canEditAll,
   canDelete,
   saved,
-  saveBusy = false,
-  onSave,
   selectedIds,
   onSelectedIds,
   onPatch,
@@ -119,8 +116,6 @@ export default function DailyStatusSheet({
   canEditAll: boolean;
   canDelete: boolean;
   saved: boolean;
-  saveBusy?: boolean;
-  onSave?: () => void;
   selectedIds: string[];
   onSelectedIds: (ids: string[]) => void;
   onPatch: (id: string, body: PatchBody) => Promise<void>;
@@ -140,19 +135,10 @@ export default function DailyStatusSheet({
   readOnly?: boolean;
   period?: 'morning' | 'evening';
   phase?: {
-    morningLocked?: boolean;
-    eveningOpen?: boolean;
     timezone?: string;
     companyLeave?: boolean;
     companyLeaveMessage?: string;
-    lockSource?: 'manual' | 'schedule' | null;
-    lockedAt?: string;
-    lockedByName?: string;
-    manuallyUnlocked?: boolean;
   };
-  canManageMorningLock?: boolean;
-  morningLockBusy?: boolean;
-  onMorningLockToggle?: (action: 'lock' | 'unlock') => void;
   attendance?: Array<{
     personId: string;
     person: string;
@@ -167,11 +153,18 @@ export default function DailyStatusSheet({
   const [lastSelectedIndex, setLastSelectedIndex] = useState<number | null>(null);
   const selectAllRef = useRef<HTMLInputElement>(null);
   const today = workDate || todayIso();
-  const morningBaselineLocked = Boolean(phase?.morningLocked);
+  const morningBaselineLocked = false;
 
   const toggleExpand = (id: string) => {
     setExpandedIds((prev) => (prev.includes(id) ? prev.filter((item) => item !== id) : [...prev, id]));
   };
+
+  useEffect(() => {
+    setExpandedIds((prev) => {
+      const withChildren = rows.filter((row) => (row.subtasks || []).length > 0 || row.hasSubtasks).map((row) => row.id);
+      return [...new Set([...prev, ...withChildren])];
+    });
+  }, [rows]);
 
   const visible = useMemo(() => {
     const needle = query.trim().toLowerCase();
@@ -188,10 +181,10 @@ export default function DailyStatusSheet({
         }
         if (chip === 'mine') return row.personId === userId;
         if (chip === 'overdue') return Boolean(row.overdue);
-        if (chip === 'critical') return Boolean(row.overdue && (row.status === 'Waiting' || row.status === 'Hold' || row.blocked));
+        if (chip === 'critical') return Boolean(row.overdue && (row.status === 'On Hold' || row.blocked));
         if (chip === 'due-today') return isoToInput(row.deadlineIso || row.deadline) === today;
         if (chip === 'completed') return row.status === 'Completed';
-        if (chip === 'hold') return row.status === 'Hold';
+        if (chip === 'hold') return row.status === 'On Hold';
         if (chip === 'additional') return row.isAdditional;
         if (chip === 'lead') return Boolean(row.isLeadTask);
         return true;
@@ -290,31 +283,13 @@ export default function DailyStatusSheet({
   return (
     <section className={`daily-status-workspace min-w-0 overflow-hidden rounded-xl ${readOnly ? 'daily-status-workspace-readonly' : ''}`}>
       <div className="flex shrink-0 flex-wrap items-center gap-2 border-b border-[#e2e8f0] px-3 py-2">
-        <SheetDateFilter value={workDate} onChange={onWorkDateChange} />
         {phase?.companyLeave ? (
           <span className="rounded-full border border-amber-300 bg-amber-50 px-2 py-0.5 text-[10px] font-bold text-amber-800">
             Company leave — no Daily Work Updates
           </span>
-        ) : period === 'morning' ? (
-          phase?.morningLocked ? (
-            <span className="inline-flex items-center gap-1 rounded-full border border-amber-300 bg-amber-50 px-2 py-0.5 text-[10px] font-bold text-amber-800">
-              <Lock className="h-3 w-3" aria-hidden />
-              Morning Locked at 11:00 AM
-            </span>
-          ) : (
-            <span className="inline-flex items-center gap-1 rounded-full border border-emerald-300 bg-emerald-50 px-2 py-0.5 text-[10px] font-bold text-emerald-800">
-              <LockOpen className="h-3 w-3" aria-hidden />
-              Morning unlocked — edits allowed
-            </span>
-          )
-        ) : phase?.morningLocked ? (
-          <span className="inline-flex items-center gap-1 rounded-full border border-indigo-300 bg-indigo-50 px-2 py-0.5 text-[10px] font-bold text-indigo-800">
-            <Moon className="h-3 w-3" aria-hidden />
-            Evening updates open
-          </span>
         ) : (
-          <span className="rounded-full border border-slate-300 bg-slate-50 px-2 py-0.5 text-[10px] font-bold text-slate-700">
-            Evening updates open after 11:00 AM
+          <span className="rounded-full border border-slate-200 bg-slate-50 px-2 py-0.5 text-[10px] font-bold text-slate-700">
+            {period === 'evening' ? 'Evening update' : 'Morning update'}
           </span>
         )}
         <div className="relative min-w-[200px] flex-1">
@@ -343,20 +318,6 @@ export default function DailyStatusSheet({
           ))}
         </div>
         <div className="ml-auto flex items-center gap-1.5">
-          {onSave && !readOnly && (
-            <button
-              type="button"
-              disabled={saveBusy}
-              onClick={onSave}
-              className="inline-flex items-center gap-1 rounded-md bg-[#059669] px-2.5 py-1.5 text-[11px] font-bold text-white hover:bg-[#047857] disabled:opacity-50"
-              title="Save updates for Email Reports"
-            >
-              <Save className="h-3.5 w-3.5" /> Save
-            </button>
-          )}
-          <button type="button" className="rounded-md border border-[#cbd5e1] p-1.5 text-[#475569]" title="Filter">
-            <Filter className="h-3.5 w-3.5" />
-          </button>
           <button
             type="button"
             onClick={() => onExport(visible)}
@@ -409,7 +370,7 @@ export default function DailyStatusSheet({
           {!readOnly && selectedVisible ? `${selectedVisible} selected · ` : ''}
           {visible.length} rows
         </span>
-        {saved && <span className="font-semibold text-emerald-700">Saved — Email Reports updated</span>}
+        {saved && <span className="font-semibold text-emerald-700">Saved</span>}
       </div>
 
       <div className="daily-status-table-wrap">
@@ -423,6 +384,7 @@ export default function DailyStatusSheet({
             <col className="col-status" />
             <col className="col-date" />
             <col className="col-deadline" />
+            <col className="col-progress" />
             <col className="col-hours" />
             <col className="col-delay" />
             {!readOnly && <col className="col-actions" />}
@@ -450,6 +412,7 @@ export default function DailyStatusSheet({
               <th>Status</th>
               <th>Start Date</th>
               <th>Task Deadline</th>
+              <th>Progress</th>
               <th>Logged Hours</th>
               <th>Reason For Delay</th>
               {!readOnly && <th aria-label="Actions" />}
@@ -458,7 +421,7 @@ export default function DailyStatusSheet({
           <tbody>
             {visible.length === 0 && (
               <tr>
-                <td colSpan={(showSelect ? 10 : 9) + (readOnly ? 0 : 1)} className="py-10 text-center text-[#64748b]">
+                <td colSpan={(showSelect ? 11 : 10) + (readOnly ? 0 : 1)} className="py-10 text-center text-[#64748b]">
                   {phase?.companyLeave
                     ? 'Company leave day — Daily Work Updates are not shown (Sunday or 2nd/4th Saturday).'
                     : 'No tasks found.'}
@@ -581,7 +544,7 @@ export default function DailyStatusSheet({
                         )}
                         <div className="flex items-start gap-1">
                           <div className="min-w-0 flex-1">
-                            {canEditTaskMeta && period !== 'evening' ? (
+                            {canEditTaskMeta ? (
                               <AutoResizeTextarea
                                 key={row.taskDescription}
                                 defaultValue={row.taskDescription}
@@ -596,32 +559,6 @@ export default function DailyStatusSheet({
                             ) : (
                               <span className="sheet-text sheet-task-field">{row.taskDescription}</span>
                             )}
-                            {period === 'evening' ? (
-                              <div className="mt-1.5 space-y-1">
-                                <div className="text-[10px] font-bold uppercase tracking-wide text-[#64748b]">
-                                  Evening work completed
-                                  <span className={`ml-2 rounded px-1.5 py-0.5 ${row.eveningSubmitted ? 'bg-emerald-100 text-emerald-800' : 'bg-slate-200 text-slate-700'}`}>
-                                    {row.eveningSubmitted ? 'Submitted' : 'Not submitted'}
-                                  </span>
-                                </div>
-                                {editable ? (
-                                  <AutoResizeTextarea
-                                    key={`${row.id}-evening-${row.currentUpdate || ''}`}
-                                    defaultValue={row.currentUpdate || ''}
-                                    className="sheet-textarea sheet-task-field"
-                                    placeholder="Enter evening update"
-                                    onBlur={(event) => {
-                                      const value = event.target.value.trim();
-                                      if (value !== (row.currentUpdate || '').trim()) {
-                                        void onPatch(row.id, { evening_update: value });
-                                      }
-                                    }}
-                                  />
-                                ) : (
-                                  <span className="sheet-text sheet-task-field">{row.currentUpdate || '—'}</span>
-                                )}
-                              </div>
-                            ) : null}
                           </div>
                           {onAddSubtask && baselineEditable && (
                             <button
@@ -644,7 +581,7 @@ export default function DailyStatusSheet({
                               return (
                                 <li key={sub.id} className="flex items-start justify-between gap-2 text-[11px] text-[#334155]">
                                   <div className="min-w-0 flex-1">
-                                    <span className="font-semibold text-[#0f172a]">{sub.title}</span>
+                                    <span className="font-semibold text-[#0f172a]">└ {sub.title}</span>
                                     {sub.assignedTo ? (
                                       <span className="ml-1.5 text-[10px] text-[#64748b]">· {sub.assignedTo}</span>
                                     ) : null}
@@ -739,11 +676,9 @@ export default function DailyStatusSheet({
                     )}
                   </td>
                   <td className="hours-cell">
-                    <LoggedHoursProgressCell
+                    <ProgressBarCell
                       status={row.status}
                       progressPercent={row.progressPercent}
-                      hoursWorked={row.hoursWorked}
-                      loggedHours={row.loggedHours}
                       editable={editable}
                       onProgressCommit={(percent) =>
                         void onPatch(row.id, {
@@ -751,6 +686,13 @@ export default function DailyStatusSheet({
                           progress_manual_override: true,
                         })
                       }
+                    />
+                  </td>
+                  <td className="hours-cell">
+                    <LoggedHoursCell
+                      hoursWorked={row.hoursWorked}
+                      loggedHours={row.loggedHours}
+                      editable={editable}
                       onHoursCommit={(hours) => void onPatch(row.id, { hours_worked: hours, work_date: workDate })}
                     />
                   </td>

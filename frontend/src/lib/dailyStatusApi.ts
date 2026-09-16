@@ -114,11 +114,19 @@ export const DailyStatusApi = {
     );
   },
 
-  async compare(date?: string) {
-    const query = date ? `?date=${encodeURIComponent(date)}` : '';
-    return apiRequest<{ items: CompareItem[]; available: boolean; date: string; message?: string }>(
-      `/api/daily-status/compare${query}`
-    );
+  async compare(date?: string, against?: string) {
+    const params = new URLSearchParams();
+    if (date) params.set('date', date);
+    if (against) params.set('against', against);
+    const query = params.toString() ? `?${params.toString()}` : '';
+    return apiRequest<{
+      items: CompareItem[];
+      available: boolean;
+      date: string;
+      previousDate?: string;
+      currentDate?: string;
+      message?: string;
+    }>(`/api/daily-status/compare${query}`);
   },
 
   async emailPreview(period: SnapshotPeriod, date?: string) {

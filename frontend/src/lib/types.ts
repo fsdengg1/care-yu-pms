@@ -935,7 +935,7 @@ export interface Task {
   employee_allocation_id?: string;
   title: string;
   description?: string;
-  status: 'TODO' | 'IN_PROGRESS' | 'DONE' | 'BLOCKED' | 'WAITING' | 'HOLD';
+  status: 'TODO' | 'IN_PROGRESS' | 'DONE' | 'BLOCKED' | 'WAITING' | 'HOLD' | 'CANCELLED';
   priority: PriorityLevel;
   due_date?: string;
   assigned_to: string;
@@ -1278,7 +1278,7 @@ export interface CeoDashboardPayload {
   };
 }
 
-export type DailyWorkStatus = 'NOT_STARTED' | 'IN_PROGRESS' | 'BLOCKED' | 'COMPLETED';
+export type DailyWorkStatus = 'NOT_STARTED' | 'IN_PROGRESS' | 'BLOCKED' | 'COMPLETED' | 'ON_HOLD' | 'CANCELLED';
 export type DailyUpdateSubmissionStatus = 'DRAFT' | 'SUBMITTED';
 export type WorkAssignmentSource = 'TASK' | 'FEASIBILITY_ALLOCATION' | 'FEASIBILITY_ASSIGNMENT' | 'LEAD' | 'PROJECT';
 
