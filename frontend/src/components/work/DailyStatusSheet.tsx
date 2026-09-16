@@ -257,11 +257,7 @@ export default function DailyStatusSheet({
     if (readOnly) return false;
     if (row.rowKind === 'leave' || row.rowKind === 'permission') return false;
     if (row.canEdit !== undefined) return row.canEdit;
-    const pending = row.acceptanceStatus === 'REQUESTED';
-    const isCreator = row.createdById === userId;
-    const isAssignee = row.personId === userId;
-    if (pending && isAssignee && !isCreator) return false;
-    return canEditAll || isAssignee || isCreator;
+    return canEditAll || row.personId === userId;
   };
   const showSelect = !readOnly;
   const tableRef = useRef<HTMLTableElement>(null);
@@ -572,6 +568,35 @@ export default function DailyStatusSheet({
                             </button>
                           )}
                         </div>
+                        {row.rowKind !== 'leave' && (
+                          <div className="mt-2 rounded-md border border-[#e2e8f0] bg-[#f8fafc] px-2 py-1.5">
+                            <div className="text-[10px] font-bold uppercase tracking-wider text-[#64748b]">
+                              {period === 'evening' ? 'Evening work completed' : 'Morning work completed'}
+                            </div>
+                            {editable ? (
+                              <AutoResizeTextarea
+                                key={`${row.id}-${period}-work`}
+                                defaultValue={row.currentUpdate || ''}
+                                className="sheet-textarea mt-1"
+                                placeholder={
+                                  period === 'evening'
+                                    ? 'What did you complete this evening?'
+                                    : 'What did you complete this morning?'
+                                }
+                                onBlur={(event) => {
+                                  const value = event.target.value.trim();
+                                  if (value !== (row.currentUpdate || '').trim()) {
+                                    void onPatch(row.id, { work_completed: value });
+                                  }
+                                }}
+                              />
+                            ) : (
+                              <p className="mt-1 whitespace-pre-wrap text-[11px] text-[#334155]">
+                                {(row.currentUpdate || '').trim() || '—'}
+                              </p>
+                            )}
+                          </div>
+                        )}
                         {expandedIds.includes(row.id) && (row.subtasks || []).length > 0 && (
                           <ul className="mt-1.5 space-y-1 border-l-2 border-[#cbd5e1] pl-2">
                             {(row.subtasks || []).map((sub) => {

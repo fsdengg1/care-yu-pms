@@ -73,6 +73,8 @@ export interface DailyStatusRow {
   eveningLoggedHours?: string;
   morningRemarks?: string;
   eveningRemarks?: string;
+  morningWorkCompleted?: string;
+  eveningWorkCompleted?: string;
 }
 
 export interface DailyStatusKpis {
@@ -239,6 +241,8 @@ export interface CompareItem {
   previousEveningHours?: string;
   previousMorningRemarks?: string;
   previousEveningRemarks?: string;
+  previousMorningWorkCompleted?: string;
+  previousEveningWorkCompleted?: string;
   currentMorningStatus?: string;
   currentEveningStatus?: string;
   currentMorningProgressPercent?: number;
@@ -247,6 +251,8 @@ export interface CompareItem {
   currentEveningHours?: string;
   currentMorningRemarks?: string;
   currentEveningRemarks?: string;
+  currentMorningWorkCompleted?: string;
+  currentEveningWorkCompleted?: string;
   morningUpdate?: string;
   eveningUpdate?: string;
   morningStatus?: string;
@@ -299,6 +305,25 @@ export function shiftWorkDate(iso: string, days: number) {
   const utc = new Date(Date.UTC(y, m - 1, d));
   utc.setUTCDate(utc.getUTCDate() + days);
   return utc.toISOString().slice(0, 10);
+}
+
+function isCompanyLeaveDayClient(ymd: string) {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(ymd)) return false;
+  const day = new Date(`${ymd}T00:00:00Z`).getUTCDay();
+  if (day === 0) return true;
+  if (day !== 6) return false;
+  const dateNum = Number(ymd.slice(8, 10));
+  const nth = Math.floor((dateNum - 1) / 7) + 1;
+  return nth === 2 || nth === 4;
+}
+
+export function previousWorkingDay(iso: string, maxLookback = 21) {
+  let cursor = shiftWorkDate(iso, -1);
+  for (let i = 0; i < maxLookback; i += 1) {
+    if (!isCompanyLeaveDayClient(cursor)) return cursor;
+    cursor = shiftWorkDate(cursor, -1);
+  }
+  return shiftWorkDate(iso, -1);
 }
 
 export function readStoredWorkDate(): string {

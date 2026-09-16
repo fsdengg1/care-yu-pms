@@ -690,7 +690,7 @@ html.light .theme-app ::-webkit-scrollbar-thumb:hover {
 
 .daily-status-sheet {
   width: 100%;
-  min-width: 1280px;
+  min-width: 1480px;
   max-width: none;
   border-collapse: collapse;
   table-layout: fixed;
@@ -731,11 +731,11 @@ html.light .theme-app ::-webkit-scrollbar-thumb:hover {
 }
 
 .daily-status-sheet col.col-hours {
-  width: 8%;
+  width: 9%;
 }
 
 .daily-status-sheet col.col-progress {
-  width: 8%;
+  width: 9%;
 }
 
 .daily-status-sheet col.col-delay {
@@ -946,11 +946,11 @@ html.light .theme-app ::-webkit-scrollbar-thumb:hover {
 }
 
 .daily-status-sheet td.hours-cell {
-  min-width: 0;
+  min-width: 112px;
   white-space: normal;
   text-align: center;
   vertical-align: middle;
-  overflow: hidden;
+  overflow: visible;
   padding: 6px 8px;
 }
 
@@ -997,15 +997,18 @@ html.light .theme-app ::-webkit-scrollbar-thumb:hover {
 
 .sheet-progress-pct {
   display: inline-flex;
+  flex-wrap: nowrap;
   align-items: center;
-  gap: 2px;
+  gap: 4px;
+  white-space: nowrap;
   font-size: 11px;
   font-weight: 700;
   color: #0f172a;
 }
 
 .sheet-progress-input {
-  width: 3.25rem;
+  width: 3.5rem;
+  min-width: 3.5rem;
   text-align: center;
   font-weight: 700;
   font-size: 11px;
@@ -1029,6 +1032,8 @@ html.light .theme-app ::-webkit-scrollbar-thumb:hover {
 }
 
 .daily-status-sheet .sheet-hours-input {
+  width: 3.5rem;
+  min-width: 3.5rem;
   font-size: 11px;
   font-weight: 600;
   text-align: center;

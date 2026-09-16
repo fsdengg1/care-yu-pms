@@ -17,6 +17,7 @@ import CreateTaskForm from '@/components/work/CreateTaskForm';
 import AdditionalTaskForm from '@/components/work/AdditionalTaskForm';
 import AddSubtaskForm from '@/components/work/AddSubtaskForm';
 import MySubtasksPanel from '@/components/work/MySubtasksPanel';
+import MyDailyWorkPanel from '@/components/work/MyDailyWorkPanel';
 import { DailyStatusApi } from '@/lib/dailyStatusApi';
 import { DailyStatusPerson, DailyStatusRow } from '@/lib/dailyStatus';
 
@@ -157,6 +158,8 @@ export default function TeamLeadDashboard({ user }: { user: User }) {
       </div>
 
       <TeamLeadExecutionPanel user={user} />
+
+      <MyDailyWorkPanel user={user} />
 
       <MySubtasksPanel
         rows={sheetRows}

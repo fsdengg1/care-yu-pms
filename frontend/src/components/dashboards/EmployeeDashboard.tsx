@@ -18,7 +18,8 @@ import CreateTaskForm from '@/components/work/CreateTaskForm';
 import AddSubtaskForm from '@/components/work/AddSubtaskForm';
 import MySubtasksPanel from '@/components/work/MySubtasksPanel';
 import PendingTaskAssignmentCard from '@/components/work/PendingTaskAssignmentCard';
-import { DailyStatusPerson, DailyStatusRow, appTodayIso, formatSheetDate } from '@/lib/dailyStatus';
+import MyDailyWorkPanel from '@/components/work/MyDailyWorkPanel';
+import { DailyStatusPerson, DailyStatusRow, appTodayIso } from '@/lib/dailyStatus';
 import { canCreateWorkTask } from '@/lib/rbac';
 
 export default function EmployeeDashboard({ user }: { user: User }) {
@@ -164,47 +165,13 @@ export default function EmployeeDashboard({ user }: { user: User }) {
         </div>
       )}
 
-      <div className="rounded-xl border border-slate-800 bg-slate-900/90 p-5">
-        <div className="mb-3 flex items-center justify-between border-b border-slate-800 pb-2">
-          <div>
-            <h2 className="text-sm font-bold text-slate-100">My Daily Work</h2>
-            <p className="text-[11px] text-slate-500">
-              {formatSheetDate(appTodayIso())} · tasks assigned to you from Daily Work Updates
-            </p>
-          </div>
-          <Link href="/daily-updates" className="text-xs font-bold text-cyan-400 hover:underline">
-            Open Daily Work Updates
-          </Link>
-        </div>
-        {sheetRows.filter((row) => !row.sheetHidden && row.rowKind !== 'leave').length === 0 ? (
-          <p className="p-6 text-center text-xs text-slate-500">No tasks assigned to you yet.</p>
-        ) : (
-          <div className="space-y-3">
-            {sheetRows
-              .filter((row) => !row.sheetHidden && row.rowKind !== 'leave')
-              .map((row) => (
-                <div key={row.id} className="rounded-lg border border-slate-800 bg-slate-950/60 px-3 py-2">
-                  <div className="text-[10px] font-bold uppercase tracking-wider text-cyan-400">{row.project}</div>
-                  <div className="mt-0.5 text-sm font-semibold text-slate-100">{row.taskDescription}</div>
-                  <div className="mt-1 flex flex-wrap gap-3 text-[11px] text-slate-400">
-                    <span>Status: <span className="font-semibold text-slate-200">{row.status}</span></span>
-                    <span>Progress: <span className="font-semibold text-slate-200">{row.progressPercent}%</span></span>
-                    <span>Logged: <span className="font-semibold text-slate-200">{row.loggedHours || '0.0 hrs'}</span></span>
-                  </div>
-                  {(row.subtasks || []).length > 0 && (
-                    <ul className="mt-2 space-y-1 border-l border-slate-700 pl-3 text-[11px] text-slate-400">
-                      {row.subtasks?.map((sub) => (
-                        <li key={sub.id}>
-                          └ {sub.title} · {sub.status} · {sub.progressPercent}%
-                        </li>
-                      ))}
-                    </ul>
-                  )}
-                </div>
-              ))}
-          </div>
-        )}
-      </div>
+      <MyDailyWorkPanel
+        user={user}
+        onRowsChange={(nextRows, nextPeople) => {
+          setSheetRows(nextRows);
+          setPeople(nextPeople);
+        }}
+      />
 
       <div className="rounded-xl border border-slate-800 bg-slate-900/90 p-5">
         <div className="mb-3 flex items-center justify-between border-b border-slate-800 pb-2">

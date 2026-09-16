@@ -15,6 +15,7 @@ import {
   DailyStatusSubtask,
   appTodayIso,
   formatSheetDate,
+  previousWorkingDay,
   shiftWorkDate,
 } from '@/lib/dailyStatus';
 import { formatEmployeeDisplayName } from '@/lib/people';
@@ -119,7 +120,7 @@ function DailyWorkUpdatesInner() {
         return;
       }
       setCompare(result.data);
-      setCompareAgainst(result.data.previousDate || shiftWorkDate(date, -1));
+      setCompareAgainst(result.data.previousDate || previousWorkingDay(date));
       setCompareOpen(true);
     } finally {
       setCompareBusy(false);
@@ -563,7 +564,7 @@ function DailyWorkUpdatesInner() {
               <div className="min-w-0">
                 <h2 className="text-sm font-bold text-[#0f172a]">Compare days</h2>
                 <p className="text-[11px] text-[#64748b]">
-                  Previous day vs current day. Morning and Evening stay separate for each date.
+                  Previous working day Morning + Evening vs the selected current day.
                 </p>
               </div>
               <div className="flex shrink-0 flex-wrap items-center gap-2">
@@ -571,7 +572,7 @@ function DailyWorkUpdatesInner() {
                   Previous
                   <input
                     type="date"
-                    value={compareAgainst || compare.previousDate || shiftWorkDate(workDate, -1)}
+                    value={compareAgainst || compare.previousDate || previousWorkingDay(workDate)}
                     onChange={(event) => {
                       const next = event.target.value;
                       setCompareAgainst(next);

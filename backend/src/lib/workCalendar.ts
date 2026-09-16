@@ -91,6 +91,21 @@ export function isWorkingDayYmd(ymd: string) {
   return !isCompanyLeaveDay(ymd);
 }
 
+/** Walk backward until a company working day is found (skips Sunday and 2nd/4th Saturday). */
+export function nearestPreviousWorkingDay(ymd: string, maxLookback = 21) {
+  let cursor = ymd;
+  for (let i = 0; i < maxLookback; i += 1) {
+    if (isWorkingDayYmd(cursor)) return cursor;
+    cursor = addDaysYmd(cursor, -1);
+  }
+  return ymd;
+}
+
+/** Working day strictly before `ymd`. */
+export function previousWorkingDay(ymd: string, maxLookback = 21) {
+  return nearestPreviousWorkingDay(addDaysYmd(ymd, -1), maxLookback);
+}
+
 export function isMorningPhaseLocked(workDate: string, when = new Date(), timezone = appTimezone()) {
   const clock = clockInAppTimezone(when, timezone);
   if (workDate < clock.date) return true;

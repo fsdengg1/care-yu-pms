@@ -7,6 +7,7 @@ import {
   normalizeDelayReason,
   addDaysYmd,
   saturdayOrdinalInMonth,
+  previousWorkingDay,
 } from '../src/lib/workCalendar.ts';
 
 function assert(cond: unknown, message: string) {
@@ -36,4 +37,6 @@ assert(isWorkingDayYmd('2026-09-05'), '1st Saturday counts as working');
 assert(saturdayOrdinalInMonth('2026-09-12') === 2, 'ordinal 2');
 assert(saturdayOrdinalInMonth('2026-09-26') === 4, 'ordinal 4');
 assert(saturdayOrdinalInMonth('2026-09-15') === null, 'weekday has no Saturday ordinal');
+assert(previousWorkingDay('2026-09-16') === '2026-09-15', 'weekday previous working day');
+assert(previousWorkingDay('2026-09-14') === '2026-09-11', 'skip Sunday and 2nd Saturday');
 console.log('workCalendar rules ok');

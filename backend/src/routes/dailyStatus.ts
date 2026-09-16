@@ -22,15 +22,13 @@ import {
   saveDailyStatusSnapshot,
   sendDailyStatusReport,
   SnapshotPeriod,
-  upsertLoggedHoursForTask,
-  upsertEveningWorkCompleted,
-  syncPeriodRecordFromTask,
   upsertDailyPeriodRecord,
+  syncPeriodRecordFromTask,
   workStatusFromSheet,
   visibleProjects,
 } from '../lib/dailyStatus.js';
 import { formatEmployeeDisplayName } from '../lib/people.js';
-import { updateWorkTask, setTaskSheetHidden } from '../lib/workTasks.js';
+import { updateWorkTask, setTaskSheetHidden, canMutateWorkTask } from '../lib/workTasks.js';
 import {
   getEmailReportScheduleConfig,
   listEmailReportHistory,
@@ -391,6 +389,9 @@ router.patch(
     if (body.progress_percent !== undefined) periodPatch.progress_percent = Math.max(0, Math.min(100, Number(body.progress_percent) || 0));
     if (typeof body.delay_reason === 'string') periodPatch.blocker = body.delay_reason;
     if (body.hours_worked !== undefined) periodPatch.hours_worked = Number(body.hours_worked);
+    if (typeof body.work_completed === 'string') periodPatch.work_completed = body.work_completed;
+    else if (typeof body.current_update === 'string') periodPatch.work_completed = body.current_update;
+    else if (typeof body.evening_update === 'string') periodPatch.work_completed = body.evening_update;
     if (Object.keys(periodPatch).length) {
       const periodResult = upsertDailyPeriodRecord(req.user!, taskId, date, period, periodPatch);
       if (!periodResult.ok) {
@@ -404,68 +405,24 @@ router.patch(
         });
       }
     }
-    if (date !== today) {
+
+    delete body.hours_worked;
+    delete body.work_completed;
+    delete body.current_update;
+    delete body.evening_update;
+    delete body.period;
+    delete body.work_date;
+    delete body.remarks;
+    delete body.progress_manual_override;
+    delete body.reason_for_delay;
+    delete body.delay_reason_other;
+
+    const mayTouchTask = Boolean(existingTask && canMutateWorkTask(req.user!, existingTask));
+    if (!mayTouchTask || date !== today) {
       delete body.status;
       delete body.progress_percent;
       delete body.delay_reason;
     }
-
-    const eveningNarrative =
-      typeof body.evening_update === 'string'
-        ? body.evening_update
-        : period === 'evening' && typeof body.description === 'string'
-          ? body.description
-          : undefined;
-    if (eveningNarrative !== undefined) {
-      const eveningResult = upsertEveningWorkCompleted(
-        req.user!,
-        String(req.params.id),
-        String(eveningNarrative),
-        readIsoDate(body.work_date, date)
-      );
-      if (!eveningResult.ok) {
-        return res.status(eveningResult.status || 400).json({
-          message:
-            eveningResult.error === 'forbidden'
-              ? 'You do not have permission to save this evening update.'
-              : eveningResult.error === 'not_found'
-                ? 'Task not found.'
-                : eveningResult.error,
-        });
-      }
-      delete body.evening_update;
-      delete body.description;
-      delete body.title;
-    }
-    delete body.period;
-
-    if (body.hours_worked !== undefined) {
-      const hoursResult = upsertLoggedHoursForTask(
-        req.user!,
-        String(req.params.id),
-        Number(body.hours_worked),
-        readIsoDate(body.work_date, date),
-        period
-      );
-      if (!hoursResult.ok) {
-        return res.status(hoursResult.status || 400).json({
-          message:
-            hoursResult.error === 'forbidden'
-              ? 'You do not have permission to update logged hours.'
-              : hoursResult.error === 'not_found'
-                ? 'Task not found.'
-                : hoursResult.error,
-        });
-      }
-      delete body.hours_worked;
-      delete body.work_date;
-      if (Object.keys(body).length === 0) {
-        await flushStore();
-        return res.json({ update: hoursResult.update, rows: rebuildRows() });
-      }
-    }
-    delete body.work_date;
-    delete body.evening_update;
 
     if (Object.keys(body).length === 0) {
       await flushStore();
@@ -489,6 +446,10 @@ router.patch(
       return res.status(404).json({ message: 'Task not found.' });
     }
     if ('error' in result) {
+      if (Object.keys(periodPatch).length && result.error === 'forbidden') {
+        await flushStore();
+        return res.json({ rows: rebuildRows() });
+      }
       return res.status(result.status || 400).json({
         message:
           result.error === 'forbidden'
