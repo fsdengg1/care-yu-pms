@@ -41,10 +41,11 @@ export type EmailReportHistoryEntry = {
 };
 
 export const DailyStatusApi = {
-  async sheet(date?: string, period?: SnapshotPeriod) {
+  async sheet(date?: string, period?: SnapshotPeriod, employeeId?: string) {
     const params = new URLSearchParams();
     if (date) params.set('date', date);
     if (period) params.set('period', period);
+    if (employeeId) params.set('employeeId', employeeId);
     const query = params.toString() ? `?${params.toString()}` : '';
     const result = await apiRequest<{
       rows: DailyStatusRow[];
@@ -201,7 +202,11 @@ export const DailyStatusApi = {
   },
 
   async updateRow(id: string, body: Record<string, unknown>) {
-    return apiRequest<{ task: { id: string }; rows: DailyStatusRow[] }>(`/api/daily-status/rows/${id}`, {
+    const params = new URLSearchParams();
+    if (typeof body.work_date === 'string' && body.work_date) params.set('date', String(body.work_date).slice(0, 10));
+    if (typeof body.period === 'string' && body.period) params.set('period', String(body.period));
+    const query = params.toString() ? `?${params.toString()}` : '';
+    return apiRequest<{ task: { id: string }; rows: DailyStatusRow[] }>(`/api/daily-status/rows/${id}${query}`, {
       method: 'PATCH',
       body: JSON.stringify(body),
     });

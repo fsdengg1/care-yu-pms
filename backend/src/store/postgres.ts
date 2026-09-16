@@ -261,6 +261,47 @@ export async function ensureSchema(): Promise<void> {
       ALTER TABLE audits ADD COLUMN IF NOT EXISTS assigned_to_name TEXT;
       ALTER TABLE daily_updates ADD COLUMN IF NOT EXISTS period TEXT;
       ALTER TABLE daily_updates ADD COLUMN IF NOT EXISTS update_type TEXT;
+      UPDATE daily_updates
+      SET
+        period = CASE
+          WHEN lower(COALESCE(period, '')) IN ('evening', 'morning') THEN lower(period)
+          WHEN upper(COALESCE(update_type, '')) = 'EVENING' THEN 'evening'
+          WHEN upper(COALESCE(update_type, '')) = 'MORNING' THEN 'morning'
+          WHEN EXTRACT(HOUR FROM timezone('Asia/Kolkata', COALESCE(created_at, submitted_at, now()))) >= 17 THEN 'evening'
+          ELSE 'morning'
+        END,
+        update_type = CASE
+          WHEN upper(COALESCE(update_type, '')) IN ('EVENING', 'MORNING') THEN upper(update_type)
+          WHEN lower(COALESCE(period, '')) = 'morning' THEN 'MORNING'
+          WHEN EXTRACT(HOUR FROM timezone('Asia/Kolkata', COALESCE(created_at, submitted_at, now()))) >= 17 THEN 'EVENING'
+          ELSE 'MORNING'
+        END
+      WHERE period IS NULL OR period = '' OR update_type IS NULL OR update_type = '';
+      DELETE FROM daily_updates
+      WHERE record_key IN (
+        SELECT record_key FROM (
+          SELECT record_key,
+            ROW_NUMBER() OVER (
+              PARTITION BY
+                COALESCE(NULLIF(task_id, ''), assignment_id, ''),
+                COALESCE(user_id, ''),
+                COALESCE(work_date, ''),
+                COALESCE(period, '')
+              ORDER BY
+                COALESCE(updated_at, submitted_at, created_at) DESC NULLS LAST,
+                record_key DESC
+            ) AS rn
+          FROM daily_updates
+        ) ranked
+        WHERE rn > 1
+      );
+      CREATE UNIQUE INDEX IF NOT EXISTS daily_updates_task_user_date_period_uidx
+        ON daily_updates (
+          COALESCE(NULLIF(task_id, ''), assignment_id, ''),
+          COALESCE(user_id, ''),
+          COALESCE(work_date, ''),
+          COALESCE(period, '')
+        );
       ALTER TABLE tasks ADD COLUMN IF NOT EXISTS delay_reason TEXT;
       ALTER TABLE leads ADD COLUMN IF NOT EXISTS fs_review_history JSONB;
     `);

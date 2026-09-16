@@ -255,12 +255,11 @@ export function canMutateWorkTask(user: User, task: Task): boolean {
 }
 
 /**
- * Task Description (and related sheet baseline fields) can be edited by a PM/admin
- * or by the assigned employee on Daily Work Updates.
+ * Task Description / Start Date / Deadline are PM/admin (or project owner) fields.
+ * Assigned employees edit Morning/Evening period records only.
  */
 export function canEditTaskBaselineFields(user: User, task: Task): boolean {
   if (['SYSTEM_ADMIN', 'ENG_DIRECTOR', 'CEO', 'PROJECT_MANAGER'].includes(user.role_code)) return true;
-  if (task.assigned_to_id === user.id) return true;
   const managerRoles = ['PROJECT_MANAGER', 'TEAM_LEAD', 'ENG_DIRECTOR', 'SYSTEM_ADMIN'];
   if (isTaskCreator(user, task) && managerRoles.includes(user.role_code)) return true;
   if (task.project_id) {

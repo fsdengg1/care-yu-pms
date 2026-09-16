@@ -26,6 +26,16 @@ async function main() {
   }
   const updates = store.getDailyUpdates().filter((u) => u.work_date === '2026-09-15' || u.work_date === '2026-09-16');
   console.log('updates 15/16', updates.length);
+  const grouped = new Map<string, string[]>();
+  for (const item of updates) {
+    const key = `${item.user_name || item.user_id} | ${(item.task_title || item.task_id || '').slice(0, 40)}`;
+    const line = `${item.work_date} ${item.period || item.update_type || '?'} hours=${item.hours_worked} "${(item.work_completed || '').slice(0, 80)}"`;
+    grouped.set(key, [...(grouped.get(key) || []), line]);
+  }
+  for (const [key, lines] of grouped) {
+    console.log('---', key);
+    for (const line of lines) console.log('   ', line);
+  }
   const byDate: Record<string, number> = {};
   for (const u of store.getDailyUpdates()) {
     byDate[u.work_date] = (byDate[u.work_date] || 0) + 1;

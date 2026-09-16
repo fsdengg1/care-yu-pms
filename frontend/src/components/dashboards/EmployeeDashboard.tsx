@@ -38,7 +38,7 @@ export default function EmployeeDashboard({ user }: { user: User }) {
     const [nextAssignments, nextSummary, sheet] = await Promise.all([
       DailyUpdatesApi.assignments(true),
       DailyUpdatesApi.summary(),
-      DailyStatusApi.sheet(appTodayIso(), 'morning'),
+      DailyStatusApi.sheet(appTodayIso(), 'morning', user.id),
     ]);
     setAssignments(nextAssignments);
     setSummary(nextSummary);

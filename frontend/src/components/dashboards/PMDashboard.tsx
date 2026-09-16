@@ -69,7 +69,7 @@ export default function PMDashboard({ user }: { user: User }) {
       }
       setAssignments(StorageService.getFeasibilityTeamAssignments());
       setSuggestions(StorageService.getFeasibilitySuggestions());
-      const [nextSummary, list] = await Promise.all([DailyUpdatesApi.summary(), DailyUpdatesApi.list()]);
+      const [nextSummary, list] = await Promise.all([DailyUpdatesApi.summary(), DailyUpdatesApi.list({ date: appTodayIso() })]);
       setSummary(nextSummary);
       setUpdates(
         list.updates.filter((item) => item.submission_status === 'SUBMITTED' && item.work_date === appTodayIso())
@@ -426,7 +426,10 @@ function UpdateRow({ item }: { item: DailyUpdate }) {
           {item.task_title}
           {item.work_completed ? ` · ${item.work_completed}` : ''}
         </div>
-        <div className="mt-0.5 text-slate-500">{formatLongDate(item.submitted_at || item.work_date)}</div>
+        <div className="mt-0.5 text-slate-500">
+          {formatLongDate(item.work_date)}
+          {item.period || item.update_type ? ` · ${String(item.period || item.update_type).toLowerCase() === 'evening' ? 'Evening' : 'Morning'}` : ''}
+        </div>
       </div>
       <div className="flex shrink-0 items-center gap-2">
         <span className={`rounded border px-1.5 py-0.5 text-[10px] font-bold ${statusClass(item.work_status)}`}>

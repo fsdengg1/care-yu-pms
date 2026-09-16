@@ -27,7 +27,7 @@ export default function ManagementDashboard({ user }: { user: User }) {
 
   useEffect(() => {
     void (async () => {
-      const [sheet, summary] = await Promise.all([DailyStatusApi.sheet(appTodayIso()), DailyUpdatesApi.summary()]);
+      const [sheet, summary] = await Promise.all([DailyStatusApi.sheet(appTodayIso(), 'morning'), DailyUpdatesApi.summary()]);
       if (!sheet.ok) {
         setError(sheet.message || 'Unable to load dashboard data.');
         return;

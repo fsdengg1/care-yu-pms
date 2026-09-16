@@ -66,7 +66,7 @@ export default function MyDailyWorkPanel({
 
   const loadSheet = useCallback(
     async (date = workDate, activePeriod = period) => {
-      const sheet = await DailyStatusApi.sheet(date, activePeriod);
+      const sheet = await DailyStatusApi.sheet(date, activePeriod, user.id);
       if (!sheet.ok) {
         setError(sheet.message || 'Unable to load daily work updates.');
         return;

@@ -432,7 +432,7 @@ export default function DailyStatusSheet({
                   const editable = canEditRow(row);
                   const baselineEditable = editable && !morningBaselineLocked;
                   const canEditTaskMeta = Boolean(row.canEditBaseline) && !morningBaselineLocked && !readOnly;
-                  const canEditDescription = !readOnly && !morningBaselineLocked && (editable || Boolean(row.canEditBaseline));
+                  const canEditDescription = canEditTaskMeta;
                   const tone = deadlineTone(row.status, row.deadlineIso || row.deadline, today);
                   const personAttendance = attendance.find((item) => item.personId === group.personId);
                   return (

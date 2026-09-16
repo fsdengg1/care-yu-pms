@@ -10,7 +10,6 @@ import {
   compareSnapshots,
   COMPANY_LEAVE_MESSAGE,
   dateInAppTimezone,
-  delayReasonMissingForTask,
   peopleForDailySheet,
   fromSheetStatus,
   isCompanyLeaveDay,
@@ -23,14 +22,14 @@ import {
   saveDailyStatusSnapshot,
   sendDailyStatusReport,
   SnapshotPeriod,
+  parseSnapshotPeriod,
   upsertDailyPeriodRecord,
-  syncPeriodRecordFromTask,
   syncEmailSnapshotFromLive,
   workStatusFromSheet,
   visibleProjects,
 } from '../lib/dailyStatus.js';
 import { formatEmployeeDisplayName } from '../lib/people.js';
-import { updateWorkTask, setTaskSheetHidden, canMutateWorkTask } from '../lib/workTasks.js';
+import { updateWorkTask, setTaskSheetHidden } from '../lib/workTasks.js';
 import {
   getEmailReportScheduleConfig,
   listEmailReportHistory,
@@ -41,12 +40,12 @@ import {
 import { attendanceForUsers } from '../lib/leaveRequests.js';
 import { normalizeDelayReason } from '../lib/workCalendar.js';
 import { env } from '../config/env.js';
-import { flushStore, replaceCollectionsFromPostgres, store } from '../store/db.js';
+import { flushStore, replaceCollectionsFromPostgres } from '../store/db.js';
 
 const router = Router();
 
 function readPeriod(value: unknown): SnapshotPeriod {
-  return String(value || '').toLowerCase() === 'evening' ? 'evening' : 'morning';
+  return parseSnapshotPeriod(value) || 'morning';
 }
 
 function readSlot(value: unknown): EmailReportSlot {
@@ -71,14 +70,20 @@ router.get(
     await replaceCollectionsFromPostgres([...DAILY_WORK_SYNC_COLLECTIONS]);
     const user = req.user!;
     const date = readIsoDate(req.query.date);
-    const period = typeof req.query.period === 'string' && req.query.period ? readPeriod(req.query.period) : undefined;
+    const period = parseSnapshotPeriod(req.query.period || req.query.type) || 'morning';
+    const employeeId =
+      typeof req.query.employeeId === 'string' && req.query.employeeId.trim()
+        ? req.query.employeeId.trim()
+        : typeof req.query.employee_id === 'string' && req.query.employee_id.trim()
+          ? req.query.employee_id.trim()
+          : undefined;
     const phase = sheetPhase(date);
-    const rows = getDailyWorkUpdates(user, { date, period: period || 'morning' });
+    const rows = getDailyWorkUpdates(user, { date, period, employeeId });
     const personIds = [...new Set(rows.map((row) => row.personId).filter(Boolean))];
     return res.json({
       rows,
       date,
-      period: period || 'morning',
+      period,
       phase,
       attendance: attendanceForUsers(personIds, date),
       kpis: buildDailyStatusKpis(user, rows.filter((row) => !row.sheetHidden && row.rowKind !== 'leave')),
@@ -340,7 +345,9 @@ router.patch(
   async (req: AuthedRequest, res) => {
     await replaceCollectionsFromPostgres([...DAILY_WORK_SYNC_COLLECTIONS]);
     const date = readIsoDate(req.query.date || req.body?.work_date);
-    const period = typeof req.body?.period === 'string' && req.body.period ? readPeriod(req.body.period) : 'morning';
+    const period = parseSnapshotPeriod(
+      req.body?.period || req.body?.update_type || req.query.period || req.query.type
+    );
     const taskId = String(req.params.id);
     if (isCompanyLeaveDay(date)) {
       return res.status(400).json({ message: COMPANY_LEAVE_MESSAGE });
@@ -359,23 +366,6 @@ router.patch(
       );
     }
     body.work_date = date;
-    const existingTask = store.getTasks().find((item) => item.id === taskId);
-    if (existingTask) {
-      const nextStatus =
-        typeof body.status === 'string'
-          ? ['TODO', 'IN_PROGRESS', 'DONE', 'BLOCKED', 'WAITING', 'HOLD', 'CANCELLED'].includes(body.status)
-            ? body.status
-            : fromSheetStatus(body.status)
-          : existingTask.status;
-      const probe = {
-        ...existingTask,
-        status: nextStatus as typeof existingTask.status,
-        delay_reason: typeof body.delay_reason === 'string' ? body.delay_reason : existingTask.delay_reason,
-      };
-      if (delayReasonMissingForTask(probe, date, typeof body.delay_reason === 'string' ? body.delay_reason : undefined)) {
-        if (!body.delay_reason) body.delay_reason = existingTask.delay_reason || 'Other: update pending';
-      }
-    }
     if (
       typeof body.status === 'string' &&
       !['TODO', 'IN_PROGRESS', 'DONE', 'BLOCKED', 'WAITING', 'HOLD', 'CANCELLED'].includes(body.status)
@@ -383,8 +373,8 @@ router.patch(
       body.status = fromSheetStatus(body.status);
     }
 
-    const rebuildRows = () => getDailyWorkUpdates(req.user!, { date, period });
-    const today = todayDate();
+    const rebuildPeriod = period || 'morning';
+    const rebuildRows = () => getDailyWorkUpdates(req.user!, { date, period: rebuildPeriod });
     const periodPatch: {
       work_completed?: string;
       hours_worked?: number;
@@ -400,6 +390,9 @@ router.patch(
     else if (typeof body.current_update === 'string') periodPatch.work_completed = body.current_update;
     else if (typeof body.evening_update === 'string') periodPatch.work_completed = body.evening_update;
     if (Object.keys(periodPatch).length) {
+      if (!period) {
+        return res.status(400).json({ message: 'period must be morning or evening' });
+      }
       const periodResult = upsertDailyPeriodRecord(req.user!, taskId, date, period, periodPatch);
       if (!periodResult.ok) {
         return res.status(periodResult.status || 400).json({
@@ -418,21 +411,18 @@ router.patch(
     delete body.current_update;
     delete body.evening_update;
     delete body.period;
+    delete body.update_type;
     delete body.work_date;
     delete body.remarks;
     delete body.progress_manual_override;
     delete body.reason_for_delay;
     delete body.delay_reason_other;
-
-    const mayTouchTask = Boolean(existingTask && canMutateWorkTask(req.user!, existingTask));
-    if (!mayTouchTask || date !== today) {
-      delete body.status;
-      delete body.progress_percent;
-      delete body.delay_reason;
-    }
+    delete body.status;
+    delete body.progress_percent;
+    delete body.delay_reason;
 
     if (Object.keys(body).length === 0) {
-      syncEmailSnapshotFromLive(date, period, req.user!);
+      if (period) syncEmailSnapshotFromLive(date, period, req.user!);
       await flushStore();
       return res.json({ rows: rebuildRows() });
     }
@@ -455,7 +445,7 @@ router.patch(
     }
     if ('error' in result) {
       if (Object.keys(periodPatch).length && result.error === 'forbidden') {
-        syncEmailSnapshotFromLive(date, period, req.user!);
+        if (period) syncEmailSnapshotFromLive(date, period, req.user!);
         await flushStore();
         return res.json({ rows: rebuildRows() });
       }
@@ -466,24 +456,7 @@ router.patch(
             : result.error,
       });
     }
-    if (body.progress_percent !== undefined || body.status !== undefined) {
-      const syncResult = syncPeriodRecordFromTask(
-        req.user!,
-        String(req.params.id),
-        date,
-        period,
-        result.task
-      );
-      if (!syncResult.ok && syncResult.error !== 'forbidden') {
-        return res.status(syncResult.status || 400).json({
-          message:
-            syncResult.error === 'not_found'
-              ? 'Task not found.'
-              : syncResult.error,
-        });
-      }
-    }
-    syncEmailSnapshotFromLive(date, period, req.user!);
+    if (period) syncEmailSnapshotFromLive(date, period, req.user!);
     await flushStore();
     return res.json({ task: result.task, rows: rebuildRows() });
   }

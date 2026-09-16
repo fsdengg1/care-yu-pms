@@ -38,7 +38,7 @@ export default function MyAssignedWorkPage() {
   };
 
   const loadSheetMeta = async () => {
-    const sheet = await DailyStatusApi.sheet();
+    const sheet = await DailyStatusApi.sheet(appTodayIso(), 'morning');
     if (sheet.ok) {
       setSheetPeople(sheet.people);
       setSheetProjects(sheet.projects);

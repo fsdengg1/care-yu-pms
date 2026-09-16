@@ -100,7 +100,7 @@ export default function TeamLeadDashboard({ user }: { user: User }) {
               !project.intake_status)
         )
       );
-      const sheet = await DailyStatusApi.sheet(appTodayIso());
+      const sheet = await DailyStatusApi.sheet(appTodayIso(), 'morning');
       if (sheet.ok) {
         setPeople(sheet.people);
         setProjects(sheet.projects);
@@ -167,7 +167,7 @@ export default function TeamLeadDashboard({ user }: { user: User }) {
         currentUserId={user.id}
         canAssignOthers={canCreateWorkTask(user)}
         onChanged={async () => {
-          const sheet = await DailyStatusApi.sheet(appTodayIso());
+          const sheet = await DailyStatusApi.sheet(appTodayIso(), 'morning');
           if (sheet.ok) {
             setPeople(sheet.people);
             setProjects(sheet.projects);
@@ -338,7 +338,7 @@ export default function TeamLeadDashboard({ user }: { user: User }) {
         onClose={() => setCreateOpen(false)}
         onCreated={(message) => {
           setNotice(message);
-          void DailyStatusApi.sheet(appTodayIso()).then((sheet) => {
+          void DailyStatusApi.sheet(appTodayIso(), 'morning').then((sheet) => {
             if (sheet.ok) {
               setPeople(sheet.people);
               setProjects(sheet.projects);
@@ -356,7 +356,7 @@ export default function TeamLeadDashboard({ user }: { user: User }) {
         onClose={() => setAdditionalOpen(false)}
         onCreated={(message) => {
           setNotice(message);
-          void DailyStatusApi.sheet(appTodayIso()).then((sheet) => {
+          void DailyStatusApi.sheet(appTodayIso(), 'morning').then((sheet) => {
             if (sheet.ok) {
               setPeople(sheet.people);
               setProjects(sheet.projects);
@@ -375,7 +375,7 @@ export default function TeamLeadDashboard({ user }: { user: User }) {
           onCreated={(message) => {
             setNotice(message);
             setSubtaskOpen(false);
-            void DailyStatusApi.sheet(appTodayIso()).then((sheet) => {
+            void DailyStatusApi.sheet(appTodayIso(), 'morning').then((sheet) => {
               if (sheet.ok) {
                 setPeople(sheet.people);
                 setProjects(sheet.projects);

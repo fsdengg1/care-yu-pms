@@ -18,6 +18,7 @@
     "db:migrate": "tsx scripts/migrate-to-postgres.ts",
     "db:migrate:force": "tsx scripts/migrate-to-postgres.ts --force-local",
     "test:permissions": "tsx scripts/verify-permissions.ts",
+    "test:daily-work": "tsx scripts/verify-daily-work-matrix.ts",
     "test:notifications": "tsx scripts/verify-notifications.ts",
     "test:lead-workflow": "tsx scripts/verify-lead-workflow.ts"
   },

@@ -21,6 +21,7 @@ import {
   resolveOrCreateTask,
   todayDate,
 } from '../lib/dailyUpdates.js';
+import { inferDefaultEmailPeriod } from '../lib/dailyStatus.js';
 
 const router = Router();
 
@@ -87,6 +88,9 @@ router.get(
     const status = typeof req.query.status === 'string' ? req.query.status : '';
     const from = typeof req.query.from === 'string' ? req.query.from : '';
     const to = typeof req.query.to === 'string' ? req.query.to : '';
+    const date = typeof req.query.date === 'string' ? req.query.date.trim().slice(0, 10) : '';
+    const typeRaw = String(req.query.type || req.query.period || '').trim().toLowerCase();
+    const type = typeRaw === 'evening' || typeRaw === 'morning' ? typeRaw : '';
     const q = typeof req.query.q === 'string' ? req.query.q.trim().toLowerCase() : '';
     const mine = String(req.query.mine || '') === '1';
 
@@ -94,6 +98,12 @@ router.get(
     if (mine) updates = updates.filter((item) => item.user_id === user.id);
     if (projectId) updates = updates.filter((item) => item.project_id === projectId || item.lead_id === projectId);
     if (status) updates = updates.filter((item) => item.work_status === status || item.submission_status === status);
+    if (date && /^\d{4}-\d{2}-\d{2}$/.test(date)) updates = updates.filter((item) => item.work_date === date);
+    if (type) {
+      updates = updates.filter(
+        (item) => item.period === type || String(item.update_type || '').toLowerCase() === type
+      );
+    }
     if (from) updates = updates.filter((item) => (item.work_date || '') >= from);
     if (to) updates = updates.filter((item) => (item.work_date || '') <= to);
     if (q) {
@@ -167,7 +177,7 @@ router.post(
     const task = resolveOrCreateTask(user, assignment);
     const progress = Math.max(0, Math.min(100, Number(body.progress_percent ?? assignment.progress_percent ?? 0) || 0));
 
-    const rawPeriod = String(body.period || body.update_type || (new Date().getHours() >= 17 ? 'evening' : 'morning')).toLowerCase();
+    const rawPeriod = String(body.period || body.update_type || inferDefaultEmailPeriod()).toLowerCase();
     const period: 'morning' | 'evening' = rawPeriod === 'evening' ? 'evening' : 'morning';
     const update_type: 'MORNING' | 'EVENING' = period === 'evening' ? 'EVENING' : 'MORNING';
     const work_date = String(body.work_date || todayDate()).slice(0, 10);
