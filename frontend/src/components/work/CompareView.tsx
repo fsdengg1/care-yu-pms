@@ -1,53 +1,254 @@
 'use client';
 
 import React, { useMemo } from 'react';
-import { CompareItem, formatSheetDate, progressForSheetStatus, sheetStatusClass } from '@/lib/dailyStatus';
+import {
+  CompareItem,
+  deadlineCellClass,
+  deadlineCellStyle,
+  deadlineTone,
+  formatSheetDate,
+  progressForSheetStatus,
+  sheetStatusClass,
+} from '@/lib/dailyStatus';
 
 function StatusPill({ value }: { value?: string }) {
-  const label = value && value !== '—' ? value : 'Not Started';
+  const label = value && value.trim() && value !== '—' ? value : 'Not Started';
   return (
-    <span className={`inline-flex max-w-full items-center rounded-md border px-1.5 py-0.5 text-[10px] font-bold leading-tight ${sheetStatusClass(label)}`}>
+    <span className={`inline-flex items-center rounded-full border px-2 py-0.5 text-[11px] font-bold leading-tight ${sheetStatusClass(label)}`}>
       {label}
     </span>
   );
 }
 
-function PeriodCard({
-  title,
+function formatDependencies(value?: string) {
+  const parts = String(value || '')
+    .split(/[,;]+/)
+    .map((part) => part.trim())
+    .filter(Boolean);
+  if (!parts.length || parts[0] === '—') return [] as string[];
+  return parts;
+}
+
+function formatDelay(value?: string) {
+  const text = (value || '').trim();
+  if (!text || text === '—') return 'No delay';
+  return text;
+}
+
+function HoursBlock({
+  label,
   status,
   progress,
   hours,
-  remarks,
-  workCompleted,
 }: {
-  title: string;
+  label: string;
   status?: string;
   progress?: number;
   hours?: string;
-  remarks?: string;
-  workCompleted?: string;
 }) {
   const pct = progressForSheetStatus(status, progress);
-  const delay = remarks && remarks !== 'No delay' && remarks !== '—' ? remarks : 'No delay';
-  const work = (workCompleted || '').trim();
+  const barColor = pct >= 100 ? '#16a34a' : pct > 0 ? '#2563eb' : '#94a3b8';
   return (
-    <div className="rounded-lg border border-[#e2e8f0] bg-white p-3">
-      <div className="text-[10px] font-bold uppercase tracking-wider text-[#64748b]">{title}</div>
-      <div className="mt-2 flex flex-wrap items-center gap-2">
-        <StatusPill value={status} />
-        <span className="text-sm font-bold text-[#0f172a]">{Number.isFinite(pct) ? `${pct}%` : '0%'}</span>
-        <span className="text-[11px] font-semibold text-[#475569]">{hours || '0.0 hrs'}</span>
+    <div className="sheet-progress-hours text-left">
+      <div className="sheet-progress-label">{label}</div>
+      <div className="sheet-progress-track" aria-hidden>
+        <div className="sheet-progress-fill" style={{ width: `${pct}%`, background: barColor }} />
       </div>
-      <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-[#e2e8f0]">
-        <div
-          className="h-full rounded-full bg-[#2563eb]"
-          style={{ width: `${Number.isFinite(pct) ? pct : 0}%` }}
-        />
-      </div>
-      <div className="mt-2 text-[11px] text-[#64748b]">Delay: {delay}</div>
-      <div className="mt-2 border-t border-[#e2e8f0] pt-2">
-        <div className="text-[10px] font-bold uppercase tracking-wider text-[#64748b]">{title} work completed</div>
-        <p className="mt-1 whitespace-pre-wrap text-[12px] leading-5 text-[#0f172a]">{work || '—'}</p>
+      <div className="sheet-progress-pct-label">{pct}%</div>
+      <div className="sheet-hours-value">{hours || '0.0 hrs'}</div>
+    </div>
+  );
+}
+
+function WorkCompletedBlock({ title, text }: { title: string; text?: string }) {
+  const value = (text || '').trim();
+  if (!value) return null;
+  return (
+    <div className="mt-2 border-t border-[#e2e8f0] pt-2">
+      <div className="text-[10px] font-bold uppercase tracking-wide text-[#64748b]">{title}</div>
+      <p className="mt-1 whitespace-pre-wrap text-[12px] leading-5 text-[#0f172a]">{value}</p>
+    </div>
+  );
+}
+
+type DaySlice = {
+  status?: string;
+  morningStatus?: string;
+  eveningStatus?: string;
+  morningProgress?: number;
+  eveningProgress?: number;
+  morningHours?: string;
+  eveningHours?: string;
+  morningRemarks?: string;
+  eveningRemarks?: string;
+  morningWork?: string;
+  eveningWork?: string;
+};
+
+function daySlice(item: CompareItem, which: 'previous' | 'current'): DaySlice {
+  if (which === 'previous') {
+    return {
+      status: item.previousEveningStatus || item.previousMorningStatus || item.morningStatus,
+      morningStatus: item.previousMorningStatus,
+      eveningStatus: item.previousEveningStatus,
+      morningProgress: item.previousMorningProgressPercent,
+      eveningProgress: item.previousEveningProgressPercent,
+      morningHours: item.previousMorningHours,
+      eveningHours: item.previousEveningHours,
+      morningRemarks: item.previousMorningRemarks,
+      eveningRemarks: item.previousEveningRemarks,
+      morningWork: item.previousMorningWorkCompleted || item.morningUpdate,
+      eveningWork: item.previousEveningWorkCompleted || item.eveningUpdate,
+    };
+  }
+  return {
+    status: item.currentEveningStatus || item.currentMorningStatus || item.status,
+    morningStatus: item.currentMorningStatus,
+    eveningStatus: item.currentEveningStatus,
+    morningProgress: item.currentMorningProgressPercent,
+    eveningProgress: item.currentEveningProgressPercent,
+    morningHours: item.currentMorningHours,
+    eveningHours: item.currentEveningHours,
+    morningRemarks: item.currentMorningRemarks,
+    eveningRemarks: item.currentEveningRemarks,
+    morningWork: item.currentMorningWorkCompleted,
+    eveningWork: item.currentEveningWorkCompleted,
+  };
+}
+
+function CompareReportTable({
+  title,
+  dateLabel,
+  workDate,
+  items,
+  which,
+}: {
+  title: string;
+  dateLabel: string;
+  workDate?: string;
+  items: CompareItem[];
+  which: 'previous' | 'current';
+}) {
+  const groups = useMemo(() => {
+    const next: Array<{ person: string; rows: CompareItem[] }> = [];
+    for (const row of items) {
+      const last = next[next.length - 1];
+      if (last && last.person === row.person) last.rows.push(row);
+      else next.push({ person: row.person, rows: [row] });
+    }
+    return next;
+  }, [items]);
+
+  return (
+    <div className="daily-status-report-card overflow-hidden">
+      <header className="daily-status-report-header">
+        <div className="text-[11px] font-bold uppercase tracking-[0.12em] text-[#facc15]">CareYu Automation</div>
+        <h2 className="mt-1 text-xl font-bold text-white">{title}</h2>
+        <p className="mt-1 text-[13px] text-[#cbd5e1]">Report date: {dateLabel}</p>
+      </header>
+      <div className="daily-status-report-table-wrap">
+        <table className="daily-status-sheet daily-status-report-table">
+          <colgroup>
+            <col className="col-person" />
+            <col className="col-project" />
+            <col className="col-task-desc" />
+            <col className="col-deps" />
+            <col className="col-status" />
+            <col className="col-date" />
+            <col className="col-deadline" />
+            <col className="col-hours" />
+            <col className="col-delay" />
+          </colgroup>
+          <thead>
+            <tr>
+              <th>Person</th>
+              <th>Project</th>
+              <th>Task Description</th>
+              <th>Dependencies</th>
+              <th>Status</th>
+              <th>Start Date</th>
+              <th>Task Deadline</th>
+              <th>Logged Hours</th>
+              <th>Reason For Delay</th>
+            </tr>
+          </thead>
+          <tbody>
+            {groups.map((group) =>
+              group.rows.map((item, index) => {
+                const slice = daySlice(item, which);
+                const latestStatus = slice.eveningStatus || slice.morningStatus || slice.status;
+                const latestRemarks = slice.eveningRemarks || slice.morningRemarks;
+                const tone = deadlineTone(latestStatus || '', item.taskDeadline, workDate);
+                const deps = formatDependencies(item.dependencies);
+                return (
+                  <tr key={`${which}-${item.id}`}>
+                    {index === 0 && (
+                      <td className="person-cell" rowSpan={group.rows.length}>
+                        {group.person}
+                      </td>
+                    )}
+                    <td className="project-cell">
+                      <span className="sheet-text">{item.project || '—'}</span>
+                    </td>
+                    <td className="task-desc-cell">
+                      <span className="sheet-text sheet-task-field">{item.taskDescription || '—'}</span>
+                      <WorkCompletedBlock title="Morning Work Completed" text={slice.morningWork} />
+                      <WorkCompletedBlock title="Evening Work Completed" text={slice.eveningWork} />
+                    </td>
+                    <td className="deps-cell">
+                      {deps.length ? (
+                        <div className="space-y-0.5">
+                          {deps.map((dep) => (
+                            <div key={dep} className="sheet-text">
+                              {dep}
+                            </div>
+                          ))}
+                        </div>
+                      ) : (
+                        <span className="sheet-text">—</span>
+                      )}
+                    </td>
+                    <td className="status-cell">
+                      <div className="space-y-1">
+                        <div>
+                          <div className="text-[9px] font-bold uppercase tracking-wide text-[#64748b]">Morning</div>
+                          <StatusPill value={slice.morningStatus} />
+                        </div>
+                        <div>
+                          <div className="text-[9px] font-bold uppercase tracking-wide text-[#64748b]">Evening</div>
+                          <StatusPill value={slice.eveningStatus} />
+                        </div>
+                      </div>
+                    </td>
+                    <td className="date-cell">{item.startDate || '—'}</td>
+                    <td className={`date-cell tone-cell ${deadlineCellClass(tone)}`} style={deadlineCellStyle(tone)}>
+                      {item.taskDeadline || '—'}
+                    </td>
+                    <td className="hours-cell">
+                      <div className="space-y-2">
+                        <HoursBlock
+                          label="Morning"
+                          status={slice.morningStatus}
+                          progress={slice.morningProgress}
+                          hours={slice.morningHours}
+                        />
+                        <HoursBlock
+                          label="Evening"
+                          status={slice.eveningStatus}
+                          progress={slice.eveningProgress}
+                          hours={slice.eveningHours}
+                        />
+                      </div>
+                    </td>
+                    <td className="delay-cell">
+                      <span className="sheet-text">{formatDelay(latestRemarks)}</span>
+                    </td>
+                  </tr>
+                );
+              })
+            )}
+          </tbody>
+        </table>
       </div>
     </div>
   );
@@ -68,126 +269,38 @@ export default function CompareView({
 }) {
   const prevLabel = formatSheetDate(previousDate || '');
   const currLabel = formatSheetDate(currentDate || date || '');
-  const groups = useMemo(() => {
-    const sorted = items
-      .slice()
-      .sort((a, b) => a.person.localeCompare(b.person) || a.project.localeCompare(b.project) || a.id.localeCompare(b.id));
-    const next: Array<{ person: string; rows: CompareItem[] }> = [];
-    for (const row of sorted) {
-      const last = next[next.length - 1];
-      if (last && last.person === row.person) last.rows.push(row);
-      else next.push({ person: row.person, rows: [row] });
-    }
-    return next;
-  }, [items]);
+  const sorted = useMemo(
+    () =>
+      items
+        .slice()
+        .sort((a, b) => a.person.localeCompare(b.person) || a.project.localeCompare(b.project) || a.id.localeCompare(b.id)),
+    [items]
+  );
 
-  if (!available) {
+  if (!available || !items.length) {
     return (
       <div className="rounded-xl border border-[#e2e8f0] bg-white p-8 text-center text-sm text-[#64748b]">
         No tasks found to compare for these dates.
       </div>
     );
   }
-  if (!items.length) {
-    return (
-      <div className="rounded-xl border border-[#e2e8f0] bg-white p-8 text-center text-sm text-[#64748b]">
-        No tasks found.
-      </div>
-    );
-  }
 
   return (
-    <div className="space-y-4">
-      <div className="rounded-xl border border-[#e2e8f0] bg-white px-4 py-3 text-[12px] text-[#64748b]">
-        Previous working day <span className="font-semibold text-[#0f172a]">{prevLabel}</span>
-        {' · Morning + Evening'} vs current day{' '}
-        <span className="font-semibold text-[#0f172a]">{currLabel}</span>
-        {' · '}
-        <span className="font-semibold text-[#0f172a]">{items.length} tasks</span>
-      </div>
-
-      {groups.map((group) => (
-        <section key={group.person} className="overflow-hidden rounded-xl border border-[#e2e8f0] bg-[#f8fafc]">
-          <div className="border-b border-[#e2e8f0] bg-[#facc15] px-4 py-2 text-sm font-bold text-[#0f172a]">{group.person}</div>
-          <div className="space-y-4 p-3">
-            {group.rows.map((item) => (
-              <article key={item.id} className="rounded-xl border border-[#e2e8f0] bg-white p-4">
-                <div className="grid gap-2 text-[12px] sm:grid-cols-2 lg:grid-cols-4">
-                  <div>
-                    <div className="text-[10px] font-bold uppercase tracking-wider text-[#64748b]">Project</div>
-                    <div className="font-semibold text-[#0f172a]">{item.project || '—'}</div>
-                  </div>
-                  <div className="sm:col-span-2">
-                    <div className="text-[10px] font-bold uppercase tracking-wider text-[#64748b]">Task</div>
-                    <div className="font-semibold text-[#0f172a]">{item.taskDescription || '—'}</div>
-                  </div>
-                  <div>
-                    <div className="text-[10px] font-bold uppercase tracking-wider text-[#64748b]">Dependencies</div>
-                    <div className="text-[#334155]">{item.dependencies || '—'}</div>
-                  </div>
-                  <div>
-                    <div className="text-[10px] font-bold uppercase tracking-wider text-[#64748b]">Start date</div>
-                    <div className="text-[#334155]">{item.startDate || '—'}</div>
-                  </div>
-                  <div>
-                    <div className="text-[10px] font-bold uppercase tracking-wider text-[#64748b]">Task deadline</div>
-                    <div className="text-[#334155]">{item.taskDeadline || '—'}</div>
-                  </div>
-                </div>
-
-                <div className="mt-4 grid gap-3 lg:grid-cols-2">
-                  <div className="rounded-xl border border-[#cbd5e1] bg-[#f8fafc] p-3">
-                    <h3 className="text-xs font-bold uppercase tracking-wider text-[#0f172a]">
-                      Previous day · {prevLabel}
-                    </h3>
-                    <div className="mt-3 grid gap-3 sm:grid-cols-2">
-                      <PeriodCard
-                        title="Morning"
-                        status={item.previousMorningStatus}
-                        progress={item.previousMorningProgressPercent}
-                        hours={item.previousMorningHours}
-                        remarks={item.previousMorningRemarks}
-                        workCompleted={item.previousMorningWorkCompleted || item.morningUpdate}
-                      />
-                      <PeriodCard
-                        title="Evening"
-                        status={item.previousEveningStatus}
-                        progress={item.previousEveningProgressPercent}
-                        hours={item.previousEveningHours}
-                        remarks={item.previousEveningRemarks}
-                        workCompleted={item.previousEveningWorkCompleted || item.eveningUpdate}
-                      />
-                    </div>
-                  </div>
-                  <div className="rounded-xl border border-cyan-200 bg-cyan-50/40 p-3">
-                    <h3 className="text-xs font-bold uppercase tracking-wider text-[#0f172a]">
-                      Current day · {currLabel}
-                    </h3>
-                    <div className="mt-3 grid gap-3 sm:grid-cols-2">
-                      <PeriodCard
-                        title="Morning"
-                        status={item.currentMorningStatus}
-                        progress={item.currentMorningProgressPercent}
-                        hours={item.currentMorningHours}
-                        remarks={item.currentMorningRemarks}
-                        workCompleted={item.currentMorningWorkCompleted}
-                      />
-                      <PeriodCard
-                        title="Evening"
-                        status={item.currentEveningStatus}
-                        progress={item.currentEveningProgressPercent}
-                        hours={item.currentEveningHours}
-                        remarks={item.currentEveningRemarks}
-                        workCompleted={item.currentEveningWorkCompleted}
-                      />
-                    </div>
-                  </div>
-                </div>
-              </article>
-            ))}
-          </div>
-        </section>
-      ))}
+    <div className="daily-status-report-body space-y-6 p-0">
+      <CompareReportTable
+        title={`Previous Day Status Report - ${prevLabel}`}
+        dateLabel={prevLabel}
+        workDate={previousDate}
+        items={sorted}
+        which="previous"
+      />
+      <CompareReportTable
+        title={`Current Day Status Report - ${currLabel}`}
+        dateLabel={currLabel}
+        workDate={currentDate || date}
+        items={sorted}
+        which="current"
+      />
     </div>
   );
 }
