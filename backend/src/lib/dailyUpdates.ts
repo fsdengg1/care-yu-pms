@@ -14,6 +14,7 @@ import { canOwnLead } from './leadWorkflow.js';
 import { formatEmployeeDisplayName } from './people.js';
 import { persistComputedProgress } from './projectProgress.js';
 import { buildEscalation, notifyEscalationOwner, persistProject, saveEscalation, stampProjectAction } from './projectWorkflow.js';
+import { dateInAppTimezone } from './workCalendar.js';
 import { emitWorkflowEvent } from './workflowEngine.js';
 
 export const STALE_HOURS = 48; // working-period window for "No Recent Update"
@@ -41,7 +42,7 @@ export function newId(prefix: string): string {
 }
 
 export function todayDate(): string {
-  return new Date().toISOString().slice(0, 10);
+  return dateInAppTimezone();
 }
 
 function taskStatusToWork(status: Task['status']): string {

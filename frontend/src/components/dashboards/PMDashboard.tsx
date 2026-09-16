@@ -8,6 +8,7 @@ import { DailyUpdatesApi } from '@/lib/dailyUpdatesApi';
 import { LeadApi } from '@/lib/leadApi';
 import { ProjectsApi } from '@/lib/projectsApi';
 import { formatLongDate, LEAD_STATUS_LABELS, WORK_STATUS_LABELS } from '@/lib/format';
+import { appTodayIso } from '@/lib/dailyStatus';
 import { GanttChartSquare, Scan, ShieldAlert, MessageSquare, Inbox, ArrowRight, FileText, Clock } from 'lucide-react';
 
 import PendingActionsCard from '@/components/work/PendingActionsCard';
@@ -70,7 +71,9 @@ export default function PMDashboard({ user }: { user: User }) {
       setSuggestions(StorageService.getFeasibilitySuggestions());
       const [nextSummary, list] = await Promise.all([DailyUpdatesApi.summary(), DailyUpdatesApi.list()]);
       setSummary(nextSummary);
-      setUpdates(list.updates.filter((item) => item.submission_status === 'SUBMITTED'));
+      setUpdates(
+        list.updates.filter((item) => item.submission_status === 'SUBMITTED' && item.work_date === appTodayIso())
+      );
       setWorkAssignments(list.assignments);
       setLoadError(nextSummary ? null : 'Unable to load daily work updates for your projects. Confirm the backend is running.');
       const listed = await ProjectsApi.list('ACTIVE');
@@ -93,7 +96,9 @@ export default function PMDashboard({ user }: { user: User }) {
   const pendingSugg = suggestions.filter((s) => s.status === 'PENDING');
 
   const submitted = updates;
-  const updatesToday = summary?.updatesToday?.length ? summary.updatesToday : submitted.filter((item) => item.work_date === new Date().toISOString().slice(0, 10));
+  const updatesToday = summary?.updatesToday?.length
+    ? summary.updatesToday.filter((item) => item.work_date === appTodayIso())
+    : submitted;
   const blocked = summary?.blockedUpdates?.length ? summary.blockedUpdates : submitted.filter((item) => item.work_status === 'BLOCKED');
   const pendingItems = summary?.pendingItems?.length ? summary.pendingItems : workAssignments.filter((item) => item.current_status !== 'COMPLETED' && !item.last_update_at);
   const staleItems = summary?.staleItems?.length ? summary.staleItems : workAssignments.filter((item) => item.current_status !== 'COMPLETED');

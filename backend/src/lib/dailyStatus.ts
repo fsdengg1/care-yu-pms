@@ -1,4 +1,5 @@
 import { store } from '../store/db.js';
+import type { CollectionName } from '../store/postgres.js';
 import { DailyUpdate, Project, Task, User } from '../types.js';
 import { canViewProject } from './dailyUpdates.js';
 import { canAcceptAssignedTask, canEditTaskBaselineFields, isLeadBasedTask } from './workTasks.js';
@@ -22,6 +23,17 @@ import { attendanceForUsers, fullDayLeaveOnDate, leaveNonWorkingDays } from './l
 
 export const COMPANY_LEAVE_MESSAGE =
   'Company leave day (Sunday or 2nd/4th Saturday). Daily Work Updates and email reports are not sent.';
+
+/** Collections every Daily Work Updates / email / compare request must reload from Postgres. */
+export const DAILY_WORK_SYNC_COLLECTIONS: CollectionName[] = [
+  'tasks',
+  'dailyUpdates',
+  'systemMeta',
+  'users',
+  'projects',
+  'leads',
+  'leaveRequests',
+];
 
 export type DailySheetStatus = 'Not Started' | 'In Progress' | 'Completed' | 'On Hold' | 'Cancelled';
 export type SnapshotPeriod = 'morning' | 'evening';
@@ -471,16 +483,6 @@ type PeriodFieldSet = {
   update?: DailyUpdate;
 };
 
-function emptyPeriodFields(): PeriodFieldSet {
-  return {
-    status: 'Not Started',
-    progressPercent: 0,
-    hoursWorked: 0,
-    remarks: 'No delay',
-    submitted: false,
-  };
-}
-
 function periodWorkCompletedText(update: DailyUpdate | undefined, masterText: string): string {
   if (!update) return '';
   const text = (update.work_completed || '').trim();
@@ -489,14 +491,7 @@ function periodWorkCompletedText(update: DailyUpdate | undefined, masterText: st
   return text;
 }
 
-function fieldsFromPeriodUpdate(
-  task: Task,
-  updates: DailyUpdate[],
-  workDate: string,
-  period: SnapshotPeriod
-): PeriodFieldSet {
-  const upd = pickUpdateForDate(updatesForTask(task, updates), workDate, period, task.assigned_to_id);
-  if (!upd) return emptyPeriodFields();
+function fieldsFromUpdate(task: Task, upd: DailyUpdate, submitted = true): PeriodFieldSet {
   const status = toSheetStatus(upd.work_status);
   const hoursWorked = Math.max(0, Number(upd.hours_worked) || 0);
   const remarks = normalizeDelayReason(upd.blocker) || 'No delay';
@@ -506,10 +501,83 @@ function fieldsFromPeriodUpdate(
     progressPercent: progressForSheetStatus(status, upd.progress_percent),
     hoursWorked,
     remarks,
-    submitted: true,
+    submitted,
     currentUpdate: periodWorkCompletedText(upd, masterText),
     update: upd,
   };
+}
+
+function fieldsFromTaskBaseline(task: Task): PeriodFieldSet {
+  const status = taskSheetStatus(task);
+  return {
+    status,
+    progressPercent: progressForSheetStatus(status, task.progress_percent),
+    hoursWorked: 0,
+    remarks: 'No delay',
+    submitted: false,
+  };
+}
+
+function fieldsFromPeriodUpdate(
+  task: Task,
+  updates: DailyUpdate[],
+  workDate: string,
+  period: SnapshotPeriod
+): PeriodFieldSet {
+  const upd = pickUpdateForDate(updatesForTask(task, updates), workDate, period, task.assigned_to_id);
+  if (!upd) return fieldsFromTaskBaseline(task);
+  return fieldsFromUpdate(task, upd);
+}
+
+function taskHasPeriodUpdate(
+  task: Task,
+  updates: DailyUpdate[],
+  workDate: string,
+  period: SnapshotPeriod
+): boolean {
+  return Boolean(pickUpdateForDate(updatesForTask(task, updates), workDate, period, task.assigned_to_id));
+}
+
+/** Recreate missing master tasks from period updates so Worker isolates cannot hide saved morning/evening rows. */
+function ensureTasksFromPeriodUpdates(workDate: string, period: SnapshotPeriod): number {
+  const now = new Date().toISOString();
+  const tasks = store.getTasks().slice();
+  const users = store.getUsers();
+  const leads = store.getLeads();
+  let changed = 0;
+  const pool = store
+    .getDailyUpdates()
+    .filter((item) => item.work_date === workDate && periodOfUpdate(item) === period);
+  for (const upd of pool) {
+    const id = String(upd.task_id || upd.assignment_id || '').trim();
+    if (!id || tasks.some((task) => task.id === id)) continue;
+    const assignee = users.find((item) => item.id === upd.user_id);
+    const lead = upd.lead_id ? leads.find((item) => item.id === upd.lead_id) : undefined;
+    const status = fromSheetStatus(toSheetStatus(upd.work_status));
+    tasks.unshift({
+      id,
+      title: (upd.task_title || 'Daily work task').slice(0, 120),
+      description: upd.task_title || undefined,
+      status,
+      priority: 'Medium',
+      assigned_to: assignee?.name || upd.user_name,
+      assigned_to_id: upd.user_id || assignee?.id || '',
+      created_by: 'period-restore',
+      created_by_id: 'period-restore',
+      project_id: upd.project_id,
+      project_name: upd.project_name && upd.project_name !== '—' ? upd.project_name : undefined,
+      task_type: lead ? 'LEAD_TASK' : upd.project_id ? 'PROJECT_TASK' : 'NON_PROJECT_TASK',
+      lead_id: lead?.id || '',
+      lead_name: lead?.title,
+      progress_percent: Math.max(0, Math.min(100, Number(upd.progress_percent) || 0)),
+      comments: [],
+      created_at: upd.created_at || now,
+      updated_at: now,
+    });
+    changed += 1;
+  }
+  if (changed) store.saveTasks(tasks);
+  return changed;
 }
 
 function normalizeComparableText(value: string): string {
@@ -717,6 +785,7 @@ export function buildDailyStatusRows(
   // Sundays + 2nd/4th Saturdays: no sheet content and no mail (do not carry weekday tasks).
   if (isCompanyLeaveDay(workDate)) return [];
   const period = options?.period === 'evening' ? 'evening' : 'morning';
+  ensureTasksFromPeriodUpdates(workDate, period);
   const users = visibleUsers(user);
   const allUsers = store.getUsers();
   const projects = store.getProjects();
@@ -747,8 +816,12 @@ export function buildDailyStatusRows(
 
   const taskRows = visibleTasks
     .filter((task) => !task.parent_task_id)
-    .filter((task) => options?.includeHistoricalCompleted || !completedBeforeWorkDate(task, workDate))
-    .filter((task) => !fullDayLeaveOnDate(task.assigned_to_id, workDate))
+    .filter((task) => {
+      if (taskHasPeriodUpdate(task, updates, workDate, period)) return true;
+      if (!options?.includeHistoricalCompleted && completedBeforeWorkDate(task, workDate)) return false;
+      if (fullDayLeaveOnDate(task.assigned_to_id, workDate)) return false;
+      return true;
+    })
     .map((task) => {
       const project = task.project_id ? projects.find((item) => item.id === task.project_id) : undefined;
       const assignee =
@@ -890,6 +963,14 @@ export function buildDailyStatusRows(
   return combined.sort((a, b) => a.person.localeCompare(b.person) || a.project.localeCompare(b.project));
 }
 
+/** Canonical Daily Work Updates query: one date, one period, live records only. */
+export function getDailyWorkUpdates(
+  user: User,
+  options?: { date?: string; period?: SnapshotPeriod; includeHistoricalCompleted?: boolean }
+): DailyStatusRow[] {
+  return buildDailyStatusRows(user, options);
+}
+
 /** Morning snapshot fields stay fixed as the evening baseline once morning is locked. */
 function applyMorningBaselineToEveningRows(rows: DailyStatusRow[], workDate: string): DailyStatusRow[] {
   const morningSnap = loadDailyStatusSnapshot(workDate, 'morning');
@@ -957,7 +1038,18 @@ function snapshotId(date: string, period: SnapshotPeriod) {
 }
 
 export function saveDailyStatusSnapshot(user: User, period: SnapshotPeriod, date = todayIso()) {
-  const rows = visibleSheetRows(buildDailyStatusRows(user, { date, period }));
+  const rows = visibleSheetRows(getDailyWorkUpdates(user, { date, period }));
+  if (!rows.length) {
+    const existing = loadDailyStatusSnapshot(date, period);
+    if (existing?.length) {
+      return {
+        date,
+        period,
+        rows: existing,
+        captured_at: String((store.getSystemMeta().find((item) => item.id === snapshotId(date, period))?.payload as { captured_at?: string } | undefined)?.captured_at || ''),
+      };
+    }
+  }
   return persistDailyStatusSnapshot(date, period, rows, user.id, { force: true });
 }
 
@@ -973,18 +1065,8 @@ export function persistDailyStatusSnapshot(
   const id = snapshotId(date, period);
   const existing = records.find((item) => item.id === id);
   const existingRows = (existing?.payload as { rows?: DailyStatusRow[] } | undefined)?.rows;
-  if (period === 'morning' && !options?.force) {
-    if (Array.isArray(existingRows) && existingRows.length > 0 && rows.length === 0) {
-      return {
-        date,
-        period,
-        rows: existingRows,
-        captured_at: String((existing?.payload as { captured_at?: string } | undefined)?.captured_at || ''),
-      };
-    }
-  }
-  // Never replace a non-empty saved sheet with an empty capture during init/refresh.
-  if (!options?.force && Array.isArray(existingRows) && existingRows.length > 0 && rows.length === 0) {
+  // Never replace a saved sheet with an empty capture (Worker isolate miss / failed reload).
+  if (Array.isArray(existingRows) && existingRows.length > 0 && (!rows || rows.length === 0)) {
     return {
       date,
       period,
@@ -1173,6 +1255,14 @@ export function rehydrateTasksFromSnapshot(rows: DailyStatusRow[] | null | undef
       }
       continue;
     }
+    if (row.isLeadTask) {
+      const existingLead =
+        (row.leadNumber
+          ? store.getLeads().find((item) => item.lead_number === row.leadNumber)
+          : undefined) ||
+        (row.leadName ? store.getLeads().find((item) => item.title === row.leadName) : undefined);
+      if (!existingLead) continue;
+    }
     const assignee =
       users.find((item) => item.id === row.personId) ||
       users.find((item) => item.name === row.person || formatEmployeeDisplayName(item) === row.person);
@@ -1265,23 +1355,19 @@ export function rowsForPeriod(user: User, period: SnapshotPeriod, date = todayIs
   if (isCompanyLeaveDay(date)) {
     return { rows: [], source: 'live', available: false, message: COMPANY_LEAVE_MESSAGE };
   }
-  if (period === 'morning') {
-    const saved = loadDailyStatusSnapshot(date, 'morning');
-    if (saved?.length) rehydrateTasksFromSnapshot(saved);
-  }
   return {
-    rows: visibleSheetRows(buildDailyStatusRows(user, { date, period })),
+    rows: visibleSheetRows(getDailyWorkUpdates(user, { date, period })),
     source: 'live',
     available: true,
   };
 }
 
-/** Morning email uses the locked snapshot; evening email uses live Daily Work Updates. */
+/** Email reports use the same live Daily Work Updates query as the sheet. Never mix dates or periods. */
 export function rowsForEmailReport(
   user: User,
   period: SnapshotPeriod,
   date = todayIso(),
-  options?: { preferLive?: boolean }
+  _options?: { preferLive?: boolean }
 ): {
   rows: DailyStatusRow[];
   source: 'snapshot' | 'live';
@@ -1296,17 +1382,11 @@ export function rowsForEmailReport(
       message: COMPANY_LEAVE_MESSAGE,
     };
   }
-  const live = visibleSheetRows(buildDailyStatusRows(user, { date, period }));
-  if (live.length || options?.preferLive !== false) {
-    return { rows: live, source: 'live', available: true };
-  }
-  if (period === 'morning') {
-    const saved = loadDailyStatusSnapshot(date, 'morning');
-    if (saved?.length) {
-      return { rows: scopedDailyStatusRows(user, saved), source: 'snapshot', available: true };
-    }
-  }
-  return { rows: live, source: 'live', available: true };
+  return {
+    rows: visibleSheetRows(getDailyWorkUpdates(user, { date, period })),
+    source: 'live',
+    available: true,
+  };
 }
 
 /** Keep the mailed/preview snapshot aligned with the live Daily Work Updates sheet. */
@@ -1314,7 +1394,8 @@ export function syncEmailSnapshotFromLive(date: string, period: SnapshotPeriod, 
   const viewer =
     actor && canSeeAllDailyStatusRows(actor) ? actor : globalSheetActor() || actor;
   if (!viewer || isCompanyLeaveDay(date)) return null;
-  const rows = visibleSheetRows(buildDailyStatusRows(viewer, { date, period }));
+  const rows = visibleSheetRows(getDailyWorkUpdates(viewer, { date, period }));
+  if (!rows.length) return null;
   return persistDailyStatusSnapshot(date, period, rows, viewer.id, { force: true });
 }
 
@@ -1805,7 +1886,8 @@ function emailTaskDescriptionHtml(row: DailyStatusRow, period: SnapshotPeriod): 
 }
 
 export function inferDefaultEmailPeriod(now = new Date()): SnapshotPeriod {
-  return clockInAppTimezone(now).hour >= 11 ? 'evening' : 'morning';
+  // 11:00 AM report is morning; 7:15 PM report is evening. Afternoon still previews morning.
+  return clockInAppTimezone(now).hour >= 19 ? 'evening' : 'morning';
 }
 
 export function renderDailyStatusEmailHtml(params: {

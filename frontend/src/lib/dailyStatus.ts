@@ -161,7 +161,7 @@ export function formatSheetDate(value?: string): string {
   return `${day}-${month}-${year}`;
 }
 
-export function overdueDays(deadlineIso: string | undefined, today = new Date().toISOString().slice(0, 10)): number {
+export function overdueDays(deadlineIso: string | undefined, today = appTodayIso()): number {
   if (!deadlineIso) return 0;
   const start = Date.parse(`${deadlineIso}T00:00:00`);
   const end = Date.parse(`${today}T00:00:00`);
@@ -284,7 +284,7 @@ export function inferDefaultEmailPeriod(now = new Date()): SnapshotPeriod {
   const hour = Number(
     new Intl.DateTimeFormat('en-GB', { timeZone: 'Asia/Kolkata', hour: '2-digit', hourCycle: 'h23' }).format(now)
   );
-  return hour >= 11 ? 'evening' : 'morning';
+  return hour >= 19 ? 'evening' : 'morning';
 }
 
 /** Calendar date in Asia/Kolkata as YYYY-MM-DD. */

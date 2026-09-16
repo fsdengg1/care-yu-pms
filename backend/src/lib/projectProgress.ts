@@ -1,8 +1,9 @@
 import { store } from '../store/db.js';
 import { GanttStatus, Project, Task } from '../types.js';
+import { dateInAppTimezone } from './workCalendar.js';
 
 function todayDate() {
-  return new Date().toISOString().slice(0, 10);
+  return dateInAppTimezone();
 }
 
 export function projectPlanTasks(projectId: string): Task[] {

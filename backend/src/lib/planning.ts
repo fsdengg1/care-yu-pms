@@ -8,6 +8,7 @@ import {
   Team,
   User,
 } from '../types.js';
+import { dateInAppTimezone } from './workCalendar.js';
 import { ensureProjectTeamTasks } from './dailyUpdates.js';
 import { newId } from './leadWorkflow.js';
 import {
@@ -54,7 +55,7 @@ export type TaskPatch = {
 };
 
 function todayDate() {
-  return new Date().toISOString().slice(0, 10);
+  return dateInAppTimezone();
 }
 
 function addDays(iso: string, days: number) {

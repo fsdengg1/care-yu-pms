@@ -8,6 +8,7 @@ import {
   renderDailyStatusEmailHtml,
   rowsForEmailReport,
   SnapshotPeriod,
+  DAILY_WORK_SYNC_COLLECTIONS,
 } from './dailyStatus.js';
 import { sendEmail } from './email.js';
 import { newId } from './leadWorkflow.js';
@@ -461,7 +462,7 @@ export async function sendConfiguredEmailReport(params: {
   };
   writeHistoryEntry(pending);
 
-  await replaceCollectionsFromPostgres(['tasks', 'systemMeta', 'dailyUpdates']);
+  await replaceCollectionsFromPostgres([...DAILY_WORK_SYNC_COLLECTIONS]);
   const packed = rowsForEmailReport(actor, meta.period, date, { preferLive: true });
   persistDailyStatusSnapshot(date, meta.period, packed.rows, actor.id, {
     force: true,

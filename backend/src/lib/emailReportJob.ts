@@ -1,6 +1,6 @@
 import { env } from '../config/env.js';
 import { replaceCollectionsFromPostgres } from '../store/db.js';
-import { applyScheduledMorningLock } from './dailyStatus.js';
+import { applyScheduledMorningLock, DAILY_WORK_SYNC_COLLECTIONS } from './dailyStatus.js';
 import {
   getEmailReportScheduleConfig,
   saveEmailReportScheduleConfig,
@@ -29,7 +29,7 @@ async function runSlot(slot: 'noon' | 'evening') {
 /** Lock morning snapshot then send the 11:00 AM report. Idempotent across overlapping ticks. */
 export async function runMorningLockAndEmail() {
   try {
-    await replaceCollectionsFromPostgres(['tasks', 'systemMeta', 'dailyUpdates']);
+    await replaceCollectionsFromPostgres([...DAILY_WORK_SYNC_COLLECTIONS]);
     const lock = applyScheduledMorningLock();
     console.info(
       `[scheduler] morning lock ${lock.skipped ? 'skipped' : 'applied'} date=${lock.date} locked=${lock.locked} reason=${lock.reason || 'ok'}`

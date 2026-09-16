@@ -206,7 +206,7 @@ function DailyWorkUpdatesInner() {
           setError(result.message || 'Unable to save daily work updates.');
           return;
         }
-        setRows(result.data.rows);
+        await loadSheet(workDate, period);
         setNotice(`${period === 'morning' ? 'Morning' : 'Evening'} updates saved.`);
       } else {
         await loadSheet(workDate, period);

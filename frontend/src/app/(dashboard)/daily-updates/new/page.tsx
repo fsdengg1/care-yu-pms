@@ -8,6 +8,7 @@ import { DailyUpdatesApi } from '@/lib/dailyUpdatesApi';
 import { canSubmitDailyUpdate } from '@/lib/rbac';
 import { formatLongDate, PIPELINE_STAGE_LABELS } from '@/lib/format';
 import { DailyUpdate, DailyWorkStatus, User, WorkAssignment } from '@/lib/types';
+import { appTodayIso } from '@/lib/dailyStatus';
 
 const STATUSES: DailyWorkStatus[] = ['NOT_STARTED', 'IN_PROGRESS', 'BLOCKED', 'COMPLETED'];
 
@@ -31,7 +32,7 @@ function NewDailyUpdateInner() {
   const [error, setError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const [form, setForm] = useState({
-    work_date: new Date().toISOString().slice(0, 10),
+    work_date: appTodayIso(),
     work_completed: '',
     progress_percent: 0,
     hours_worked: 0,

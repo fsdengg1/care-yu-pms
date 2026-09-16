@@ -19,7 +19,7 @@ import AddSubtaskForm from '@/components/work/AddSubtaskForm';
 import MySubtasksPanel from '@/components/work/MySubtasksPanel';
 import MyDailyWorkPanel from '@/components/work/MyDailyWorkPanel';
 import { DailyStatusApi } from '@/lib/dailyStatusApi';
-import { DailyStatusPerson, DailyStatusRow } from '@/lib/dailyStatus';
+import { DailyStatusPerson, DailyStatusRow, appTodayIso } from '@/lib/dailyStatus';
 
 function assignedTeamIds(lead: Lead): string[] {
   return [...new Set([...(lead.assigned_team_ids || []), ...(lead.assigned_team_id ? [lead.assigned_team_id] : [])].filter(Boolean))];
@@ -100,7 +100,7 @@ export default function TeamLeadDashboard({ user }: { user: User }) {
               !project.intake_status)
         )
       );
-      const sheet = await DailyStatusApi.sheet();
+      const sheet = await DailyStatusApi.sheet(appTodayIso());
       if (sheet.ok) {
         setPeople(sheet.people);
         setProjects(sheet.projects);
@@ -167,7 +167,7 @@ export default function TeamLeadDashboard({ user }: { user: User }) {
         currentUserId={user.id}
         canAssignOthers={canCreateWorkTask(user)}
         onChanged={async () => {
-          const sheet = await DailyStatusApi.sheet();
+          const sheet = await DailyStatusApi.sheet(appTodayIso());
           if (sheet.ok) {
             setPeople(sheet.people);
             setProjects(sheet.projects);
@@ -338,7 +338,7 @@ export default function TeamLeadDashboard({ user }: { user: User }) {
         onClose={() => setCreateOpen(false)}
         onCreated={(message) => {
           setNotice(message);
-          void DailyStatusApi.sheet().then((sheet) => {
+          void DailyStatusApi.sheet(appTodayIso()).then((sheet) => {
             if (sheet.ok) {
               setPeople(sheet.people);
               setProjects(sheet.projects);
@@ -356,7 +356,7 @@ export default function TeamLeadDashboard({ user }: { user: User }) {
         onClose={() => setAdditionalOpen(false)}
         onCreated={(message) => {
           setNotice(message);
-          void DailyStatusApi.sheet().then((sheet) => {
+          void DailyStatusApi.sheet(appTodayIso()).then((sheet) => {
             if (sheet.ok) {
               setPeople(sheet.people);
               setProjects(sheet.projects);
@@ -375,7 +375,7 @@ export default function TeamLeadDashboard({ user }: { user: User }) {
           onCreated={(message) => {
             setNotice(message);
             setSubtaskOpen(false);
-            void DailyStatusApi.sheet().then((sheet) => {
+            void DailyStatusApi.sheet(appTodayIso()).then((sheet) => {
               if (sheet.ok) {
                 setPeople(sheet.people);
                 setProjects(sheet.projects);

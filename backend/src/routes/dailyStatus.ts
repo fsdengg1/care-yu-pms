@@ -3,7 +3,8 @@ import { AuthedRequest, requireAuth } from '../middleware/auth.js';
 import { requirePermission } from '../lib/rbac.js';
 import {
   buildDailyStatusKpis,
-  buildDailyStatusRows,
+  getDailyWorkUpdates,
+  DAILY_WORK_SYNC_COLLECTIONS,
   canManageMorningLock,
   canSeeAllDailyStatusRows,
   compareSnapshots,
@@ -67,12 +68,12 @@ router.get(
   '/sheet',
   requirePermission('view:daily-updates', 'submit:daily-update', 'view:dashboard:ceo'),
   async (req: AuthedRequest, res) => {
-    await replaceCollectionsFromPostgres(['tasks', 'systemMeta', 'dailyUpdates']);
+    await replaceCollectionsFromPostgres([...DAILY_WORK_SYNC_COLLECTIONS]);
     const user = req.user!;
     const date = readIsoDate(req.query.date);
     const period = typeof req.query.period === 'string' && req.query.period ? readPeriod(req.query.period) : undefined;
     const phase = sheetPhase(date);
-    const rows = buildDailyStatusRows(user, { date, period: period || 'morning' });
+    const rows = getDailyWorkUpdates(user, { date, period: period || 'morning' });
     const personIds = [...new Set(rows.map((row) => row.personId).filter(Boolean))];
     return res.json({
       rows,
@@ -105,7 +106,7 @@ router.post(
       date,
       locked: false,
       phase: sheetPhase(date),
-      rows: buildDailyStatusRows(user, { date, period: 'morning' }),
+      rows: getDailyWorkUpdates(user, { date, period: 'morning' }),
     });
   }
 );
@@ -125,7 +126,7 @@ router.post(
     if (isCompanyLeaveDay(date)) {
       return res.status(400).json({ message: COMPANY_LEAVE_MESSAGE });
     }
-    await replaceCollectionsFromPostgres(['tasks', 'systemMeta', 'dailyUpdates']);
+    await replaceCollectionsFromPostgres([...DAILY_WORK_SYNC_COLLECTIONS]);
     const result = saveDailyStatusSnapshot(req.user!, period, date);
     await flushStore();
     return res.json({
@@ -157,7 +158,7 @@ router.get(
   '/compare',
   requirePermission('view:daily-updates', 'submit:daily-update', 'view:dashboard:ceo'),
   async (req: AuthedRequest, res) => {
-    await replaceCollectionsFromPostgres(['tasks', 'systemMeta', 'dailyUpdates']);
+    await replaceCollectionsFromPostgres([...DAILY_WORK_SYNC_COLLECTIONS]);
     const date = typeof req.query.date === 'string' && req.query.date ? req.query.date : undefined;
     const against = typeof req.query.against === 'string' && req.query.against ? req.query.against : undefined;
     const result = compareSnapshots(req.user!, date, against);
@@ -174,7 +175,7 @@ router.get(
   '/email-preview',
   requirePermission('view:daily-updates', 'view:dashboard:ceo'),
   async (req: AuthedRequest, res) => {
-    await replaceCollectionsFromPostgres(['tasks', 'systemMeta', 'dailyUpdates']);
+    await replaceCollectionsFromPostgres([...DAILY_WORK_SYNC_COLLECTIONS]);
     const period = readPeriod(req.query.period);
     const date = readIsoDate(req.query.date);
     const packed = rowsForEmailReport(req.user!, period, date, { preferLive: true });
@@ -203,7 +204,7 @@ router.post(
   '/email-send',
   requirePermission('view:daily-updates', 'view:dashboard:ceo'),
   async (req: AuthedRequest, res) => {
-    await replaceCollectionsFromPostgres(['tasks', 'systemMeta', 'dailyUpdates']);
+    await replaceCollectionsFromPostgres([...DAILY_WORK_SYNC_COLLECTIONS]);
     const period = readPeriod(req.body?.period);
     const configured = getEmailReportScheduleConfig();
     const toEmail =
@@ -337,6 +338,7 @@ router.patch(
   '/rows/:id',
   requirePermission('view:daily-updates', 'create:task', 'submit:daily-update'),
   async (req: AuthedRequest, res) => {
+    await replaceCollectionsFromPostgres([...DAILY_WORK_SYNC_COLLECTIONS]);
     const date = readIsoDate(req.query.date || req.body?.work_date);
     const period = typeof req.body?.period === 'string' && req.body.period ? readPeriod(req.body.period) : 'morning';
     const taskId = String(req.params.id);
@@ -381,7 +383,7 @@ router.patch(
       body.status = fromSheetStatus(body.status);
     }
 
-    const rebuildRows = () => buildDailyStatusRows(req.user!, { date, period });
+    const rebuildRows = () => getDailyWorkUpdates(req.user!, { date, period });
     const today = todayDate();
     const periodPatch: {
       work_completed?: string;

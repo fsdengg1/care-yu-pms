@@ -7,7 +7,7 @@ import { ArrowRight } from 'lucide-react';
 import { User } from '@/lib/types';
 import { DailyUpdatesApi } from '@/lib/dailyUpdatesApi';
 import { DailyStatusApi } from '@/lib/dailyStatusApi';
-import { DailyStatusRow, deadlineCellClass, deadlineTone } from '@/lib/dailyStatus';
+import { DailyStatusRow, appTodayIso, deadlineCellClass, deadlineTone } from '@/lib/dailyStatus';
 import { formatEmployeeDisplayName } from '@/lib/people';
 import { formatDateTime, formatRelativeTime } from '@/lib/format';
 import KPIStatCard from '@/components/work/KPIStatCard';
@@ -27,7 +27,7 @@ export default function ManagementDashboard({ user }: { user: User }) {
 
   useEffect(() => {
     void (async () => {
-      const [sheet, summary] = await Promise.all([DailyStatusApi.sheet(), DailyUpdatesApi.summary()]);
+      const [sheet, summary] = await Promise.all([DailyStatusApi.sheet(appTodayIso()), DailyUpdatesApi.summary()]);
       if (!sheet.ok) {
         setError(sheet.message || 'Unable to load dashboard data.');
         return;
