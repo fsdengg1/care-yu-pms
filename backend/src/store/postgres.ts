@@ -171,6 +171,10 @@ async function workerSchemaReady(): Promise<boolean> {
 }
 
 export async function ensureSchema(): Promise<void> {
+  if (process.env.CLOUDFLARE_WORKER === '1') {
+    console.info('[store] Worker fast-path: skipping schema migration on login/boot');
+    return;
+  }
   if (await workerSchemaReady()) {
     console.info('[store] Worker fast-path: schema already present, skipping migration');
     return;

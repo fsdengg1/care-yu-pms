@@ -29,7 +29,10 @@ function resolveApiBaseUrl() {
 
 export const API_URL = resolveApiBaseUrl();
 
-function backendUnreachableMessage() {
+function backendUnreachableMessage(status?: number) {
+  if (status === 502 || status === 503 || status === 504) {
+    return 'The server is starting. Please wait a few seconds and try again.';
+  }
   return 'Unable to reach the server. Please check your connection and try again.';
 }
 
@@ -40,8 +43,12 @@ function isRetryableStatus(status: number) {
 function shouldRetry(path: string, method: string, status: number) {
   if (!isRetryableStatus(status)) return false;
   const verb = method.toUpperCase();
+  const route = path.split('?')[0];
+  if (verb === 'POST' && /\/api\/auth\/(login|login-mode|invitation-login|verify-invitation)$/.test(route)) {
+    return false;
+  }
   if (verb === 'GET' || verb === 'HEAD') return true;
-  return verb === 'POST' && /\/api\/auth\/(login|login-mode|me)$/.test(path.split('?')[0]);
+  return verb === 'POST' && /\/api\/auth\/me$/.test(route);
 }
 
 async function apiRequestOnce<T>(
@@ -74,21 +81,20 @@ async function apiRequestOnce<T>(
       return {
         ok: false,
         status: response.status,
-        message: backendUnreachableMessage(),
+        message: backendUnreachableMessage(response.status),
       };
     }
 
     if (!response.ok) {
-      const emptyBody = !payload || typeof payload !== 'object' || !('message' in payload);
+      const payloadMessage = typeof payload.message === 'string' && payload.message.trim() ? payload.message : '';
+      const emptyBody = !payload || typeof payload !== 'object' || !payloadMessage;
       const proxyDown =
         isRetryableStatus(response.status) ||
         (response.status >= 500 && emptyBody);
       return {
         ok: false,
         status: response.status,
-        message: proxyDown
-          ? backendUnreachableMessage()
-          : payload.message || 'Request failed. Please try again.',
+        message: payloadMessage || (proxyDown ? backendUnreachableMessage(response.status) : 'Request failed. Please try again.'),
         code: typeof payload.code === 'string' ? payload.code : undefined,
         errors: Array.isArray(payload.errors) ? payload.errors : undefined,
       };
@@ -99,7 +105,7 @@ async function apiRequestOnce<T>(
     return {
       ok: false,
       status: 0,
-      message: backendUnreachableMessage(),
+      message: backendUnreachableMessage(0),
     };
   }
 }

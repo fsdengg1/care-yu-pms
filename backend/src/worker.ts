@@ -52,7 +52,7 @@ async function ensureInitialized() {
         initializing = null;
       });
   }
-  const timeoutMs = 20000;
+  const timeoutMs = 12000;
   let timer: ReturnType<typeof setTimeout> | undefined;
   try {
     await Promise.race([
@@ -193,6 +193,8 @@ function dispatchExpress(request: Request, raw: Buffer): Promise<Response> {
 async function handleApiRequest(request: Request, env: WorkerEnv, ctx?: { waitUntil: (promise: Promise<unknown>) => void }): Promise<Response> {
   bindWorkerEnv(env);
   setWorkerWaitUntil(ctx ? (promise) => ctx.waitUntil(promise) : null);
+  const pathname = new URL(request.url).pathname;
+  const isAuthRoute = pathname.startsWith('/api/auth/');
 
   if (request.method === 'OPTIONS') {
     return new Response(null, { status: 204, headers: corsHeaders(request) });
@@ -200,7 +202,7 @@ async function handleApiRequest(request: Request, env: WorkerEnv, ctx?: { waitUn
 
   try {
     await ensureInitialized();
-    if (ctx) {
+    if (ctx && !isAuthRoute) {
       ctx.waitUntil(hydrateRemainingWorkerCollections().catch((error) => {
         console.error('[worker-init] Remaining collection hydrate failed:', error);
       }));
@@ -232,7 +234,13 @@ async function handleApiRequest(request: Request, env: WorkerEnv, ctx?: { waitUn
       : Buffer.alloc(0);
 
   try {
-    return await dispatchExpress(request, raw);
+    const response = await dispatchExpress(request, raw);
+    if (ctx && isAuthRoute && request.method === 'POST' && pathname.endsWith('/login')) {
+      ctx.waitUntil(hydrateRemainingWorkerCollections().catch((error) => {
+        console.error('[worker-init] Remaining collection hydrate failed:', error);
+      }));
+    }
+    return response;
   } catch (err) {
     console.error('[worker-handler] dispatch failed:', err);
     return new Response(

@@ -40,11 +40,18 @@ export async function loginWithApi(
   password: string,
   rememberMe = true
 ): Promise<{ ok: true; user: User; token: string } | { ok: false; error: string; code?: string }> {
-  const result = await apiRequest<{ user: User; token: string }>('/api/auth/login', {
-    method: 'POST',
-    body: JSON.stringify({ workEmail: email.trim(), email: email.trim(), password, rememberMe }),
-  });
+  const body = JSON.stringify({ workEmail: email.trim(), email: email.trim(), password, rememberMe });
+  const attempt = () =>
+    apiRequest<{ user: User; token: string }>('/api/auth/login', {
+      method: 'POST',
+      body,
+    });
 
+  let result = await attempt();
+  if (!result.ok && (result.status === 502 || result.status === 503 || result.status === 504)) {
+    await new Promise((resolve) => setTimeout(resolve, 2000));
+    result = await attempt();
+  }
   if (!result.ok) {
     return { ok: false, error: result.message, code: result.code };
   }

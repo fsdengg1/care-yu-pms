@@ -989,11 +989,6 @@ const WORKER_BOOT_COLLECTIONS: CollectionName[] = [
   'teams',
   'pendingSignups',
   'systemMeta',
-  'tasks',
-  'dailyUpdates',
-  'projects',
-  'leads',
-  'leaveRequests',
 ];
 
 export async function hydrateRemainingWorkerCollections(): Promise<void> {
@@ -1058,7 +1053,7 @@ export async function initStore(options?: { forceImportLocal?: boolean }): Promi
   cache = merged;
   markCollectionsFresh(worker ? WORKER_BOOT_COLLECTIONS : [...COLLECTION_NAMES]);
   if (worker) {
-    console.info('[store] Worker boot loaded login/daily-work collections only');
+    console.info('[store] Worker boot loaded auth collections only');
   }
   const loadedFromPostgres = source === 'postgres' && postgresHasData;
   if (loadedFromPostgres) {
