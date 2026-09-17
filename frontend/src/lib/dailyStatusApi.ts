@@ -40,6 +40,37 @@ export type EmailReportHistoryEntry = {
   source: 'schedule' | 'test' | 'manual';
 };
 
+type SheetResponse = {
+  rows: DailyStatusRow[];
+  kpis: DailyStatusKpis;
+  people: DailyStatusPerson[];
+  projects: Array<{ id: string; name: string; code: string }>;
+  date?: string;
+  period?: SnapshotPeriod;
+  phase?: {
+    morningLocked: boolean;
+    eveningOpen: boolean;
+    timezone: string;
+    lockHour: number;
+    companyLeave?: boolean;
+    companyLeaveMessage?: string;
+    lockSource?: 'manual' | 'schedule' | null;
+    lockedAt?: string;
+    lockedByName?: string;
+    manuallyUnlocked?: boolean;
+    scheduledLocked?: boolean;
+  };
+  attendance?: Array<{
+    personId: string;
+    person: string;
+    onLeave?: boolean;
+    halfDay?: string;
+    permission?: { fromTime?: string; toTime?: string; reason?: string };
+  }>;
+};
+
+const sheetInflight = new Map<string, Promise<ReturnType<typeof apiRequest<SheetResponse>>>>();
+
 export const DailyStatusApi = {
   async sheet(date?: string, period?: SnapshotPeriod, employeeId?: string) {
     const params = new URLSearchParams();
@@ -47,34 +78,16 @@ export const DailyStatusApi = {
     if (period) params.set('period', period);
     if (employeeId) params.set('employeeId', employeeId);
     const query = params.toString() ? `?${params.toString()}` : '';
-    const result = await apiRequest<{
-      rows: DailyStatusRow[];
-      kpis: DailyStatusKpis;
-      people: DailyStatusPerson[];
-      projects: Array<{ id: string; name: string; code: string }>;
-      date?: string;
-      period?: SnapshotPeriod;
-      phase?: {
-        morningLocked: boolean;
-        eveningOpen: boolean;
-        timezone: string;
-        lockHour: number;
-        companyLeave?: boolean;
-        companyLeaveMessage?: string;
-        lockSource?: 'manual' | 'schedule' | null;
-        lockedAt?: string;
-        lockedByName?: string;
-        manuallyUnlocked?: boolean;
-        scheduledLocked?: boolean;
-      };
-      attendance?: Array<{
-        personId: string;
-        person: string;
-        onLeave?: boolean;
-        halfDay?: string;
-        permission?: { fromTime?: string; toTime?: string; reason?: string };
-      }>;
-    }>(`/api/daily-status/sheet${query}`);
+    const key = `/api/daily-status/sheet${query}`;
+    let pending = sheetInflight.get(key);
+    if (!pending) {
+      pending = apiRequest<SheetResponse>(key);
+      sheetInflight.set(key, pending);
+      void pending.finally(() => {
+        if (sheetInflight.get(key) === pending) sheetInflight.delete(key);
+      });
+    }
+    const result = await pending;
     if (!result.ok) {
       return {
         ok: false as const,

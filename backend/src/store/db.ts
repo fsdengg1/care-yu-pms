@@ -844,6 +844,10 @@ function mergeRowsById<T extends { id?: string; updated_at?: string; created_at?
   return [...byId.values()];
 }
 
+const collectionReloadInflight = new Map<string, Promise<void>>();
+const collectionReloadAt = new Map<string, number>();
+const COLLECTION_RELOAD_TTL_MS = 2500;
+
 /** Pull selected collections from Postgres into the in-memory cache (after pending writes). */
 /** Replace in-memory collections from Postgres without merging stale isolate rows. */
 export async function replaceCollectionsFromPostgres(names: CollectionName[]): Promise<void> {
@@ -851,15 +855,35 @@ export async function replaceCollectionsFromPostgres(names: CollectionName[]): P
     throw new Error('Store not initialized. Call initStore() before handling requests.');
   }
   if (!names.length) return;
-  await writeChain;
-  const remote = await loadSelectedCollections(names);
-  const db = loadDb();
-  for (const name of names) {
-    const rows = remote[name];
-    if (!Array.isArray(rows)) continue;
-    (db as unknown as Record<string, unknown[]>)[name] = rows;
+  const key = [...names].sort().join(',');
+  const last = collectionReloadAt.get(key) || 0;
+  if (Date.now() - last < COLLECTION_RELOAD_TTL_MS) return;
+  const existing = collectionReloadInflight.get(key);
+  if (existing) {
+    await existing;
+    return;
   }
-  cache = db;
+  const run = (async () => {
+    await writeChain;
+    try {
+      const remote = await loadSelectedCollections(names);
+      const db = loadDb();
+      for (const name of names) {
+        const rows = remote[name];
+        if (!Array.isArray(rows)) continue;
+        (db as unknown as Record<string, unknown[]>)[name] = rows;
+      }
+      cache = db;
+      collectionReloadAt.set(key, Date.now());
+    } catch (error) {
+      console.error('[store] Failed to reload collections from Postgres; serving cached data:', error);
+      if (!cache) throw error;
+    } finally {
+      collectionReloadInflight.delete(key);
+    }
+  })();
+  collectionReloadInflight.set(key, run);
+  await run;
 }
 
 export async function refreshCollectionsFromPostgres(names?: CollectionName[]): Promise<void> {
@@ -1007,6 +1031,7 @@ export async function initStore(options?: { forceImportLocal?: boolean }): Promi
 
 export async function flushStore(): Promise<void> {
   await writeChain;
+  collectionReloadAt.clear();
 }
 
 /** Lead workflow collections that must stay consistent across Worker isolates. */

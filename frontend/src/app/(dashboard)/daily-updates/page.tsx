@@ -127,12 +127,15 @@ function DailyWorkUpdatesInner() {
     }
   };
 
-  const loadSheet = async (date = workDate, activePeriod = period) => {
+  const loadSheet = async (date = workDate, activePeriod = period, options?: { silent?: boolean }) => {
     const sheet = await DailyStatusApi.sheet(date, activePeriod);
     if (!sheet.ok) {
-      setError(sheet.message || 'Unable to load daily work updates.');
+      if (!options?.silent) {
+        setError(sheet.message || 'Unable to load daily work updates.');
+      }
       return;
     }
+    setError(null);
     setRows(sheet.rows);
     setPeople(sheet.people);
     setSheetProjects(sheet.projects);
@@ -146,7 +149,6 @@ function DailyWorkUpdatesInner() {
     setUser(current);
     const initialDate = appTodayIso();
     setWorkDate(initialDate);
-    void loadSheet(initialDate, period).catch((err) => setError(friendlyError(err, 'Unable to load daily work updates.')));
     void UsersApi.list().then((result) => {
       if (!result.ok) return;
       setActivePeople(
@@ -162,16 +164,25 @@ function DailyWorkUpdatesInner() {
 
   useEffect(() => {
     if (!user) return;
-    const refresh = () => {
+    let focusTimer: number | undefined;
+    const refresh = (silent = false) => {
       if (pendingPatchesRef.current.length) return;
-      void loadSheet(workDate, period).catch(() => undefined);
+      void loadSheet(workDate, period, { silent }).catch((err) => {
+        if (!silent) setError(friendlyError(err, 'Unable to load daily work updates.'));
+      });
     };
-    refresh();
-    window.addEventListener('focus', refresh);
-    window.addEventListener('careyu-daily-update-saved', refresh);
+    refresh(false);
+    const onFocus = () => {
+      window.clearTimeout(focusTimer);
+      focusTimer = window.setTimeout(() => refresh(true), 1500);
+    };
+    const onSaved = () => refresh(false);
+    window.addEventListener('focus', onFocus);
+    window.addEventListener('careyu-daily-update-saved', onSaved);
     return () => {
-      window.removeEventListener('focus', refresh);
-      window.removeEventListener('careyu-daily-update-saved', refresh);
+      window.clearTimeout(focusTimer);
+      window.removeEventListener('focus', onFocus);
+      window.removeEventListener('careyu-daily-update-saved', onSaved);
     };
   }, [user, workDate, period]);
 

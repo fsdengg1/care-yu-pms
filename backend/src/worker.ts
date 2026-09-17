@@ -208,6 +208,17 @@ async function handleApiRequest(request: Request, env: WorkerEnv, ctx?: { waitUn
 
   try {
     return await dispatchExpress(request, raw);
+  } catch (err) {
+    console.error('[worker-handler] dispatch failed:', err);
+    return new Response(
+      JSON.stringify({
+        message: 'The server hit an unexpected error. Please try again.',
+      }),
+      {
+        status: 500,
+        headers: { 'Content-Type': 'application/json', ...Object.fromEntries(corsHeaders(request)) },
+      }
+    );
   } finally {
     setWorkerWaitUntil(null);
   }

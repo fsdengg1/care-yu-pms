@@ -67,33 +67,40 @@ router.get(
   '/sheet',
   requirePermission('view:daily-updates', 'submit:daily-update', 'view:dashboard:ceo'),
   async (req: AuthedRequest, res) => {
-    await replaceCollectionsFromPostgres([...DAILY_WORK_SYNC_COLLECTIONS]);
-    const user = req.user!;
-    const date = readIsoDate(req.query.date);
-    const period = parseSnapshotPeriod(req.query.period || req.query.type) || 'morning';
-    const employeeId =
-      typeof req.query.employeeId === 'string' && req.query.employeeId.trim()
-        ? req.query.employeeId.trim()
-        : typeof req.query.employee_id === 'string' && req.query.employee_id.trim()
-          ? req.query.employee_id.trim()
-          : undefined;
-    const phase = sheetPhase(date);
-    const rows = getDailyWorkUpdates(user, { date, period, employeeId });
-    const personIds = [...new Set(rows.map((row) => row.personId).filter(Boolean))];
-    return res.json({
-      rows,
-      date,
-      period,
-      phase,
-      attendance: attendanceForUsers(personIds, date),
-      kpis: buildDailyStatusKpis(user, rows.filter((row) => !row.sheetHidden && row.rowKind !== 'leave')),
-      people: peopleForDailySheet(rows),
-      projects: visibleProjects(user).map((project) => ({
-        id: project.id,
-        name: project.name,
-        code: project.code,
-      })),
-    });
+    try {
+      await replaceCollectionsFromPostgres([...DAILY_WORK_SYNC_COLLECTIONS]);
+      const user = req.user!;
+      const date = readIsoDate(req.query.date);
+      const period = parseSnapshotPeriod(req.query.period || req.query.type) || 'morning';
+      const employeeId =
+        typeof req.query.employeeId === 'string' && req.query.employeeId.trim()
+          ? req.query.employeeId.trim()
+          : typeof req.query.employee_id === 'string' && req.query.employee_id.trim()
+            ? req.query.employee_id.trim()
+            : undefined;
+      const phase = sheetPhase(date);
+      const rows = getDailyWorkUpdates(user, { date, period, employeeId });
+      const personIds = [...new Set(rows.map((row) => row.personId).filter(Boolean))];
+      return res.json({
+        rows,
+        date,
+        period,
+        phase,
+        attendance: attendanceForUsers(personIds, date),
+        kpis: buildDailyStatusKpis(user, rows.filter((row) => !row.sheetHidden && row.rowKind !== 'leave')),
+        people: peopleForDailySheet(rows),
+        projects: visibleProjects(user).map((project) => ({
+          id: project.id,
+          name: project.name,
+          code: project.code,
+        })),
+      });
+    } catch (error) {
+      console.error('[daily-status/sheet]', error);
+      return res.status(500).json({
+        message: 'Unable to load daily work updates. Please try again.',
+      });
+    }
   }
 );
 
@@ -145,17 +152,24 @@ router.get(
   '/snapshot',
   requirePermission('view:daily-updates', 'submit:daily-update', 'view:dashboard:ceo'),
   (req: AuthedRequest, res) => {
-    const period = readPeriod(req.query.period);
-    const date = readIsoDate(req.query.date);
-    const packed = rowsForPeriod(req.user!, period, date);
-    return res.json({
-      date,
-      period,
-      source: packed.source,
-      available: packed.available,
-      rows: packed.rows,
-      snapshot: loadDailyStatusSnapshot(date, period),
-    });
+    try {
+      const period = readPeriod(req.query.period);
+      const date = readIsoDate(req.query.date);
+      const packed = rowsForPeriod(req.user!, period, date);
+      return res.json({
+        date,
+        period,
+        source: packed.source,
+        available: packed.available,
+        rows: packed.rows,
+        snapshot: loadDailyStatusSnapshot(date, period),
+      });
+    } catch (error) {
+      console.error('[daily-status/snapshot]', error);
+      return res.status(500).json({
+        message: 'Unable to load the daily work snapshot. Please try again.',
+      });
+    }
   }
 );
 

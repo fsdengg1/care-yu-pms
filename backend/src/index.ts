@@ -143,6 +143,17 @@ app.use('/api', documentsRouter);
 app.use('/api', operationsRouter);
 app.use('/api', masterRouter);
 
+app.use((err: unknown, _req: express.Request, res: express.Response, next: express.NextFunction) => {
+  console.error('[api] Unhandled error:', err);
+  if (res.headersSent) {
+    next(err);
+    return;
+  }
+  res.status(500).json({
+    message: 'The server hit an unexpected error. Please try again.',
+  });
+});
+
 async function initializeBackend() {
   if (isStoreInitialized()) return;
   const storeInfo = await initStore();

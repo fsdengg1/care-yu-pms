@@ -346,12 +346,16 @@ export async function loadSelectedCollections(names: CollectionName[]): Promise<
   if (!names.length) return out;
   const { loadRelationalRows } = await import('./relationalStore.js');
   const pool = getPool();
-  const wantsUsers = names.includes('users');
-  for (const name of names) {
-    if (name === 'users') continue;
-    out[name] = await loadRelationalRows(pool, name);
+  const client = await pool.connect();
+  try {
+    for (const name of names) {
+      if (name === 'users') continue;
+      out[name] = await loadRelationalRows(client, name);
+    }
+  } finally {
+    client.release();
   }
-  if (wantsUsers) {
+  if (names.includes('users')) {
     const { loadUsersTable } = await import('./usersTable.js');
     out.users = await loadUsersTable();
   }

@@ -571,7 +571,12 @@ function ensureTasksFromPeriodUpdates(workDate: string, period: SnapshotPeriod):
     });
     changed += 1;
   }
-  if (changed) store.saveTasks(tasks);
+  if (changed) {
+    // Restore into this isolate only. Persisting on GET turns every sheet load into a
+    // full tasks write and 503s the Cloudflare Worker under concurrent Daily Work traffic.
+    const live = store.getTasks();
+    live.splice(0, live.length, ...tasks);
+  }
   return changed;
 }
 
