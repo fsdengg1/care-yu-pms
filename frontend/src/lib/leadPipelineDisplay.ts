@@ -4,6 +4,25 @@ export function quotationRevisionLabel(lead: Pick<Lead, 'quotation'>): string {
   return lead.quotation?.revision_label || `R${lead.quotation?.revision ?? 0}`;
 }
 
+export function leadNumberSortValue(value: string | undefined): number {
+  const match = String(value || '')
+    .trim()
+    .toUpperCase()
+    .match(/^(?:LEAD|LD)-(\d+)$/);
+  return match ? Number(match[1]) : Number.MAX_SAFE_INTEGER;
+}
+
+export function compareLeadNumber(a: string | undefined, b: string | undefined): number {
+  const left = leadNumberSortValue(a);
+  const right = leadNumberSortValue(b);
+  if (left !== right) return left - right;
+  return String(a || '').localeCompare(String(b || ''), undefined, { numeric: true });
+}
+
+export function sortByLeadNumber<T>(items: T[], getNumber: (item: T) => string | undefined): T[] {
+  return [...items].sort((a, b) => compareLeadNumber(getNumber(a), getNumber(b)));
+}
+
 export function leadPipelineDisplay(lead: Pick<Lead, 'status' | 'pipeline_stage' | 'quotation'>): {
   stage: string;
   quotation: string | null;

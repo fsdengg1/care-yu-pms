@@ -21,7 +21,8 @@
     "test:daily-work": "tsx scripts/verify-daily-work-matrix.ts",
     "test:login": "tsx scripts/verify-login-isolate.ts",
     "test:notifications": "tsx scripts/verify-notifications.ts",
-    "test:lead-workflow": "tsx scripts/verify-lead-workflow.ts"
+    "test:lead-workflow": "tsx scripts/verify-lead-workflow.ts",
+    "db:cleanup-test-leads": "tsx scripts/cleanup-test-leads.ts --apply"
   },
   "dependencies": {
     "@elasticemail/elasticemail-client": "^4.0.26",

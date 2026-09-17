@@ -7,7 +7,7 @@ import { ArrowRight, Building2, FolderKanban, Inbox, Plus } from 'lucide-react';
 import { Lead } from '@/lib/types';
 import { LeadApi } from '@/lib/leadApi';
 import { canCreateLead } from '@/lib/rbac';
-import { leadPipelineDisplay } from '@/lib/leadPipelineDisplay';
+import { compareLeadNumber, leadPipelineDisplay } from '@/lib/leadPipelineDisplay';
 import { workflowActionLabel } from '@/lib/workflowActionLabel';
 import { useAuth } from '@/components/auth/AuthProvider';
 
@@ -22,7 +22,9 @@ export default function LeadPipelinePanel({ title = 'Lead pipeline' }: { title?:
     })();
   }, []);
 
-  const openLeads = leads.filter((lead) => lead.status !== 'ORDER_CONVERTED' && lead.status !== 'LOST' && lead.status !== 'CANCELLED');
+  const openLeads = leads
+    .filter((lead) => lead.status !== 'ORDER_CONVERTED' && lead.status !== 'LOST' && lead.status !== 'CANCELLED')
+    .sort((a, b) => compareLeadNumber(a.lead_number, b.lead_number));
 
   return (
     <div className="rounded-xl border border-slate-800 bg-slate-900/90 p-5">

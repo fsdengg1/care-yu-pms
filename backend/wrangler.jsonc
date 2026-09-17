@@ -21,6 +21,9 @@
       "45 13 * * *"
     ]
   },
+  "placement": {
+    "mode": "smart"
+  },
   "vars": {
     "CLOUDFLARE_WORKER": "1",
     "NODE_ENV": "production",

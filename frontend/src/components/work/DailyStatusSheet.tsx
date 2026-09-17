@@ -19,6 +19,7 @@ import StatusDropdown from './StatusDropdown';
 import RowMoreMenu from './RowMoreMenu';
 import TaskAccessBadges from './TaskAccessBadges';
 import { LoggedHoursCell, ProgressBarCell } from './LoggedHoursProgressCell';
+import { compareLeadNumber } from '@/lib/leadPipelineDisplay';
 
 export type SheetChip = 'all' | 'mine' | 'overdue' | 'critical' | 'due-today' | 'completed' | 'hold' | 'additional' | 'lead' | 'hidden';
 
@@ -199,6 +200,9 @@ export default function DailyStatusSheet({
       const last = next[next.length - 1];
       if (last && last.personId === row.personId) last.rows.push(row);
       else next.push({ personId: row.personId, person: row.person, rows: [row] });
+    }
+    for (const group of next) {
+      group.rows.sort((a, b) => compareLeadNumber(a.leadNumber, b.leadNumber) || a.taskDescription.localeCompare(b.taskDescription));
     }
     return next;
   }, [visible]);

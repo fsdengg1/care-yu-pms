@@ -1,3 +1,4 @@
+import type { Pool, PoolClient } from 'pg';
 import { NotificationPreferences, User } from '../types.js';
 import { getPool } from './postgres.js';
 
@@ -211,8 +212,9 @@ function userValues(user: User) {
   ];
 }
 
-export async function loadUsersTable(): Promise<User[]> {
-  const result = await getPool().query<UserRow>(`SELECT * FROM users ORDER BY id ASC`);
+export async function loadUsersTable(client?: Pool | PoolClient): Promise<User[]> {
+  const db = client ?? getPool();
+  const result = await db.query<UserRow>(`SELECT * FROM users ORDER BY id ASC`);
   return result.rows.map(rowToUser);
 }
 

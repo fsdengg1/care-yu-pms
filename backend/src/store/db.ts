@@ -845,8 +845,21 @@ function mergeRowsById<T extends { id?: string; updated_at?: string; created_at?
 }
 
 const collectionReloadInflight = new Map<string, Promise<void>>();
-const collectionReloadAt = new Map<string, number>();
-const COLLECTION_RELOAD_TTL_MS = 2500;
+const collectionReloadAt = new Map<CollectionName, number>();
+
+function collectionReloadTtlMs() {
+  return process.env.CLOUDFLARE_WORKER === '1' ? 12000 : 2500;
+}
+
+function staleCollections(names: CollectionName[]): CollectionName[] {
+  const now = Date.now();
+  const ttl = collectionReloadTtlMs();
+  return names.filter((name) => now - (collectionReloadAt.get(name) || 0) >= ttl);
+}
+
+function markCollectionsFresh(names: CollectionName[], at = Date.now()) {
+  for (const name of names) collectionReloadAt.set(name, at);
+}
 
 /** Pull selected collections from Postgres into the in-memory cache (after pending writes). */
 /** Replace in-memory collections from Postgres without merging stale isolate rows. */
@@ -855,9 +868,9 @@ export async function replaceCollectionsFromPostgres(names: CollectionName[]): P
     throw new Error('Store not initialized. Call initStore() before handling requests.');
   }
   if (!names.length) return;
-  const key = [...names].sort().join(',');
-  const last = collectionReloadAt.get(key) || 0;
-  if (Date.now() - last < COLLECTION_RELOAD_TTL_MS) return;
+  const stale = staleCollections(names);
+  if (!stale.length) return;
+  const key = [...stale].sort().join(',');
   const existing = collectionReloadInflight.get(key);
   if (existing) {
     await existing;
@@ -866,15 +879,15 @@ export async function replaceCollectionsFromPostgres(names: CollectionName[]): P
   const run = (async () => {
     await writeChain;
     try {
-      const remote = await loadSelectedCollections(names);
+      const remote = await loadSelectedCollections(stale);
       const db = loadDb();
-      for (const name of names) {
+      for (const name of stale) {
         const rows = remote[name];
         if (!Array.isArray(rows)) continue;
         (db as unknown as Record<string, unknown[]>)[name] = rows;
       }
       cache = db;
-      collectionReloadAt.set(key, Date.now());
+      markCollectionsFresh(stale);
     } catch (error) {
       console.error('[store] Failed to reload collections from Postgres; serving cached data:', error);
       if (!cache) throw error;
@@ -891,11 +904,13 @@ export async function refreshCollectionsFromPostgres(names?: CollectionName[]): 
     throw new Error('Store not initialized. Call initStore() before handling requests.');
   }
   if (names && !names.length) return;
-  await writeChain;
   const selected = names?.length ? names : [...COLLECTION_NAMES];
-  const remote = await loadSelectedCollections(selected);
+  const stale = staleCollections(selected);
+  if (!stale.length) return;
+  await writeChain;
+  const remote = await loadSelectedCollections(stale);
   const db = loadDb();
-  for (const name of selected) {
+  for (const name of stale) {
     const remoteRows = (remote[name] || []) as Array<{ id?: string; updated_at?: string; created_at?: string; status?: string }>;
     const localRows = ((db[name] as Array<{ id?: string; updated_at?: string; created_at?: string; status?: string }> | undefined) || []);
     if (name === 'leads') {
@@ -913,10 +928,11 @@ export async function refreshCollectionsFromPostgres(names?: CollectionName[]): 
     }
     (db as unknown as Record<string, unknown>)[name] = mergeRowsById(remoteRows, localRows);
   }
-  if (!names?.length || names.includes('teams')) {
+  if (stale.includes('teams')) {
     refreshTeamCounts(db);
   }
   cache = db;
+  markCollectionsFresh(stale);
 }
 
 function matchLead(id: string): Lead | undefined {
@@ -967,6 +983,25 @@ export async function ensureLeadLoaded(id: string, attempts = 8): Promise<Lead |
   return matchLead(id);
 }
 
+const WORKER_BOOT_COLLECTIONS: CollectionName[] = [
+  'users',
+  'roles',
+  'teams',
+  'pendingSignups',
+  'systemMeta',
+  'tasks',
+  'dailyUpdates',
+  'projects',
+  'leads',
+  'leaveRequests',
+];
+
+export async function hydrateRemainingWorkerCollections(): Promise<void> {
+  if (process.env.CLOUDFLARE_WORKER !== '1') return;
+  const rest = COLLECTION_NAMES.filter((name) => !WORKER_BOOT_COLLECTIONS.includes(name));
+  await replaceCollectionsFromPostgres(rest);
+}
+
 export async function initStore(options?: { forceImportLocal?: boolean }): Promise<{
   source: 'postgres' | 'local-db.json' | 'seed';
   counts: Record<string, number>;
@@ -974,7 +1009,10 @@ export async function initStore(options?: { forceImportLocal?: boolean }): Promi
   await pingDatabase();
   await ensureSchema();
 
-  const fromPostgres = await loadAllCollections();
+  const worker = process.env.CLOUDFLARE_WORKER === '1';
+  const fromPostgres = worker
+    ? { ...emptyDb(), ...(await loadSelectedCollections(WORKER_BOOT_COLLECTIONS)) }
+    : await loadAllCollections();
   const postgresHasData = collectionsHaveData(fromPostgres);
   const localFile = readLocalDbFile();
   const localHasData = Boolean(localFile && collectionsHaveData(localFile));
@@ -1018,6 +1056,10 @@ export async function initStore(options?: { forceImportLocal?: boolean }): Promi
   }
 
   cache = merged;
+  markCollectionsFresh(worker ? WORKER_BOOT_COLLECTIONS : [...COLLECTION_NAMES]);
+  if (worker) {
+    console.info('[store] Worker boot loaded login/daily-work collections only');
+  }
   const loadedFromPostgres = source === 'postgres' && postgresHasData;
   if (loadedFromPostgres) {
     console.info('[store] Loaded existing Postgres data without full rewrite');
@@ -1078,7 +1120,20 @@ export const store = {
     saveDb(db);
   },
   getLeads(): Lead[] {
-    return loadDb().leads;
+    const leads = loadDb().leads;
+    return [...leads].sort((a, b) => {
+      const seq = (value?: string) => {
+        const match = String(value || '')
+          .trim()
+          .toUpperCase()
+          .match(/^(?:LEAD|LD)-(\d+)$/);
+        return match ? Number(match[1]) : Number.MAX_SAFE_INTEGER;
+      };
+      const left = seq(a.lead_number);
+      const right = seq(b.lead_number);
+      if (left !== right) return left - right;
+      return String(a.lead_number || '').localeCompare(String(b.lead_number || ''), undefined, { numeric: true });
+    });
   },
   getProjects(): Project[] {
     return loadDb().projects;

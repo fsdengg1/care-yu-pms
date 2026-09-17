@@ -10,6 +10,7 @@ import { User, WorkAssignment } from '@/lib/types';
 import { DailyStatusPerson, DailyStatusRow, appTodayIso } from '@/lib/dailyStatus';
 import { canCreateWorkTask } from '@/lib/rbac';
 import { isLeadBasedAssignment } from '@/lib/leadTasks';
+import { compareLeadNumber } from '@/lib/leadPipelineDisplay';
 import { WorkFilter } from '@/lib/assignedWork';
 import CreateTaskForm from '@/components/work/CreateTaskForm';
 import PendingTaskAssignmentCard from '@/components/work/PendingTaskAssignmentCard';
@@ -34,7 +35,9 @@ export default function MyAssignedWorkPage() {
   const [notice, setNotice] = useState<string | null>(null);
 
   const loadAssignments = async () => {
-    setAssignments(await DailyUpdatesApi.assignments(true));
+    setAssignments(
+      (await DailyUpdatesApi.assignments(true)).sort((a, b) => compareLeadNumber(a.lead_number, b.lead_number))
+    );
   };
 
   const loadSheetMeta = async () => {

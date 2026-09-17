@@ -40,6 +40,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
     const me = await apiRequest<{ user: User }>('/api/auth/me');
     if (!me.ok) {
+      const cached = StorageService.getCurrentUser();
+      const transient = me.status === 0 || me.status === 502 || me.status === 503 || me.status === 504;
+      if (transient && cached) {
+        setUser(cached);
+        return true;
+      }
       StorageService.clearCurrentUser();
       setUser(null);
       return false;

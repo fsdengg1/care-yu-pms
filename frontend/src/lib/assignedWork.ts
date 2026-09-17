@@ -1,5 +1,6 @@
 import { WorkAssignment } from './types';
 import { isLeadBasedAssignment } from './leadTasks';
+import { compareLeadNumber } from './leadPipelineDisplay';
 
 export type WorkFilter = 'ALL' | 'OVERDUE' | 'TODAY' | 'UPCOMING' | 'COMPLETED';
 
@@ -133,5 +134,5 @@ export function buildAssignedWorkGroups(assignments: WorkAssignment[], filter: W
       const nested = items.length > 1 || nodes.some((node) => !node.item || node.children.length > 0);
       return { ...meta, nodes, taskCount: items.length, nested };
     })
-    .sort((a, b) => `${a.code} ${a.title}`.localeCompare(`${b.code} ${b.title}`));
+    .sort((a, b) => compareLeadNumber(a.code, b.code) || a.title.localeCompare(b.title));
 }

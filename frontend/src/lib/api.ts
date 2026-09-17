@@ -33,7 +33,18 @@ function backendUnreachableMessage() {
   return 'Unable to reach the server. Please check your connection and try again.';
 }
 
-export async function apiRequest<T>(
+function isRetryableStatus(status: number) {
+  return status === 0 || status === 502 || status === 503 || status === 504;
+}
+
+function shouldRetry(path: string, method: string, status: number) {
+  if (!isRetryableStatus(status)) return false;
+  const verb = method.toUpperCase();
+  if (verb === 'GET' || verb === 'HEAD') return true;
+  return verb === 'POST' && /\/api\/auth\/(login|login-mode|me)$/.test(path.split('?')[0]);
+}
+
+async function apiRequestOnce<T>(
   path: string,
   options: RequestInit = {}
 ): Promise<{ ok: true; data: T } | { ok: false; status: number; message: string; code?: string; errors?: { field: string; message: string }[] }> {
@@ -70,9 +81,7 @@ export async function apiRequest<T>(
     if (!response.ok) {
       const emptyBody = !payload || typeof payload !== 'object' || !('message' in payload);
       const proxyDown =
-        response.status === 502 ||
-        response.status === 503 ||
-        response.status === 504 ||
+        isRetryableStatus(response.status) ||
         (response.status >= 500 && emptyBody);
       return {
         ok: false,
@@ -93,4 +102,17 @@ export async function apiRequest<T>(
       message: backendUnreachableMessage(),
     };
   }
+}
+
+export async function apiRequest<T>(
+  path: string,
+  options: RequestInit = {}
+): Promise<{ ok: true; data: T } | { ok: false; status: number; message: string; code?: string; errors?: { field: string; message: string }[] }> {
+  const method = String(options.method || 'GET');
+  let last = await apiRequestOnce<T>(path, options);
+  for (let attempt = 1; !last.ok && attempt < 3 && shouldRetry(path, method, last.status); attempt += 1) {
+    await new Promise((resolve) => setTimeout(resolve, 400 * attempt));
+    last = await apiRequestOnce<T>(path, options);
+  }
+  return last;
 }

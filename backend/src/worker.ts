@@ -3,7 +3,7 @@ import { app, initializeBackend } from './index.js';
 import { runPendingReminders, runDailyDigests } from './lib/reminderJob.js';
 import { sendConfiguredEmailReport } from './lib/emailReportSchedule.js';
 import { runMorningLockAndEmail } from './lib/emailReportJob.js';
-import { setWorkerWaitUntil } from './store/db.js';
+import { hydrateRemainingWorkerCollections, setWorkerWaitUntil } from './store/db.js';
 
 type WorkerEnv = Record<string, unknown> & {
   ASSETS?: { fetch: (request: Request) => Promise<Response> };
@@ -52,7 +52,20 @@ async function ensureInitialized() {
         initializing = null;
       });
   }
-  await initializing;
+  const timeoutMs = 20000;
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  try {
+    await Promise.race([
+      initializing,
+      new Promise<never>((_, reject) => {
+        timer = setTimeout(() => {
+          reject(new Error('Backend is still starting. Please try again in a moment.'));
+        }, timeoutMs);
+      }),
+    ]);
+  } finally {
+    if (timer) clearTimeout(timer);
+  }
 }
 
 function corsHeaders(request: Request): Headers {
@@ -118,7 +131,7 @@ function dispatchExpress(request: Request, raw: Buffer): Promise<Response> {
           headers: { 'Content-Type': 'application/json', ...Object.fromEntries(corsHeaders(request)) },
         })
       );
-    }, 120000);
+    }, 25000);
 
     try {
       const url = new URL(request.url);
@@ -187,8 +200,16 @@ async function handleApiRequest(request: Request, env: WorkerEnv, ctx?: { waitUn
 
   try {
     await ensureInitialized();
+    if (ctx) {
+      ctx.waitUntil(hydrateRemainingWorkerCollections().catch((error) => {
+        console.error('[worker-init] Remaining collection hydrate failed:', error);
+      }));
+    }
   } catch (err) {
     console.error('[worker-init] Store init error:', err);
+    if (ctx && initializing) {
+      ctx.waitUntil(initializing.catch(() => undefined));
+    }
     return new Response(
       JSON.stringify({
         error: 'Backend Initialization Error',
@@ -196,7 +217,11 @@ async function handleApiRequest(request: Request, env: WorkerEnv, ctx?: { waitUn
       }),
       {
         status: 503,
-        headers: { 'Content-Type': 'application/json', ...Object.fromEntries(corsHeaders(request)) },
+        headers: {
+          'Content-Type': 'application/json',
+          'Retry-After': '2',
+          ...Object.fromEntries(corsHeaders(request)),
+        },
       }
     );
   }
@@ -227,6 +252,19 @@ async function handleApiRequest(request: Request, env: WorkerEnv, ctx?: { waitUn
 export default {
   async fetch(request: Request, env: WorkerEnv, ctx: { waitUntil: (promise: Promise<unknown>) => void }): Promise<Response> {
     const pathname = new URL(request.url).pathname;
+
+    if (pathname === '/api/health') {
+      bindWorkerEnv(env);
+      return new Response(
+        JSON.stringify({
+          ok: true,
+          service: 'careyu-backend',
+          env: process.env.NODE_ENV || 'production',
+          store: initialized ? 'ready' : 'starting',
+        }),
+        { status: 200, headers: { 'Content-Type': 'application/json', ...Object.fromEntries(corsHeaders(request)) } }
+      );
+    }
 
     // API routes are handled by the Worker (see run_worker_first in wrangler.jsonc).
     if (pathname === '/api' || pathname.startsWith('/api/')) {

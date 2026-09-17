@@ -10,6 +10,7 @@ import { canCreateLead, canManageLeadRecord, isCeoViewOnly, userIsOnLeadTeam } f
 import { LeadApi } from '@/lib/leadApi';
 import { formatInrCompact, formatLongDate, PIPELINE_STAGE_LABELS, workflowStatusPresentation } from '@/lib/format';
 import { leadDetailHref, leadEditHref } from '@/lib/leadRoutes';
+import { compareLeadNumber } from '@/lib/leadPipelineDisplay';
 import ConfirmDialog from '@/components/work/ConfirmDialog';
 import { 
   Building2, 
@@ -114,7 +115,7 @@ export default function LeadsListPage() {
     const matchesStage = stageFilter === 'ALL' || lead.pipeline_stage === stageFilter;
 
     return matchesSearch && matchesStatus && matchesVertical && matchesPriority && matchesStage;
-  });
+  }).sort((a, b) => compareLeadNumber(a.lead_number, b.lead_number));
 
   const showToast = (message: string, error = false) => {
     setToast({ message, error });
@@ -145,13 +146,13 @@ export default function LeadsListPage() {
     l.status === 'UNDER_PM_REVIEW' ||
     l.status === 'RESUBMITTED_TO_PM') &&
     (l.current_owner_id === currentUser.id || l.responsible_user_id === currentUser.id || l.pm_id === currentUser.id)
-  );
+  ).sort((a, b) => compareLeadNumber(a.lead_number, b.lead_number));
 
   // Sales Action Required Queue (Returned to Sales)
   const salesReturnedQueue = leads.filter(l => 
     (l.status === 'RETURNED_TO_SALES' || l.status === 'ADDITIONAL_INFORMATION_REQUIRED') &&
     (l.created_by_id === currentUser.id || l.sales_owner_id === currentUser.id)
-  );
+  ).sort((a, b) => compareLeadNumber(a.lead_number, b.lead_number));
 
   return (
     <div className="space-y-6">

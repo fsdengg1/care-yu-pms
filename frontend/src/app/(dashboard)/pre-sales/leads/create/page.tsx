@@ -128,7 +128,15 @@ function CreateLeadForm() {
       router.replace('/pre-sales/leads');
       return;
     }
-    setLeadNumber(StorageService.generateLeadNumber());
+    setLeadNumber('LEAD-009');
+    void LeadApi.list().then((leads) => {
+      if (!leads.length) {
+        setLeadNumber(StorageService.generateLeadNumber());
+        return;
+      }
+      StorageService.saveLeads(leads);
+      setLeadNumber(StorageService.generateLeadNumber());
+    });
     if (currentUser?.role_code === 'ENG_DIRECTOR') {
       setFormData((prev) => ({ ...prev, business_vertical: 'Engineering Director' }));
     }

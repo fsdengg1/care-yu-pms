@@ -21,6 +21,7 @@ import PendingTaskAssignmentCard from '@/components/work/PendingTaskAssignmentCa
 import MyDailyWorkPanel from '@/components/work/MyDailyWorkPanel';
 import { DailyStatusPerson, DailyStatusRow, appTodayIso } from '@/lib/dailyStatus';
 import { canCreateWorkTask } from '@/lib/rbac';
+import { compareLeadNumber } from '@/lib/leadPipelineDisplay';
 
 export default function EmployeeDashboard({ user }: { user: User }) {
   const [assignments, setAssignments] = useState<WorkAssignment[]>([]);
@@ -40,12 +41,12 @@ export default function EmployeeDashboard({ user }: { user: User }) {
       DailyUpdatesApi.summary(),
       DailyStatusApi.sheet(appTodayIso(), 'morning', user.id),
     ]);
-    setAssignments(nextAssignments);
+    setAssignments([...nextAssignments].sort((a, b) => compareLeadNumber(a.lead_number, b.lead_number)));
     setSummary(nextSummary);
     if (sheet.ok) {
       setPeople(sheet.people);
       setProjects(sheet.projects);
-      setSheetRows((sheet.rows || []).filter((row) => row.personId === user.id));
+      setSheetRows((sheet.rows || []).filter((row: DailyStatusRow) => row.personId === user.id));
     }
   }, [user.id]);
 

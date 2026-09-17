@@ -141,7 +141,7 @@ export function getPool(): pg.Pool {
       pool = new Pool({
         connectionString: hyperdrive ? env.databaseUrl : connectionStringWithoutSslMode(env.databaseUrl),
         ssl: hyperdrive ? false : env.databaseSsl ? { rejectUnauthorized: false } : false,
-        max: worker ? 1 : 3,
+        max: worker ? 1 : 2,
         connectionTimeoutMillis: worker ? 15000 : 60000,
         idleTimeoutMillis: worker ? 5000 : 30000,
         allowExitOnIdle: Boolean(worker),
@@ -328,15 +328,36 @@ export async function loadAllCollections(): Promise<Record<CollectionName, unkno
     out[name] = [];
   }
 
-  const { loadRelationalCollections } = await import('./relationalStore.js');
-  const relational = await loadRelationalCollections(getPool());
-  for (const name of COLLECTION_NAMES) {
-    if (name === 'users') continue;
-    const rows = relational[name];
-    if (Array.isArray(rows)) out[name] = rows;
+  const { loadRelationalRows } = await import('./relationalStore.js');
+  const { loadUsersTable } = await import('./usersTable.js');
+  const pool = getPool();
+  const names = COLLECTION_NAMES.filter((name) => name !== 'users');
+  const worker = process.env.CLOUDFLARE_WORKER === '1';
+  if (!worker) {
+    const client = await pool.connect();
+    try {
+      const { loadRelationalCollections } = await import('./relationalStore.js');
+      const relational = await loadRelationalCollections(client);
+      for (const name of COLLECTION_NAMES) {
+        if (name === 'users') continue;
+        const rows = relational[name];
+        if (Array.isArray(rows)) out[name] = rows;
+      }
+      out.users = await loadUsersTable(client);
+      return out;
+    } finally {
+      client.release();
+    }
   }
 
-  const { loadUsersTable } = await import('./usersTable.js');
+  const concurrency = 5;
+  for (let index = 0; index < names.length; index += concurrency) {
+    const batch = names.slice(index, index + concurrency);
+    const rows = await Promise.all(batch.map((name) => loadRelationalRows(pool, name)));
+    batch.forEach((name, offset) => {
+      out[name] = rows[offset];
+    });
+  }
   out.users = await loadUsersTable();
   return out;
 }
@@ -345,6 +366,7 @@ export async function loadSelectedCollections(names: CollectionName[]): Promise<
   const out: Partial<Record<CollectionName, unknown[]>> = {};
   if (!names.length) return out;
   const { loadRelationalRows } = await import('./relationalStore.js');
+  const { loadUsersTable } = await import('./usersTable.js');
   const pool = getPool();
   const client = await pool.connect();
   try {
@@ -352,12 +374,11 @@ export async function loadSelectedCollections(names: CollectionName[]): Promise<
       if (name === 'users') continue;
       out[name] = await loadRelationalRows(client, name);
     }
+    if (names.includes('users')) {
+      out.users = await loadUsersTable(client);
+    }
   } finally {
     client.release();
-  }
-  if (names.includes('users')) {
-    const { loadUsersTable } = await import('./usersTable.js');
-    out.users = await loadUsersTable();
   }
   return out;
 }
@@ -452,5 +473,8 @@ async function pingWithCurrentConfig(timeoutMs: number, attempts: number): Promi
 
 export async function pingDatabase(): Promise<void> {
   const worker = process.env.CLOUDFLARE_WORKER === '1';
-  await pingWithCurrentConfig(worker ? 10000 : 20000, worker ? 1 : 3);
+  // Worker cold start already opens Postgres for schema/data load. A separate ping
+  // costs another Hyperdrive connection and pushes login/daily-status into 503s.
+  if (worker) return;
+  await pingWithCurrentConfig(20000, 3);
 }

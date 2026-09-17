@@ -10,6 +10,7 @@ import { ProjectsApi } from '@/lib/projectsApi';
 import { formatLongDate, LEAD_STATUS_LABELS, WORK_STATUS_LABELS } from '@/lib/format';
 import { appTodayIso } from '@/lib/dailyStatus';
 import { GanttChartSquare, Scan, ShieldAlert, MessageSquare, Inbox, ArrowRight, FileText, Clock } from 'lucide-react';
+import { compareLeadNumber } from '@/lib/leadPipelineDisplay';
 
 import PendingActionsCard from '@/components/work/PendingActionsCard';
 import LeadPipelinePanel from '@/components/dashboards/LeadPipelinePanel';
@@ -67,7 +68,14 @@ export default function PMDashboard({ user }: { user: User }) {
         });
         setPendingReviews(dashboard.pendingReviews || []);
       }
-      setAssignments(StorageService.getFeasibilityTeamAssignments());
+      setAssignments(
+        StorageService.getFeasibilityTeamAssignments().sort((a, b) =>
+          compareLeadNumber(
+            StorageService.getLeadById(a.lead_id)?.lead_number,
+            StorageService.getLeadById(b.lead_id)?.lead_number
+          )
+        )
+      );
       setSuggestions(StorageService.getFeasibilitySuggestions());
       const [nextSummary, list] = await Promise.all([DailyUpdatesApi.summary(), DailyUpdatesApi.list({ date: appTodayIso() })]);
       setSummary(nextSummary);
@@ -391,7 +399,9 @@ export default function PMDashboard({ user }: { user: User }) {
             {assignments.slice(0, 8).map((a) => (
               <div key={a.id} className="flex items-center justify-between py-2">
                 <div>
-                  <span className="mr-2 font-mono font-bold text-cyan-400">{a.lead_id}</span>
+                  <span className="mr-2 font-mono font-bold text-cyan-400">
+                    {StorageService.getLeadById(a.lead_id)?.lead_number || a.lead_id}
+                  </span>
                   <span className="font-semibold text-slate-100">{a.team_name}</span>
                   {a.assignment_type === 'CRITICAL_DIRECT' && (
                     <span className="ml-2 rounded bg-rose-950 px-1.5 py-0.5 text-[10px] font-bold text-rose-300">CRITICAL</span>

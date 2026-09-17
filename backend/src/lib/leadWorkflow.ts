@@ -38,6 +38,40 @@ export function newId(prefix: string): string {
   return `${prefix}-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`;
 }
 
+export function officialLeadSequence(value: string | undefined): number | null {
+  const match = String(value || '')
+    .trim()
+    .toUpperCase()
+    .match(/^(?:LEAD|LD)-(\d+)$/);
+  if (!match) return null;
+  return Number(match[1]);
+}
+
+export function compareLeadIdentity(a?: string, b?: string): number {
+  const left = officialLeadSequence(a) ?? Number.MAX_SAFE_INTEGER;
+  const right = officialLeadSequence(b) ?? Number.MAX_SAFE_INTEGER;
+  if (left !== right) return left - right;
+  return String(a || '').localeCompare(String(b || ''), undefined, { numeric: true });
+}
+
+export function allocateNextLeadIdentity(leads: Lead[]): { id: string; lead_number: string } {
+  let max = 0;
+  const used = new Set<string>();
+  for (const lead of leads) {
+    used.add(String(lead.id || '').trim().toUpperCase());
+    used.add(String(lead.lead_number || '').trim().toUpperCase());
+    const seq = officialLeadSequence(lead.lead_number) ?? officialLeadSequence(lead.id);
+    if (seq != null) max = Math.max(max, seq);
+  }
+  let next = max + 1;
+  let leadNumber = `LEAD-${String(next).padStart(3, '0')}`;
+  while (used.has(leadNumber)) {
+    next += 1;
+    leadNumber = `LEAD-${String(next).padStart(3, '0')}`;
+  }
+  return { id: leadNumber, lead_number: leadNumber };
+}
+
 export function stageFromStatus(status: LeadStatus): PipelineStage {
   switch (status) {
     case 'DRAFT':
@@ -229,6 +263,18 @@ export function deleteLead(lead: Lead, user: User): void {
   );
   store.saveFeasibilityEmployeeAllocations(
     store.getFeasibilityEmployeeAllocations().filter((item) => item.lead_id !== lead.id)
+  );
+  store.saveTasks(store.getTasks().filter((item) => item.lead_id !== lead.id));
+  store.saveDailyUpdates(store.getDailyUpdates().filter((item) => item.lead_id !== lead.id));
+  store.saveStageTransitions(store.getStageTransitions().filter((item) => item.lead_id !== lead.id));
+  store.saveEntityDocuments(
+    store.getEntityDocuments().filter((item) => !(item.entity_type === 'LEAD' && item.entity_id === lead.id))
+  );
+  store.saveNotifications(
+    store.getNotifications().filter((item) => item.entity_id !== lead.id && item.entity_id !== lead.lead_number)
+  );
+  store.saveAssignmentHistory(
+    store.getAssignmentHistory().filter((item) => item.entity_id !== lead.id && item.entity_id !== lead.lead_number)
   );
   audit(user, lead, 'LEAD_DELETED', `${user.name} deleted lead ${lead.lead_number}.`);
 }
@@ -682,32 +728,40 @@ export function assignTeamToLead(
     ? (assignee.team_lead_id ? users.find((item) => item.id === assignee.team_lead_id) : fallbackLead)
     : assignee;
 
+  const now = new Date().toISOString();
+  const existing = store
+    .getFeasibilityTeamAssignments()
+    .find((item) => item.lead_id === lead.id && item.team_id === team.id && item.status !== 'CANCELLED');
+  const nextStatusForAssignment = existing && ['IN_PROGRESS', 'SUBMITTED_TO_PM', 'COMPLETED'].includes(existing.status)
+    ? existing.status
+    : direct
+      ? 'READY_TO_START'
+      : 'PENDING_TEAM_LEAD_REVIEW';
   const assignment: FeasibilityTeamAssignment = {
-    id: newId('fta'),
+    id: existing?.id || newId('fta'),
     lead_id: lead.id,
     team_id: team.id,
     team_name: team.name,
     team_lead_id: teamLead?.id,
     team_lead_name: teamLead?.name || team.team_lead_name,
-    assignment_type: 'NORMAL',
+    assignment_type: existing?.assignment_type || 'NORMAL',
     priority: lead.priority,
-    due_date: due.toISOString().slice(0, 10),
-    pm_instructions: notes || 'Prepare technical feasibility for this opportunity.',
-    status: direct ? 'READY_TO_START' : 'PENDING_TEAM_LEAD_REVIEW',
-    created_by: user.name,
-    created_by_id: user.id,
-    created_at: new Date().toISOString(),
-    updated_at: new Date().toISOString(),
+    due_date: existing?.due_date || due.toISOString().slice(0, 10),
+    pm_instructions: notes || existing?.pm_instructions || 'Prepare technical feasibility for this opportunity.',
+    status: nextStatusForAssignment,
+    created_by: existing?.created_by || user.name,
+    created_by_id: existing?.created_by_id || user.id,
+    created_at: existing?.created_at || now,
+    updated_at: now,
   };
 
-  const now = new Date().toISOString();
-  const assignments = store.getFeasibilityTeamAssignments().map((item) =>
-    item.lead_id === lead.id && item.team_id === team.id && item.status !== 'CANCELLED'
-      ? { ...item, status: 'CANCELLED' as const, updated_at: now }
-      : item
-  );
-  assignments.unshift(assignment);
-  store.saveFeasibilityTeamAssignments(assignments);
+  const assignments = store.getFeasibilityTeamAssignments();
+  if (existing) {
+    store.saveFeasibilityTeamAssignments(assignments.map((item) => (item.id === existing.id ? assignment : item)));
+  } else {
+    assignments.unshift(assignment);
+    store.saveFeasibilityTeamAssignments(assignments);
+  }
 
   const working =
     lead.status === 'ACCEPTED_FOR_FEASIBILITY' || lead.status === 'FEASIBILITY_IN_PROGRESS'
@@ -1277,6 +1331,12 @@ export function buildMyWork(user: User): { items: MyWorkItem[]; groups: Record<s
     });
   }
 
+  items.sort((a, b) => {
+    if (a.lead_id === 'new') return -1;
+    if (b.lead_id === 'new') return 1;
+    return compareLeadIdentity(a.lead_number, b.lead_number);
+  });
+
   const groups: Record<string, MyWorkItem[]> = {};
   for (const item of items) {
     groups[item.category] = groups[item.category] || [];
@@ -1317,7 +1377,7 @@ export function buildPmDashboard(user: User) {
     returnedToSales: returnedToSales.length,
     pendingReviews: pendingReviews
       .slice()
-      .sort((a, b) => +new Date(b.submitted_at || b.updated_at) - +new Date(a.submitted_at || a.updated_at))
+      .sort((a, b) => compareLeadIdentity(a.lead_number, b.lead_number))
       .map((lead) => {
         const previous = previousFeasibilityReview(lead);
         const feasibilityQueue = lead.status === 'FEASIBILITY_SUBMITTED';
@@ -1407,10 +1467,7 @@ export function buildBusinessHeadDashboard(user: User) {
     drafts: drafts.length,
     quotationReady: leads.filter((lead) => lead.status === 'QUOTATION').length,
     negotiations: leads.filter((lead) => lead.status === 'NEGOTIATION').length,
-    leads: leads
-      .slice()
-      .sort((a, b) => +new Date(b.updated_at) - +new Date(a.updated_at))
-      .slice(0, 8),
+    leads: leads.slice().sort((a, b) => compareLeadIdentity(a.lead_number, b.lead_number)),
   };
 }
 

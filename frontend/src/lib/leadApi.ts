@@ -1,4 +1,5 @@
 import { apiRequest } from './api';
+import { compareLeadNumber } from './leadPipelineDisplay';
 import { StorageService } from './storage';
 import {
   FeasibilityStudy,
@@ -44,14 +45,18 @@ export const LeadApi = {
   async list(): Promise<Lead[]> {
     const result = await call<{ leads: Lead[]; assignments?: FeasibilityTeamAssignment[] }>('/api/leads');
     if (!result.ok) return [];
-    StorageService.saveLeads(result.data.leads);
+    const leads = [...result.data.leads].sort((a, b) => compareLeadNumber(a.lead_number, b.lead_number));
+    StorageService.saveLeads(leads);
     if (result.data.assignments) {
-      // Merge API assignments with any other local rows for leads not in this response.
-      const incomingLeadIds = new Set(result.data.assignments.map((item) => item.lead_id));
-      const retained = StorageService.getFeasibilityTeamAssignments().filter((item) => !incomingLeadIds.has(item.lead_id));
-      StorageService.saveFeasibilityTeamAssignments([...result.data.assignments, ...retained]);
+      const validLeadIds = new Set(leads.map((lead) => lead.id));
+      const leadNumberById = new Map(leads.map((lead) => [lead.id, lead.lead_number]));
+      StorageService.saveFeasibilityTeamAssignments(
+        result.data.assignments
+          .filter((item) => validLeadIds.has(item.lead_id) && item.status !== 'CANCELLED')
+          .sort((a, b) => compareLeadNumber(leadNumberById.get(a.lead_id), leadNumberById.get(b.lead_id)))
+      );
     }
-    return result.data.leads;
+    return leads;
   },
 
   async get(id: string): Promise<LeadWorkflowPayload | null> {
@@ -296,7 +301,14 @@ export const LeadApi = {
 
   async myWork(): Promise<{ items: MyWorkItem[]; groups: Record<string, MyWorkItem[]> }> {
     const result = await call<{ items: MyWorkItem[]; groups: Record<string, MyWorkItem[]> }>('/api/leads/my-work');
-    if (result.ok) return result.data;
+    if (result.ok) {
+      const items = [...(result.data.items || [])].sort((a, b) => {
+        if (a.lead_id === 'new') return -1;
+        if (b.lead_id === 'new') return 1;
+        return compareLeadNumber(a.lead_number, b.lead_number);
+      });
+      return { ...result.data, items };
+    }
     return { items: [], groups: {} };
   },
 
@@ -359,13 +371,25 @@ export const LeadApi = {
         href: string;
       }>;
     }>('/api/dashboard/pm');
-    if (result.ok) return result.data;
+    if (result.ok) {
+      return {
+        ...result.data,
+        pendingReviews: [...(result.data.pendingReviews || [])].sort((a, b) =>
+          compareLeadNumber(a.lead_number, b.lead_number)
+        ),
+      };
+    }
     return null;
   },
 
   async businessHeadDashboard(): Promise<BusinessHeadDashboard | null> {
     const result = await call<BusinessHeadDashboard>('/api/dashboard/business-head');
-    if (result.ok) return result.data;
+    if (result.ok) {
+      return {
+        ...result.data,
+        leads: [...(result.data.leads || [])].sort((a, b) => compareLeadNumber(a.lead_number, b.lead_number)),
+      };
+    }
     return null;
   },
 

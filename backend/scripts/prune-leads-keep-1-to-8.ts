@@ -1,10 +1,13 @@
 import '../src/config/env.js';
 import { flushStore, initStore, shutdownStore, store } from '../src/store/db.js';
 
-function leadSequence(leadNumber: string): number | null {
-  const matches = String(leadNumber || '').match(/(\d+)/g);
-  if (!matches?.length) return null;
-  return Number(matches[matches.length - 1]);
+function officialLeadSequence(leadNumber: string): number | null {
+  const match = String(leadNumber || '')
+    .trim()
+    .toUpperCase()
+    .match(/^(?:LEAD|LD)-(\d+)$/);
+  if (!match) return null;
+  return Number(match[1]);
 }
 
 async function main() {
@@ -16,7 +19,7 @@ async function main() {
   }
 
   const keep = leads.filter((lead) => {
-    const seq = leadSequence(lead.lead_number);
+    const seq = officialLeadSequence(lead.lead_number) ?? officialLeadSequence(lead.id);
     return seq != null && seq >= 1 && seq <= 8;
   });
   const keepIds = new Set(keep.map((lead) => lead.id));

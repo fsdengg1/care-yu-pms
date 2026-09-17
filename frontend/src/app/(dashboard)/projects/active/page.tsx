@@ -8,6 +8,7 @@ import { ProjectsApi } from '@/lib/projectsApi';
 import { Project, ProjectHealth, User } from '@/lib/types';
 import { StorageService } from '@/lib/storage';
 import { canCreateLead, canPerformPmOperations, isCeoViewOnly } from '@/lib/rbac';
+import { compareLeadNumber } from '@/lib/leadPipelineDisplay';
 import ProjectCard from '@/components/work/ProjectCard';
 
 type SortKey = 'progress' | 'health' | 'target' | 'updated';
@@ -78,10 +79,13 @@ export default function ActiveProjectsPage() {
     rows.sort((a, b) => {
       if (createdId && (a.id === createdId || a.code === createdId) && b.id !== createdId && b.code !== createdId) return -1;
       if (createdId && (b.id === createdId || b.code === createdId) && a.id !== createdId && a.code !== createdId) return 1;
-      if (sort === 'progress') return b.progress - a.progress;
-      if (sort === 'health') return (HEALTH_ORDER[a.health] ?? 9) - (HEALTH_ORDER[b.health] ?? 9);
-      if (sort === 'target') return (a.target_completion || '').localeCompare(b.target_completion || '');
-      return (b.last_update_at || b.updated_at).localeCompare(a.last_update_at || a.updated_at);
+      let primary = 0;
+      if (sort === 'progress') primary = b.progress - a.progress;
+      else if (sort === 'health') primary = (HEALTH_ORDER[a.health] ?? 9) - (HEALTH_ORDER[b.health] ?? 9);
+      else if (sort === 'target') primary = (a.target_completion || '').localeCompare(b.target_completion || '');
+      else primary = (b.last_update_at || b.updated_at).localeCompare(a.last_update_at || a.updated_at);
+      if (primary !== 0) return primary;
+      return compareLeadNumber(a.lead_number, b.lead_number);
     });
     return rows;
   }, [projects, q, health, pm, team, sort, createdId]);

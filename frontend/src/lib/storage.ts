@@ -1,4 +1,5 @@
 import { INITIAL_USERS, INITIAL_ROLES, INITIAL_TEAMS } from './seedData';
+import { compareLeadNumber } from './leadPipelineDisplay';
 import {
   User,
   Role,
@@ -276,7 +277,8 @@ export class StorageService {
   static getLeads(): Lead[] {
     if (!this.isBrowser) return [];
     const stored = localStorage.getItem(STORAGE_KEYS.LEADS);
-    return stored ? JSON.parse(stored) : [];
+    const leads: Lead[] = stored ? JSON.parse(stored) : [];
+    return leads.sort((a, b) => compareLeadNumber(a.lead_number, b.lead_number));
   }
 
   static getLeadById(id: string): Lead | undefined {
@@ -303,16 +305,24 @@ export class StorageService {
 
   static generateLeadNumber(): string {
     const leads = this.getLeads();
-    const count = leads.length + 1;
-    return `LD-2026-${String(count).padStart(4, '0')}`;
+    let max = 0;
+    for (const lead of leads) {
+      const match = String(lead.lead_number || lead.id || '')
+        .trim()
+        .toUpperCase()
+        .match(/^(?:LEAD|LD)-(\d+)$/);
+      if (match) max = Math.max(max, Number(match[1]));
+    }
+    return `LEAD-${String(max + 1).padStart(3, '0')}`;
   }
 
   static createLead(leadData: Omit<Lead, 'id' | 'lead_number' | 'created_at' | 'updated_at'>): Lead {
     const leads = this.getLeads();
+    const leadNumber = this.generateLeadNumber();
     const newLead: Lead = {
       ...leadData,
-      id: `lead-${Date.now()}`,
-      lead_number: this.generateLeadNumber(),
+      id: leadNumber,
+      lead_number: leadNumber,
       created_at: new Date().toISOString(),
       updated_at: new Date().toISOString(),
     };
@@ -493,7 +503,9 @@ export class StorageService {
   static getFeasibilityTeamAssignments(): FeasibilityTeamAssignment[] {
     if (!this.isBrowser) return [];
     const stored = localStorage.getItem(STORAGE_KEYS.FEASIBILITY_TEAM_ASSIGNMENTS);
-    return stored ? JSON.parse(stored) : [];
+    const assignments: FeasibilityTeamAssignment[] = stored ? JSON.parse(stored) : [];
+    const leadNumberById = new Map(this.getLeads().map((lead) => [lead.id, lead.lead_number]));
+    return assignments.sort((a, b) => compareLeadNumber(leadNumberById.get(a.lead_id), leadNumberById.get(b.lead_id)));
   }
 
   static getFeasibilityTeamAssignmentById(id: string): FeasibilityTeamAssignment | undefined {

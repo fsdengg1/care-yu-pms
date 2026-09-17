@@ -17,7 +17,9 @@ import {
   assignTeamsToLead,
   assignedTeamRecipientIds,
   audit,
+  allocateNextLeadIdentity,
   buildMyWork,
+  compareLeadIdentity,
   canDeleteLead,
   canEditProjectInput,
   canHandleLeadCommercial,
@@ -290,20 +292,29 @@ router.get('/', requireAuth, requirePermission('view:leads', 'create:lead'), asy
       )
       .map((item) => item.lead_id)
   );
-  const leads = store.getLeads().map(hydrateLead).filter((lead) => {
-    if (['CEO', 'CTO', 'SYSTEM_ADMIN'].includes(user.role_code)) return true;
-    if (assignedLeadIds.has(lead.id)) return true;
-    return canOwnLead(user, lead);
-  });
+  const leads = store
+    .getLeads()
+    .map(hydrateLead)
+    .filter((lead) => {
+      if (['CEO', 'CTO', 'SYSTEM_ADMIN'].includes(user.role_code)) return true;
+      if (assignedLeadIds.has(lead.id)) return true;
+      return canOwnLead(user, lead);
+    })
+    .sort((a, b) => compareLeadIdentity(a.lead_number, b.lead_number));
+  const existingLeadIds = new Set(store.getLeads().map((item) => item.id));
   const leadIds = new Set(leads.map((lead) => lead.id));
+  const leadNumberById = new Map(leads.map((lead) => [lead.id, lead.lead_number]));
   res.json({
     leads,
-    assignments: allAssignments.filter(
-      (item) =>
-        leadIds.has(item.lead_id) ||
-        item.team_lead_id === user.id ||
-        Boolean(user.team_id && item.team_id === user.team_id)
-    ),
+    assignments: allAssignments
+      .filter(
+        (item) =>
+          existingLeadIds.has(item.lead_id) &&
+          (leadIds.has(item.lead_id) ||
+            item.team_lead_id === user.id ||
+            Boolean(user.team_id && item.team_id === user.team_id))
+      )
+      .sort((a, b) => compareLeadIdentity(leadNumberById.get(a.lead_id), leadNumberById.get(b.lead_id))),
   });
 });
 
@@ -353,12 +364,11 @@ router.post('/', requireAuth, requirePermission('create:lead'), async (req: Auth
   const status: LeadStatus = 'DRAFT';
   const expectedValue = validation.normalized.expected_value ?? parseMoney(body.expected_value ?? body.estimated_opportunity_value);
   const now = new Date().toISOString();
-  const leads = store.getLeads();
-  const nextNumber = `LD-${String(leads.length + 1).padStart(3, '0')}`;
+  const identity = allocateNextLeadIdentity(store.getLeads());
 
   const lead: Lead = {
-    id: body.id && String(body.id).startsWith('lead-') ? body.id : newId('lead'),
-    lead_number: body.lead_number || nextNumber,
+    id: identity.id,
+    lead_number: identity.lead_number,
     title: body.title || '',
     customer_name: body.customer_name || '',
     customer_type: body.customer_type || 'Other',
@@ -452,11 +462,13 @@ router.post('/', requireAuth, requirePermission('create:lead'), async (req: Auth
   try {
     const created = await transact(async () => {
       const current = store.getLeads();
-      current.unshift(lead);
+      const identity = allocateNextLeadIdentity(current);
+      const nextLead = { ...lead, id: identity.id, lead_number: identity.lead_number };
+      current.unshift(nextLead);
       store.saveLeads(current);
-      audit(user, lead, 'LEAD_CREATED', `${user.name} created lead ${lead.lead_number}`);
-      if (!wantsSubmit) return lead;
-      return await submitExistingLead(lead, user, body);
+      audit(user, nextLead, 'LEAD_CREATED', `${user.name} created lead ${nextLead.lead_number}`);
+      if (!wantsSubmit) return nextLead;
+      return await submitExistingLead(nextLead, user, body);
     });
     return res.status(201).json(payloadFor(created));
   } catch (error) {

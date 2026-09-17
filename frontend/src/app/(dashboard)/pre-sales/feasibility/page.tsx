@@ -8,6 +8,7 @@ import { FeasibilityTeamAssignment, Lead, Project, User } from '@/lib/types';
 import { apiRequest } from '@/lib/api';
 import { LeadApi } from '@/lib/leadApi';
 import { PIPELINE_STAGE_LABELS } from '@/lib/format';
+import { compareLeadNumber } from '@/lib/leadPipelineDisplay';
 import { Scan, ArrowRight, ShieldAlert, Inbox, Clock } from 'lucide-react';
 
 export default function FeasibilityStudiesPage() {
@@ -21,8 +22,9 @@ export default function FeasibilityStudiesPage() {
     setCurrentUser(u);
     void (async () => {
       const apiLeads = await LeadApi.list();
-      // Prefer API assignments returned with the list (already synced into StorageService by LeadApi.list).
-      const storedAssignments = StorageService.getFeasibilityTeamAssignments();
+      const storedAssignments = StorageService.getFeasibilityTeamAssignments().filter((item) =>
+        apiLeads.some((lead) => lead.id === item.lead_id)
+      );
       const fromLeads: FeasibilityTeamAssignment[] = [];
       for (const lead of apiLeads) {
         if (!['ACCEPTED_FOR_FEASIBILITY', 'FEASIBILITY_IN_PROGRESS', 'FEASIBILITY_SUBMITTED', 'FEASIBILITY_RETURNED'].includes(lead.status)) continue;
@@ -75,13 +77,14 @@ export default function FeasibilityStudiesPage() {
   const isTL = currentUser.role_code === 'TEAM_LEAD';
 
   const visible = assignments.filter(a => {
+    if (!leadsMap[a.lead_id]) return false;
     if (isViewer) return true;
     if (isTL) return a.team_lead_id === currentUser.id || a.team_id === currentUser.team_id;
     if (a.team_id && a.team_id === currentUser.team_id) return true;
     return StorageService.getFeasibilityAllocationsByAssignmentId(a.id).some(
       (allocation) => allocation.employee_id === currentUser.id
     );
-  });
+  }).sort((a, b) => compareLeadNumber(leadsMap[a.lead_id]?.lead_number, leadsMap[b.lead_id]?.lead_number));
   const tlPending = visible.filter((a) => a.status === 'PENDING_TEAM_LEAD_REVIEW');
   const isCEO = currentUser.role_code === 'CEO';
 
@@ -102,7 +105,8 @@ export default function FeasibilityStudiesPage() {
         teams: teams.length ? teams.join(', ') : 'Unassigned',
         owner: project?.pm_name || lead.sales_owner || '—',
       };
-    });
+    })
+    .sort((a, b) => compareLeadNumber(a.lead.lead_number, b.lead.lead_number));
 
   const showCeoStudies = isCEO && visible.length === 0;
   const tableCount = showCeoStudies ? ceoStudies.length : visible.length;

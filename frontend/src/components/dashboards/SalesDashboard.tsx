@@ -8,6 +8,7 @@ import { DailyUpdatesApi } from '@/lib/dailyUpdatesApi';
 import { formatInrCompact } from '@/lib/format';
 import { workflowActionLabel } from '@/lib/workflowActionLabel';
 import { canCreateLead } from '@/lib/rbac';
+import { compareLeadNumber } from '@/lib/leadPipelineDisplay';
 import { Building2, Plus, Inbox, ArrowRight } from 'lucide-react';
 import { DailyUpdateSummary } from '@/lib/types';
 import PendingActionsCard from '@/components/work/PendingActionsCard';
@@ -113,7 +114,10 @@ export default function SalesDashboard({ user }: { user: User }) {
           </div>
         ) : (
           <div className="divide-y divide-slate-800/60">
-            {data.leads.map((lead) => (
+            {data.leads
+              .slice()
+              .sort((a, b) => compareLeadNumber(a.lead_number, b.lead_number))
+              .map((lead) => (
               <Link key={lead.id} href={`/pre-sales/leads/${lead.id}`} className="flex items-center justify-between py-3 hover:bg-slate-800/30">
                 <div>
                   <span className="mr-2 font-mono font-bold text-cyan-400">{lead.lead_number}</span>

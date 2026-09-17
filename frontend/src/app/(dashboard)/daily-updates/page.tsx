@@ -127,6 +127,8 @@ function DailyWorkUpdatesInner() {
     }
   };
 
+  const lastSheetLoadAt = React.useRef(0);
+
   const loadSheet = async (date = workDate, activePeriod = period, options?: { silent?: boolean }) => {
     const sheet = await DailyStatusApi.sheet(date, activePeriod);
     if (!sheet.ok) {
@@ -135,6 +137,7 @@ function DailyWorkUpdatesInner() {
       }
       return;
     }
+    lastSheetLoadAt.current = Date.now();
     setError(null);
     setRows(sheet.rows);
     setPeople(sheet.people);
@@ -174,9 +177,15 @@ function DailyWorkUpdatesInner() {
     refresh(false);
     const onFocus = () => {
       window.clearTimeout(focusTimer);
-      focusTimer = window.setTimeout(() => refresh(true), 1500);
+      focusTimer = window.setTimeout(() => {
+        if (Date.now() - lastSheetLoadAt.current < 8000) return;
+        refresh(true);
+      }, 4000);
     };
-    const onSaved = () => refresh(false);
+    const onSaved = () => {
+      if (Date.now() - lastSheetLoadAt.current < 2000) return;
+      refresh(false);
+    };
     window.addEventListener('focus', onFocus);
     window.addEventListener('careyu-daily-update-saved', onSaved);
     return () => {

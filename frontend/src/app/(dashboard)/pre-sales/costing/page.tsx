@@ -7,6 +7,7 @@ import { Calculator } from 'lucide-react';
 import { Lead } from '@/lib/types';
 import { formatInrCompact } from '@/lib/format';
 import { workflowActionLabel } from '@/lib/workflowActionLabel';
+import { compareLeadNumber } from '@/lib/leadPipelineDisplay';
 import { StorageService } from '@/lib/storage';
 import { isCeoViewOnly } from '@/lib/rbac';
 import { LeadApi } from '@/lib/leadApi';
@@ -20,14 +21,16 @@ export default function CostingPage() {
     void (async () => {
       const all = await LeadApi.list();
       setLeads(
-        all.filter(
-          (lead) =>
-            lead.status === 'COSTING_IN_PROGRESS' ||
-            lead.status === 'COSTING_SUBMITTED' ||
-            lead.status === 'COSTING_RETURNED' ||
-            lead.pipeline_stage === 'COSTING' ||
-            lead.pipeline_stage === 'QUOTATION'
-        )
+        all
+          .filter(
+            (lead) =>
+              lead.status === 'COSTING_IN_PROGRESS' ||
+              lead.status === 'COSTING_SUBMITTED' ||
+              lead.status === 'COSTING_RETURNED' ||
+              lead.pipeline_stage === 'COSTING' ||
+              lead.pipeline_stage === 'QUOTATION'
+          )
+          .sort((a, b) => compareLeadNumber(a.lead_number, b.lead_number))
       );
     })();
   }, []);

@@ -20,6 +20,7 @@ import MySubtasksPanel from '@/components/work/MySubtasksPanel';
 import MyDailyWorkPanel from '@/components/work/MyDailyWorkPanel';
 import { DailyStatusApi } from '@/lib/dailyStatusApi';
 import { DailyStatusPerson, DailyStatusRow, appTodayIso } from '@/lib/dailyStatus';
+import { compareLeadNumber } from '@/lib/leadPipelineDisplay';
 
 function assignedTeamIds(lead: Lead): string[] {
   return [...new Set([...(lead.assigned_team_ids || []), ...(lead.assigned_team_id ? [lead.assigned_team_id] : [])].filter(Boolean))];
@@ -80,13 +81,16 @@ export default function TeamLeadDashboard({ user }: { user: User }) {
         map[lead.id] = lead;
       });
       setLeadsMap(map);
-      const stored = StorageService.getFeasibilityTeamAssignmentsForTeamLead(user.id, user.team_id);
+      const stored = StorageService.getFeasibilityTeamAssignmentsForTeamLead(user.id, user.team_id).filter(
+        (item) => map[item.lead_id]
+      );
       const mine = [...stored];
       for (const lead of leads) {
         if (!userIsOnLeadTeam(user, lead)) continue;
         if (mine.some((item) => item.lead_id === lead.id && (!user.team_id || item.team_id === user.team_id))) continue;
         mine.push(assignmentFromLead(lead, user));
       }
+      mine.sort((a, b) => compareLeadNumber(map[a.lead_id]?.lead_number, map[b.lead_id]?.lead_number));
       setAssignments(mine);
       setSummary(await DailyUpdatesApi.summary());
       const listed = await ProjectsApi.list('ACTIVE');

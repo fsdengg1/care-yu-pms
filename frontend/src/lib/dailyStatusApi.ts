@@ -69,7 +69,8 @@ type SheetResponse = {
   }>;
 };
 
-const sheetInflight = new Map<string, Promise<ReturnType<typeof apiRequest<SheetResponse>>>>();
+type SheetRequestResult = Awaited<ReturnType<typeof apiRequest<SheetResponse>>>;
+const sheetInflight = new Map<string, Promise<SheetRequestResult>>();
 
 export const DailyStatusApi = {
   async sheet(date?: string, period?: SnapshotPeriod, employeeId?: string) {
