@@ -67,7 +67,7 @@ export default function LeadPipelinePanel({ title = 'Lead pipeline' }: { title?:
         </div>
       ) : (
         <div className="divide-y divide-slate-800/60">
-          {openLeads.slice(0, 8).map((lead) => {
+          {openLeads.map((lead) => {
             const pipeline = leadPipelineDisplay(lead);
             return (
             <Link key={lead.id} href={`/pre-sales/leads/${lead.id}`} className="flex items-center justify-between py-3 hover:bg-slate-800/30">

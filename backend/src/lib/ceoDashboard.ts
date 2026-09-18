@@ -12,6 +12,17 @@ import { persistRefreshedProjects, syncConvertedLeadsToProjects } from './projec
 const CLOSED_STAGES: PipelineStage[] = ['CONVERTED', 'REJECTED', 'CANCELLED'];
 
 export function resolvePipelineStage(lead: Lead): PipelineStage {
+  const qStatus = lead.quotation?.workflow_status;
+  if (lead.status === 'ORDER_CONVERTED' || lead.status === 'WON') return 'CONVERTED';
+  if (lead.status === 'LOST') return 'REJECTED';
+  if (lead.status === 'CANCELLED') return 'CANCELLED';
+  if (
+    lead.status === 'NEGOTIATION' ||
+    qStatus === 'SUBMITTED_TO_CUSTOMER' ||
+    qStatus === 'CUSTOMER_REVIEW'
+  ) {
+    return 'NEGOTIATION';
+  }
   if (lead.pipeline_stage) return lead.pipeline_stage;
   switch (lead.status) {
     case 'DRAFT':

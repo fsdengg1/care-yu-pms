@@ -23,6 +23,16 @@ export function sortByLeadNumber<T>(items: T[], getNumber: (item: T) => string |
   return [...items].sort((a, b) => compareLeadNumber(getNumber(a), getNumber(b)));
 }
 
+export function isSubmittedToCustomerLead(lead: Pick<Lead, 'status' | 'pipeline_stage' | 'quotation'>): boolean {
+  const qStatus = lead.quotation?.workflow_status;
+  return (
+    qStatus === 'SUBMITTED_TO_CUSTOMER' ||
+    qStatus === 'CUSTOMER_REVIEW' ||
+    lead.status === 'NEGOTIATION' ||
+    lead.pipeline_stage === 'NEGOTIATION'
+  );
+}
+
 export function leadPipelineDisplay(lead: Pick<Lead, 'status' | 'pipeline_stage' | 'quotation'>): {
   stage: string;
   quotation: string | null;
@@ -37,7 +47,7 @@ export function leadPipelineDisplay(lead: Pick<Lead, 'status' | 'pipeline_stage'
   if (qStatus === 'REVISION_REQUESTED' || qStatus === 'REVISION_IN_PROGRESS') {
     return { stage: qStatus === 'REVISION_REQUESTED' ? 'Revision Requested' : 'Revision in Progress', quotation: `Quotation — ${revision}` };
   }
-  if (qStatus === 'SUBMITTED_TO_CUSTOMER' || qStatus === 'CUSTOMER_REVIEW' || status === 'NEGOTIATION' || pipeline === 'NEGOTIATION') {
+  if (isSubmittedToCustomerLead(lead)) {
     return { stage: 'Submitted to Customer', quotation: `Quotation — ${revision}` };
   }
   if (status === 'QUOTATION' || pipeline === 'QUOTATION' || qStatus === 'PENDING_INTERNAL') {

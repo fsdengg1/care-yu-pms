@@ -25,7 +25,7 @@ const PIPELINE_BARS: Array<{ key: keyof CeoDashboardPayload['pipeline']['stages'
   { key: 'feasibility', label: 'Feasibility' },
   { key: 'costing', label: 'Costing' },
   { key: 'quotation', label: 'Quotation' },
-  { key: 'negotiation', label: 'Negotiation' },
+  { key: 'negotiation', label: 'Submitted to Customer' },
   { key: 'converted', label: 'Converted' },
 ];
 
@@ -94,7 +94,7 @@ export default function CEODashboard({ user }: DashboardProps) {
           <div className="mt-1 flex flex-wrap gap-2 text-[10px] text-slate-400">
             <span>{data?.pipeline.inProgress ?? 0} In Progress</span>
             <span>{data?.pipeline.awaitingApproval ?? 0} Awaiting Approval</span>
-            <span>{data?.pipeline.negotiation ?? 0} Negotiation</span>
+            <span>{data?.pipeline.negotiation ?? 0} Submitted to Customer</span>
           </div>
         </Link>
 

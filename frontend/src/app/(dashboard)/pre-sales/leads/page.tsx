@@ -10,7 +10,7 @@ import { canCreateLead, canManageLeadRecord, isCeoViewOnly, userIsOnLeadTeam } f
 import { LeadApi } from '@/lib/leadApi';
 import { formatInrCompact, formatLongDate, PIPELINE_STAGE_LABELS, workflowStatusPresentation } from '@/lib/format';
 import { leadDetailHref, leadEditHref } from '@/lib/leadRoutes';
-import { compareLeadNumber } from '@/lib/leadPipelineDisplay';
+import { compareLeadNumber, isSubmittedToCustomerLead, leadPipelineDisplay } from '@/lib/leadPipelineDisplay';
 import ConfirmDialog from '@/components/work/ConfirmDialog';
 import { 
   Building2, 
@@ -109,10 +109,14 @@ export default function LeadsListPage() {
       statusFilter === 'ALL' ||
       lead.status === statusFilter ||
       (statusFilter === 'SUBMITTED_TO_PM' && submittedStatuses.includes(lead.status)) ||
+      (statusFilter === 'NEGOTIATION' && isSubmittedToCustomerLead(lead)) ||
       (statusFilter === 'CANCELLED' && rejectedStatuses.includes(lead.status));
     const matchesVertical = verticalFilter === 'ALL' || lead.business_vertical === verticalFilter;
     const matchesPriority = priorityFilter === 'ALL' || lead.priority === priorityFilter;
-    const matchesStage = stageFilter === 'ALL' || lead.pipeline_stage === stageFilter;
+    const matchesStage =
+      stageFilter === 'ALL' ||
+      lead.pipeline_stage === stageFilter ||
+      (stageFilter === 'NEGOTIATION' && isSubmittedToCustomerLead(lead));
 
     return matchesSearch && matchesStatus && matchesVertical && matchesPriority && matchesStage;
   }).sort((a, b) => compareLeadNumber(a.lead_number, b.lead_number));
@@ -323,6 +327,7 @@ export default function LeadsListPage() {
             <option value="SUBMITTED_TO_PM">Submitted to PM</option>
             <option value="RETURNED_TO_SALES">Returned for Clarification</option>
             <option value="ACCEPTED_FOR_FEASIBILITY">Approved</option>
+            <option value="NEGOTIATION">Submitted to Customer</option>
             <option value="CANCELLED">Rejected</option>
           </select>
 
@@ -387,7 +392,8 @@ export default function LeadsListPage() {
               ) : (
                 visibleLeads.map(lead => {
                   const presentation = workflowStatusPresentation(lead.status, lead);
-                  const statusLabel = presentation.label;
+                  const pipeline = leadPipelineDisplay(lead);
+                  const statusLabel = isCEO ? pipeline.stage : presentation.label;
                   const canMutateLead =
                     canManageLeadRecord(currentUser) && EDITABLE_LEAD_STATUSES.has(lead.status);
 

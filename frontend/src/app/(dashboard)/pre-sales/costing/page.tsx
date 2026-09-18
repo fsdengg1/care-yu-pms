@@ -27,8 +27,13 @@ export default function CostingPage() {
               lead.status === 'COSTING_IN_PROGRESS' ||
               lead.status === 'COSTING_SUBMITTED' ||
               lead.status === 'COSTING_RETURNED' ||
+              lead.status === 'QUOTATION' ||
+              lead.status === 'NEGOTIATION' ||
               lead.pipeline_stage === 'COSTING' ||
-              lead.pipeline_stage === 'QUOTATION'
+              lead.pipeline_stage === 'QUOTATION' ||
+              lead.pipeline_stage === 'NEGOTIATION' ||
+              lead.quotation?.workflow_status === 'SUBMITTED_TO_CUSTOMER' ||
+              lead.quotation?.workflow_status === 'CUSTOMER_REVIEW'
           )
           .sort((a, b) => compareLeadNumber(a.lead_number, b.lead_number))
       );
@@ -45,7 +50,7 @@ export default function CostingPage() {
         <p className="mt-1 text-xs text-slate-400">
           {viewOnly
             ? 'Management view of costing and quotation-stage opportunities. No operational costing actions.'
-            : 'Opportunities currently in costing or quotation. Open a lead to record BOM, vendor quotations, and submit costing.'}
+            : 'Opportunities currently in costing, quotation, or submitted to the customer. Open a lead to record BOM, vendor quotations, and submit costing.'}
         </p>
       </div>
 

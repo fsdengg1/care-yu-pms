@@ -437,6 +437,13 @@ function alignStoredLead(lead: Lead): Lead {
   if (lead.status === 'FEASIBILITY_IN_PROGRESS' && lead.pipeline_stage === 'NEGOTIATION') {
     return { ...lead, status: 'NEGOTIATION' };
   }
+  const qStatus = lead.quotation?.workflow_status;
+  if (
+    (qStatus === 'SUBMITTED_TO_CUSTOMER' || qStatus === 'CUSTOMER_REVIEW') &&
+    (lead.status === 'QUOTATION' || lead.status === 'FEASIBILITY_IN_PROGRESS')
+  ) {
+    return { ...lead, status: 'NEGOTIATION', pipeline_stage: 'NEGOTIATION' };
+  }
   return lead;
 }
 

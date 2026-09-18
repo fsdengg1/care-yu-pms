@@ -18,6 +18,7 @@ import { NotificationsApi } from '@/lib/notificationsApi';
 import { TasksApi } from '@/lib/tasksApi';
 import { formatInrCompact, WORKFLOW_ACTION_SUCCESS, workflowActionFromQuery, workflowStatusPresentation } from '@/lib/format';
 import { projectStageFlowSummary } from '@/lib/projectStageFlow';
+import ProjectStageFlowBar from '@/components/leads/ProjectStageFlowBar';
 import { canCreateLead, canCreateLeadTask } from '@/lib/rbac';
 import {
   Lead, LeadActivity, LeadComment, LeadDocument, LeadStatusHistory,
@@ -576,6 +577,8 @@ export default function LeadDetailPage() {
           )}
         </div>
       </div>
+
+      <ProjectStageFlowBar lead={lead} />
 
       <WorkflowStatusBanner status={lead.status} lead={lead} feedback={workflowFeedback} error={actionError} showStage={false} />
 
