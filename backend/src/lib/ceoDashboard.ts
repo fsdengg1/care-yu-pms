@@ -44,15 +44,6 @@ export function resolvePipelineStage(lead: Lead): PipelineStage {
       return 'COSTING';
     case 'QUOTATION':
       return 'QUOTATION';
-    case 'NEGOTIATION':
-      return 'NEGOTIATION';
-    case 'ORDER_CONVERTED':
-    case 'WON':
-      return 'CONVERTED';
-    case 'LOST':
-      return 'REJECTED';
-    case 'CANCELLED':
-      return 'CANCELLED';
     default:
       return 'PROJECT_INPUT';
   }
