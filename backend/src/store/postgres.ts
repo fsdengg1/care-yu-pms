@@ -141,10 +141,11 @@ export function getPool(): pg.Pool {
       pool = new Pool({
         connectionString: hyperdrive ? env.databaseUrl : connectionStringWithoutSslMode(env.databaseUrl),
         ssl: hyperdrive ? false : env.databaseSsl ? { rejectUnauthorized: false } : false,
-        max: worker ? 1 : 2,
+        max: 1,
         connectionTimeoutMillis: worker ? 15000 : 60000,
-        idleTimeoutMillis: worker ? 5000 : 30000,
+        idleTimeoutMillis: worker ? 5000 : 10000,
         allowExitOnIdle: Boolean(worker),
+        application_name: worker ? 'careyu-worker' : 'careyu-local',
       });
       pool.on('error', (err) => {
         console.warn('[pg-pool] Background client error, resetting pool:', err.message);
@@ -445,6 +446,47 @@ export async function closePool(): Promise<void> {
   }
 }
 
+function isConnectionSlotError(error: unknown): boolean {
+  const code = typeof error === 'object' && error && 'code' in error ? String((error as { code?: unknown }).code) : '';
+  const message = error instanceof Error ? error.message : String(error);
+  return code === '53300' || /remaining connection slots|too many connections/i.test(message);
+}
+
+async function reclaimIdleConnections(): Promise<number> {
+  const client = new Client({
+    connectionString: connectionStringWithoutSslMode(env.databaseUrl),
+    ssl: env.databaseSsl ? { rejectUnauthorized: false } : false,
+    connectionTimeoutMillis: 8000,
+    application_name: 'careyu-local-reclaim',
+  });
+  try {
+    await client.connect();
+    const result = await client.query<{ killed: boolean }>(`
+      SELECT pg_terminate_backend(pid) AS killed
+      FROM pg_stat_activity
+      WHERE datname = current_database()
+        AND pid <> pg_backend_pid()
+        AND usename = current_user
+        AND state IN ('idle', 'idle in transaction')
+        AND now() - state_change > interval '10 seconds'
+        AND application_name <> 'careyu-local-reclaim'
+    `);
+    const terminated = result.rowCount ?? 0;
+    if (terminated > 0) {
+      console.info(`[store] Reclaimed ${terminated} idle Postgres connection(s)`);
+    }
+    return terminated;
+  } catch (error) {
+    console.warn(
+      '[store] Could not reclaim idle Postgres connections:',
+      error instanceof Error ? error.message : error
+    );
+    return 0;
+  } finally {
+    await client.end().catch(() => undefined);
+  }
+}
+
 async function pingWithCurrentConfig(timeoutMs: number, attempts: number): Promise<void> {
   let lastError: unknown;
   for (let attempt = 1; attempt <= attempts; attempt += 1) {
@@ -467,8 +509,12 @@ async function pingWithCurrentConfig(timeoutMs: number, attempts: number): Promi
         error instanceof Error ? `${error.name}: ${error.message}` : error
       );
       await closePool();
+      if (isConnectionSlotError(error)) {
+        await reclaimIdleConnections();
+      }
       if (attempt < attempts) {
-        await new Promise((resolve) => setTimeout(resolve, 1000 * attempt));
+        const delayMs = isConnectionSlotError(error) ? 4000 * attempt : 1000 * attempt;
+        await new Promise((resolve) => setTimeout(resolve, delayMs));
       }
     }
   }
@@ -480,5 +526,5 @@ export async function pingDatabase(): Promise<void> {
   // Worker cold start already opens Postgres for schema/data load. A separate ping
   // costs another Hyperdrive connection and pushes login/daily-status into 503s.
   if (worker) return;
-  await pingWithCurrentConfig(20000, 3);
+  await pingWithCurrentConfig(20000, 8);
 }
