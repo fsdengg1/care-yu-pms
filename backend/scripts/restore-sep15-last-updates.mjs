@@ -13,7 +13,7 @@ const pool = new pg.Pool({
   connectionString: u.toString(),
   ssl: { rejectUnauthorized: false },
   max: 1,
-  connectionTimeoutMillis: 30000,
+  connectionTimeoutMillis: 10000,
 });
 
 const DATE = '2026-09-15';

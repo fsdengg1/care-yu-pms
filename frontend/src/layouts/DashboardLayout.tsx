@@ -14,9 +14,9 @@ function DashboardShell() {
 
   if (loading || !user) {
     return (
-      <div className="theme-app flex min-h-screen flex-col items-center justify-center gap-3 bg-background text-xs text-muted-foreground">
-        <CareyuLogo />
-        Loading Care Yu Automation Project Hub...
+      <div className="theme-app app-boot">
+        <CareyuLogo variant="light" />
+        <p>Opening Project Hub…</p>
       </div>
     );
   }
@@ -27,16 +27,16 @@ function DashboardShell() {
         <button
           type="button"
           aria-label="Close navigation menu"
-          className="modal-scrim-light fixed inset-0 z-40 backdrop-blur-[1px] lg:hidden"
+          className="modal-scrim-light fixed inset-0 z-40 backdrop-blur-[2px] lg:hidden"
           onClick={closeMobile}
         />
       )}
       <Sidebar user={user} />
-      <div className="flex min-w-0 flex-1 flex-col overflow-hidden transition-[margin] duration-250 ease-in-out">
+      <div className="flex min-w-0 flex-1 flex-col overflow-hidden">
         <NotificationProvider user={user}>
           <Navbar user={user} />
           <NotificationToastHost />
-          <main className="theme-inverted flex-1 overflow-y-auto overflow-x-hidden bg-background p-6">
+          <main className="theme-inverted app-canvas flex-1 overflow-y-auto overflow-x-hidden">
             <Outlet />
           </main>
         </NotificationProvider>

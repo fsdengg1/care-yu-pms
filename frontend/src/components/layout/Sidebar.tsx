@@ -3,7 +3,6 @@
 import { Link, usePathname } from '@/lib/navigation';
 import React from 'react';
 
-
 import { User } from '@/lib/types';
 import { filterNavForUser, isCeoViewOnly, CEO_NAV_CATEGORY_LABELS } from '@/lib/rbac';
 import CareyuLogo from '@/components/brand/CareyuLogo';
@@ -27,7 +26,8 @@ import {
   Settings,
   ChevronRight,
   Mail,
-  Menu,
+  PanelLeft,
+  PanelLeftClose,
   BarChart3,
   CalendarClock,
 } from 'lucide-react';
@@ -76,7 +76,7 @@ export default function Sidebar({ user }: SidebarProps) {
   return (
     <aside
       className={[
-        'app-sidebar app-chrome sticky top-0 flex h-screen shrink-0 flex-col border-r border-slate-800 bg-slate-900',
+        'app-sidebar sticky top-0 flex h-screen shrink-0 flex-col',
         isDesktop && collapsed ? 'app-sidebar--collapsed' : 'app-sidebar--expanded',
         !isDesktop && mobileOpen ? 'app-sidebar--mobile-open' : '',
         !isDesktop ? 'app-sidebar--mobile' : '',
@@ -85,55 +85,38 @@ export default function Sidebar({ user }: SidebarProps) {
         .join(' ')}
       aria-label="Main navigation"
     >
-      <div
-        className={`border-b border-slate-800 bg-slate-950/50 ${
-          iconOnly ? 'flex justify-center px-2 py-3' : 'flex items-center justify-between gap-2 p-4'
-        }`}
-      >
+      <div className="app-sidebar__brand">
         {!iconOnly && (
           <div className="min-w-0 flex-1">
-            <CareyuLogo variant="light" />
+            <CareyuLogo variant="light" compact />
           </div>
         )}
         <button
           type="button"
           onClick={toggleSidebar}
-          aria-label="Toggle sidebar"
+          aria-label={iconOnly ? 'Expand sidebar' : 'Collapse sidebar'}
           aria-expanded={isDesktop ? !collapsed : mobileOpen}
-          className="inline-flex shrink-0 items-center justify-center rounded-md border border-slate-700 p-2 text-slate-300 transition-colors hover:border-cyan-700 hover:bg-slate-800 hover:text-cyan-300"
+          className="app-sidebar__toggle"
         >
-          <Menu className="h-4 w-4" />
+          {iconOnly ? <PanelLeft className="h-4 w-4" /> : <PanelLeftClose className="h-4 w-4" />}
         </button>
       </div>
 
-      <div
-        className={`overflow-hidden border-b border-slate-800/80 bg-slate-900/80 transition-all duration-250 ease-in-out ${
-          iconOnly ? 'max-h-0 border-b-0 py-0 opacity-0' : 'max-h-16 px-4 py-2.5 opacity-100'
-        }`}
-        aria-hidden={iconOnly}
-      >
-        <div className="flex items-center justify-between">
-          <span className="text-[11px] font-semibold uppercase tracking-wider text-slate-400">Active Role</span>
-          <span className="rounded border border-cyan-800/60 bg-cyan-950 px-2 py-0.5 text-xs font-semibold text-cyan-300">
-            {user.role_name}
-          </span>
-        </div>
+      <div className="app-sidebar__role">
+        <span className="app-sidebar__role-label">Role</span>
+        <span className="app-sidebar__role-value" title={user.role_name}>
+          {user.role_name}
+        </span>
       </div>
 
-      <div className={`flex-1 space-y-4 overflow-y-auto py-3 ${iconOnly ? 'px-1.5' : 'px-3'}`}>
+      <nav className="app-sidebar__nav">
         {categories.map((cat) => {
           const items = navItems.filter((item) => item.category === cat.key);
           if (items.length === 0) return null;
 
           return (
-            <div key={cat.key} className="space-y-1">
-              <div
-                className={`px-2 text-[10px] font-bold uppercase tracking-wider text-slate-500 transition-all duration-250 ease-in-out ${
-                  iconOnly ? 'pointer-events-none max-h-0 overflow-hidden opacity-0' : 'max-h-8 opacity-100'
-                }`}
-              >
-                {cat.label}
-              </div>
+            <div key={cat.key} className="app-sidebar__section">
+              <div className="app-sidebar__section-label">{cat.label}</div>
               {items.map((item) => {
                 const isActive =
                   item.href === '/dashboard'
@@ -148,34 +131,18 @@ export default function Sidebar({ user }: SidebarProps) {
                     onClick={() => {
                       if (!isDesktop) closeMobile();
                     }}
-                    className={`flex items-center rounded-md text-xs font-medium transition-all duration-200 ${
-                      iconOnly ? 'justify-center px-2 py-2.5' : 'justify-between px-3 py-2'
-                    } ${
-                      isActive
-                        ? iconOnly
-                          ? 'border border-cyan-500/40 bg-cyan-600/20 text-cyan-300 shadow-sm'
-                          : 'border border-cyan-500/40 bg-cyan-600/20 text-cyan-300 shadow-sm'
-                        : 'text-slate-400 hover:bg-slate-800/60 hover:text-slate-200'
-                    }`}
+                    className={`app-nav-link${isActive ? ' is-active' : ''}`}
                   >
-                    <div className={`flex items-center ${iconOnly ? 'justify-center' : 'gap-2.5'}`}>
-                      <span className={isActive ? 'text-cyan-400' : 'text-slate-400'}>{ICON_MAP[item.iconName]}</span>
-                      <span
-                        className={`sidebar-nav-label whitespace-nowrap transition-all duration-250 ease-in-out ${
-                          iconOnly ? 'max-w-0 overflow-hidden opacity-0' : 'max-w-[220px] opacity-100'
-                        }`}
-                      >
-                        {item.name}
-                      </span>
-                    </div>
+                    <span className="app-nav-link__main">
+                      <span className="app-nav-link__icon">{ICON_MAP[item.iconName]}</span>
+                      {!iconOnly && <span className="app-nav-link__label">{item.name}</span>}
+                    </span>
                     {!iconOnly && (
                       <>
                         {item.badge ? (
-                          <span className="rounded-full border border-cyan-700/50 bg-cyan-900/60 px-1.5 py-0.5 text-[10px] text-cyan-300">
-                            {item.badge}
-                          </span>
+                          <span className="app-nav-link__badge">{item.badge}</span>
                         ) : isActive ? (
-                          <ChevronRight className="h-3.5 w-3.5 text-cyan-400" />
+                          <ChevronRight className="h-3.5 w-3.5 shrink-0 text-cyan-300" />
                         ) : null}
                       </>
                     )}
@@ -185,16 +152,9 @@ export default function Sidebar({ user }: SidebarProps) {
             </div>
           );
         })}
-      </div>
+      </nav>
 
-      <div
-        className={`overflow-hidden border-t border-slate-800 bg-slate-950/60 text-center text-[10px] text-slate-500 transition-all duration-250 ease-in-out ${
-          iconOnly ? 'max-h-0 border-t-0 p-0 opacity-0' : 'max-h-16 p-3 opacity-100'
-        }`}
-        aria-hidden={iconOnly}
-      >
-        Care Yu Automation · Project Hub
-      </div>
+      {!iconOnly && <div className="app-sidebar__foot">Care Yu Automation · Project Hub</div>}
     </aside>
   );
 }

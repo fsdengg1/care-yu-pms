@@ -84,42 +84,6 @@ export const COLLECTION_NAMES: CollectionName[] = [
   'systemMeta',
 ];
 
-function createWorkerClientPool(): pg.Pool {
-  const config: pg.ClientConfig = {
-    connectionString: env.databaseUrl,
-    ssl: false,
-  };
-
-  const fake = {
-    async query(text: string | { text: string; values?: unknown[] }, values?: unknown[]) {
-      const client = new Client(config);
-      await client.connect();
-      try {
-        if (typeof text === 'string') return await client.query(text, values);
-        return await client.query(text);
-      } finally {
-        await client.end().catch(() => undefined);
-      }
-    },
-    async connect() {
-      const client = new Client(config);
-      await client.connect();
-      (client as pg.PoolClient).release = (() => {
-        void client.end().catch(() => undefined);
-      }) as pg.PoolClient['release'];
-      return client;
-    },
-    async end() {
-      return;
-    },
-    on() {
-      return fake;
-    },
-  };
-
-  return fake as unknown as pg.Pool;
-}
-
 function connectionStringWithoutSslMode(url: string): string {
   try {
     const parsed = new URL(url);
@@ -135,23 +99,20 @@ export function getPool(): pg.Pool {
   if (!pool) {
     const worker = process.env.CLOUDFLARE_WORKER === '1';
     const hyperdrive = process.env.HYPERDRIVE_ACTIVE === '1';
-    if (worker && hyperdrive) {
-      pool = createWorkerClientPool();
-    } else {
-      pool = new Pool({
-        connectionString: hyperdrive ? env.databaseUrl : connectionStringWithoutSslMode(env.databaseUrl),
-        ssl: hyperdrive ? false : env.databaseSsl ? { rejectUnauthorized: false } : false,
-        max: 1,
-        connectionTimeoutMillis: worker ? 15000 : 60000,
-        idleTimeoutMillis: worker ? 5000 : 10000,
-        allowExitOnIdle: Boolean(worker),
-        application_name: worker ? 'careyu-worker' : 'careyu-local',
-      });
-      pool.on('error', (err) => {
-        console.warn('[pg-pool] Background client error, resetting pool:', err.message);
-        pool = null;
-      });
-    }
+    pool = new Pool({
+      connectionString: hyperdrive ? env.databaseUrl : connectionStringWithoutSslMode(env.databaseUrl),
+      ssl: hyperdrive ? false : env.databaseSsl ? { rejectUnauthorized: false } : false,
+      max: 5,
+      idleTimeoutMillis: 10000,
+      connectionTimeoutMillis: 10000,
+      allowExitOnIdle: Boolean(worker),
+      application_name: worker ? 'careyu-worker' : 'careyu-local',
+    });
+    pool.on('error', (err) => {
+      // pg already drops the idle client. Keep this same pool so the error
+      // cannot leave its connections open under a replacement pool.
+      console.warn('[pg-pool] Idle client error:', err.message);
+    });
   }
   return pool;
 }

@@ -16,7 +16,7 @@ async function once() {
   const client = new pg.Client({
     connectionString: connectionStringWithoutSslMode(env.databaseUrl),
     ssl: env.databaseSsl ? { rejectUnauthorized: false } : false,
-    connectionTimeoutMillis: 15000,
+    connectionTimeoutMillis: 10000,
     application_name: 'careyu-local-reclaim',
   });
   await client.connect();

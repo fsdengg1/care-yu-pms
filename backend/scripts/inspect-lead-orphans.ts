@@ -16,6 +16,7 @@ function connectionStringWithoutSslMode(url: string): string {
 const client = new pg.Client({
   connectionString: connectionStringWithoutSslMode(env.databaseUrl),
   ssl: env.databaseSsl ? { rejectUnauthorized: false } : false,
+  connectionTimeoutMillis: 10000,
 });
 
 await client.connect();

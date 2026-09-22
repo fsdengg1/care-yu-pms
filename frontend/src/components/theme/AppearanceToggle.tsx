@@ -8,19 +8,11 @@ export default function AppearanceToggle() {
   const { appearance, setAppearance } = useTheme();
 
   return (
-    <div
-              className="flex items-center rounded-md border border-slate-600 bg-slate-800 p-0.5"
-      role="group"
-      aria-label="Appearance"
-    >
+    <div className="app-appearance" role="group" aria-label="Appearance">
       <button
         type="button"
         onClick={() => setAppearance('light')}
-        className={`flex items-center gap-1 rounded px-2 py-1 text-[11px] font-semibold transition-colors ${
-          appearance === 'light'
-            ? 'bg-white text-black shadow-sm'
-            : 'text-slate-400 hover:text-slate-200'
-        }`}
+        className={`app-appearance__btn${appearance === 'light' ? ' is-active' : ''}`}
         aria-pressed={appearance === 'light'}
         title="Light appearance"
       >
@@ -30,11 +22,7 @@ export default function AppearanceToggle() {
       <button
         type="button"
         onClick={() => setAppearance('dark')}
-        className={`flex items-center gap-1 rounded px-2 py-1 text-[11px] font-semibold transition-colors ${
-          appearance === 'dark'
-            ? 'bg-slate-950 text-cyan-300 shadow-sm'
-            : 'text-slate-400 hover:text-slate-200'
-        }`}
+        className={`app-appearance__btn${appearance === 'dark' ? ' is-active' : ''}`}
         aria-pressed={appearance === 'dark'}
         title="Dark appearance"
       >

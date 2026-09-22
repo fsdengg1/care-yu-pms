@@ -15,6 +15,7 @@ async function main() {
   const pool = new pg.Pool({
     connectionString: admin.toString(),
     ssl: { rejectUnauthorized: false },
+    connectionTimeoutMillis: 10000,
   });
 
   const client = await pool.connect();
