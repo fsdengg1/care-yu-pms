@@ -167,6 +167,10 @@ export const env = {
   get escalationAfterReminders() { return Number(process.env.ESCALATION_AFTER_REMINDERS ?? 3); },
   get dailyDigestEnabled() { return (process.env.DAILY_DIGEST_ENABLED ?? 'true').toLowerCase() === 'true'; },
   get schedulerEnabled() { return (process.env.NOTIFICATION_SCHEDULER_ENABLED ?? 'true').toLowerCase() !== 'false'; },
+  /** Automatic pending task/lead reminder emails. Off until explicitly enabled. */
+  get pendingEmailNotificationsEnabled() {
+    return (process.env.ENABLE_PENDING_EMAIL_NOTIFICATIONS ?? 'false').trim().toLowerCase() === 'true';
+  },
   get appTimezone() { return (process.env.APP_TIMEZONE ?? process.env.TZ ?? 'Asia/Kolkata').trim() || 'Asia/Kolkata'; },
   get defaultProjectManagerEmail() { return (process.env.DEFAULT_PROJECT_MANAGER_EMAIL ?? '').trim().toLowerCase(); },
 };

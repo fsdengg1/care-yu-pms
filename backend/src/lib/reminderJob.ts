@@ -9,16 +9,15 @@ import {
   markNotificationsOverdue,
   recipientHasViewed,
 } from './smartNotifications.js';
+import { claimPendingEmailSend, completePendingEmailClaim } from './pendingEmailClaim.js';
+import { classifyReminderDue, notificationDateKey } from './pendingEmailPolicy.js';
 
 let started = false;
 
+type ReminderTick = 'ignored' | 'stale' | 'sent' | 'already_sent' | 'duplicate';
+
 function todayKey() {
   return new Date().toISOString().slice(0, 10);
-}
-
-function isDue(iso?: string) {
-  if (!iso) return true;
-  return Date.parse(iso) <= Date.now();
 }
 
 function saveLead(lead: Lead) {
@@ -37,12 +36,48 @@ function saveTask(task: Task) {
   store.saveTasks(tasks);
 }
 
-async function processLeadReminder(lead: Lead) {
-  if (!leadNeedsReminder(lead) || !lead.responsible_user_id) return;
-  if (!isDue(lead.next_reminder_at)) return;
+function emailAlreadyRecorded(deferred: { email_dispatch?: string; email_status?: string } | undefined) {
+  return Boolean(
+    deferred &&
+      (deferred.email_dispatch === 'MANUALLY_SENT' ||
+        deferred.email_dispatch === 'AUTOMATICALLY_SENT' ||
+        deferred.email_status === 'SENT' ||
+        deferred.email_status === 'PENDING')
+  );
+}
+
+async function deliverOnce(
+  userId: string,
+  taskId: string,
+  notificationType: string,
+  send: () => Promise<'sent' | 'already_sent' | 'failed'>
+): Promise<ReminderTick> {
+  const claim = {
+    userId,
+    taskId,
+    notificationType,
+    notificationDate: notificationDateKey(),
+  };
+  const slot = await claimPendingEmailSend(claim);
+  if (slot === 'duplicate') return 'duplicate';
+  try {
+    const result = await send();
+    await completePendingEmailClaim(claim, result === 'failed' ? 'FAILED' : 'SENT');
+    return result === 'sent' ? 'sent' : 'already_sent';
+  } catch (error) {
+    await completePendingEmailClaim(claim, 'FAILED').catch(() => undefined);
+    throw error;
+  }
+}
+
+async function processLeadReminder(lead: Lead): Promise<ReminderTick> {
+  if (!leadNeedsReminder(lead) || !lead.responsible_user_id) return 'ignored';
+  const due = classifyReminderDue(lead.next_reminder_at);
+  if (due === 'not_scheduled' || due === 'waiting') return 'ignored';
+  if (due === 'stale') return 'stale';
 
   const owner = store.findUserById(lead.responsible_user_id);
-  if (!owner) return;
+  if (!owner) return 'ignored';
 
   const today = todayKey();
   if (lead.due_date && lead.due_date < today) {
@@ -51,63 +86,82 @@ async function processLeadReminder(lead: Lead) {
 
   const viewed = recipientHasViewed('LEAD', lead.id, owner.id) || Boolean(lead.last_action_at);
   const deferred = latestDeferredForRecipient('LEAD', lead.id, owner.id);
-  const emailAlreadySent =
-    deferred &&
-    (deferred.email_dispatch === 'MANUALLY_SENT' || deferred.email_dispatch === 'AUTOMATICALLY_SENT' || deferred.email_status === 'SENT');
+  const emailAlreadySent = emailAlreadyRecorded(deferred);
 
   const count = lead.reminder_count || 0;
   if (count < env.maxReminders) {
     const nextCount = count + 1;
+    let tick: ReminderTick = 'already_sent';
     if (deferred && !emailAlreadySent && !viewed && !deferred.completed_at) {
-      await dispatchNotificationEmail({ notification: deferred, mode: 'AUTOMATIC' });
+      tick = await deliverOnce(owner.id, lead.id, 'LEAD_PENDING', async () => {
+        const dispatched = await dispatchNotificationEmail({ notification: deferred, mode: 'AUTOMATIC' });
+        if (dispatched.error === 'already_sent' || dispatched.error === 'disabled') return 'already_sent';
+        if (dispatched.error) return 'failed';
+        return 'sent';
+      });
     } else if (emailAlreadySent && !lead.last_action_at) {
-      await notificationService.notifyReminder({
-        entityType: 'LEAD',
-        entityId: lead.id,
-        entityName: lead.title,
-        recipientUserId: owner.id,
-        stage: lead.pipeline_stage || lead.status,
-        assignedOn: lead.assigned_at,
-        status: lead.status,
-        reminderCount: nextCount,
+      tick = await deliverOnce(owner.id, lead.id, 'LEAD_PENDING', async () => {
+        const notified = await notificationService.notifyReminder({
+          entityType: 'LEAD',
+          entityId: lead.id,
+          entityName: lead.title,
+          recipientUserId: owner.id,
+          stage: lead.pipeline_stage || lead.status,
+          assignedOn: lead.assigned_at,
+          status: lead.status,
+          reminderCount: nextCount,
+        });
+        return notified.skipped ? 'already_sent' : 'sent';
       });
     }
-    saveLead({
-      ...lead,
-      reminder_count: nextCount,
-      last_reminder_at: new Date().toISOString(),
-      next_reminder_at: nextCount >= env.maxReminders ? undefined : hoursFromNow(env.reminderAfterHours),
-    });
-    return;
+    if (tick === 'sent') {
+      saveLead({
+        ...lead,
+        reminder_count: nextCount,
+        last_reminder_at: new Date().toISOString(),
+        next_reminder_at: nextCount >= env.maxReminders ? undefined : hoursFromNow(env.reminderAfterHours),
+      });
+    }
+    return tick;
   }
 
-  if (lead.escalated_at || count < env.escalationAfterReminders) return;
+  if (lead.escalated_at || count < env.escalationAfterReminders) return 'already_sent';
   const manager = reportingManagerOf(owner);
-  if (!manager || manager.id === owner.id) return;
-  await notificationService.notifyEscalation({
-    entityType: 'LEAD',
-    entityId: lead.id,
-    entityName: lead.title,
-    recipientUserId: manager.id,
-    employeeName: owner.name,
-    assignedOn: lead.assigned_at,
-    stage: lead.pipeline_stage || lead.status,
-    reminderCount: count,
+  if (!manager || manager.id === owner.id) return 'already_sent';
+  const tick = await deliverOnce(manager.id, lead.id, 'LEAD_ESCALATION', async () => {
+    const notified = await notificationService.notifyEscalation({
+      entityType: 'LEAD',
+      entityId: lead.id,
+      entityName: lead.title,
+      recipientUserId: manager.id,
+      employeeName: owner.name,
+      assignedOn: lead.assigned_at,
+      stage: lead.pipeline_stage || lead.status,
+      reminderCount: count,
+    });
+    return notified.skipped ? 'already_sent' : 'sent';
   });
-  saveLead({
-    ...lead,
-    escalated_at: new Date().toISOString(),
-    escalated_to_user_id: manager.id,
-    next_reminder_at: undefined,
-  });
+  if (tick === 'sent') {
+    saveLead({
+      ...lead,
+      escalated_at: new Date().toISOString(),
+      escalated_to_user_id: manager.id,
+      next_reminder_at: undefined,
+    });
+  }
+  return tick;
 }
 
-async function processTaskReminder(task: Task) {
-  if (!taskNeedsReminder(task)) return;
+async function processTaskReminder(task: Task): Promise<ReminderTick> {
+  if (!taskNeedsReminder(task)) return 'ignored';
   const ownerId = task.responsible_user_id || task.assigned_to_id;
-  if (!ownerId || !isDue(task.next_reminder_at)) return;
+  if (!ownerId) return 'ignored';
+  const due = classifyReminderDue(task.next_reminder_at);
+  if (due === 'not_scheduled' || due === 'waiting') return 'ignored';
+  if (due === 'stale') return 'stale';
+
   const owner = store.findUserById(ownerId);
-  if (!owner) return;
+  if (!owner) return 'ignored';
 
   const today = todayKey();
   if (task.due_date && task.due_date < today) {
@@ -116,71 +170,112 @@ async function processTaskReminder(task: Task) {
 
   const viewed = recipientHasViewed('TASK', task.id, owner.id) || Boolean(task.last_action_at);
   const deferred = latestDeferredForRecipient('TASK', task.id, owner.id);
-  const emailAlreadySent =
-    deferred &&
-    (deferred.email_dispatch === 'MANUALLY_SENT' || deferred.email_dispatch === 'AUTOMATICALLY_SENT' || deferred.email_status === 'SENT');
+  const emailAlreadySent = emailAlreadyRecorded(deferred);
 
   const count = task.reminder_count || 0;
   if (count < env.maxReminders) {
     const nextCount = count + 1;
+    let tick: ReminderTick = 'already_sent';
     if (deferred && !emailAlreadySent && !viewed && !deferred.completed_at) {
-      await dispatchNotificationEmail({ notification: deferred, mode: 'AUTOMATIC' });
+      tick = await deliverOnce(owner.id, task.id, 'TASK_PENDING', async () => {
+        const dispatched = await dispatchNotificationEmail({ notification: deferred, mode: 'AUTOMATIC' });
+        if (dispatched.error === 'already_sent' || dispatched.error === 'disabled') return 'already_sent';
+        if (dispatched.error) return 'failed';
+        return 'sent';
+      });
     } else if (emailAlreadySent && task.status !== 'DONE') {
-      await notificationService.notifyReminder({
-        entityType: 'TASK',
-        entityId: task.id,
-        entityName: task.title,
-        recipientUserId: owner.id,
-        stage: task.status,
-        assignedOn: task.created_at,
-        status: task.status,
-        reminderCount: nextCount,
+      tick = await deliverOnce(owner.id, task.id, 'TASK_PENDING', async () => {
+        const notified = await notificationService.notifyReminder({
+          entityType: 'TASK',
+          entityId: task.id,
+          entityName: task.title,
+          recipientUserId: owner.id,
+          stage: task.status,
+          assignedOn: task.created_at,
+          status: task.status,
+          reminderCount: nextCount,
+        });
+        return notified.skipped ? 'already_sent' : 'sent';
       });
     }
-    saveTask({
-      ...task,
-      reminder_count: nextCount,
-      last_reminder_at: new Date().toISOString(),
-      next_reminder_at: nextCount >= env.maxReminders ? undefined : hoursFromNow(env.reminderAfterHours),
-    });
-    return;
+    if (tick === 'sent') {
+      saveTask({
+        ...task,
+        reminder_count: nextCount,
+        last_reminder_at: new Date().toISOString(),
+        next_reminder_at: nextCount >= env.maxReminders ? undefined : hoursFromNow(env.reminderAfterHours),
+      });
+    }
+    return tick;
   }
 
-  if (task.escalated_at || count < env.escalationAfterReminders) return;
+  if (task.escalated_at || count < env.escalationAfterReminders) return 'already_sent';
   const manager = reportingManagerOf(owner);
-  if (!manager || manager.id === owner.id) return;
-  await notificationService.notifyEscalation({
-    entityType: 'TASK',
-    entityId: task.id,
-    entityName: task.title,
-    recipientUserId: manager.id,
-    employeeName: owner.name,
-    assignedOn: task.created_at,
-    stage: task.status,
-    reminderCount: count,
+  if (!manager || manager.id === owner.id) return 'already_sent';
+  const tick = await deliverOnce(manager.id, task.id, 'TASK_ESCALATION', async () => {
+    const notified = await notificationService.notifyEscalation({
+      entityType: 'TASK',
+      entityId: task.id,
+      entityName: task.title,
+      recipientUserId: manager.id,
+      employeeName: owner.name,
+      assignedOn: task.created_at,
+      stage: task.status,
+      reminderCount: count,
+    });
+    return notified.skipped ? 'already_sent' : 'sent';
   });
-  saveTask({
-    ...task,
-    escalated_at: new Date().toISOString(),
-    escalated_to_user_id: manager.id,
-    next_reminder_at: undefined,
-  });
+  if (tick === 'sent') {
+    saveTask({
+      ...task,
+      escalated_at: new Date().toISOString(),
+      escalated_to_user_id: manager.id,
+      next_reminder_at: undefined,
+    });
+  }
+  return tick;
+}
+
+function tally(tick: ReminderTick, counts: { found: number; already: number; sending: number; duplicate: number; stale: number }) {
+  if (tick === 'ignored') return;
+  if (tick === 'stale') {
+    counts.stale += 1;
+    return;
+  }
+  counts.found += 1;
+  if (tick === 'sent') counts.sending += 1;
+  else if (tick === 'duplicate') counts.duplicate += 1;
+  else counts.already += 1;
 }
 
 export async function runPendingReminders() {
+  if (!env.pendingEmailNotificationsEnabled) {
+    console.info('[EMAIL_NOTIFICATION] Disabled by configuration');
+    return;
+  }
+
+  console.info('[EMAIL_NOTIFICATION] Scheduler started');
+  const counts = { found: 0, already: 0, sending: 0, duplicate: 0, stale: 0 };
   for (const lead of store.getLeads()) {
     try {
-      await processLeadReminder(lead);
+      tally(await processLeadReminder(lead), counts);
     } catch (error) {
       console.error('[scheduler] lead reminder failed', lead.id, error);
     }
   }
   for (const task of store.getTasks()) {
     try {
-      await processTaskReminder(task);
+      tally(await processTaskReminder(task), counts);
     } catch (error) {
       console.error('[scheduler] task reminder failed', task.id, error);
     }
+  }
+  console.info(`[EMAIL_NOTIFICATION] Pending notifications found: ${counts.found}`);
+  console.info(`[EMAIL_NOTIFICATION] Already sent: ${counts.already}`);
+  console.info(`[EMAIL_NOTIFICATION] Sending: ${counts.sending}`);
+  console.info(`[EMAIL_NOTIFICATION] Skipped duplicate: ${counts.duplicate}`);
+  if (counts.stale) {
+    console.info(`[EMAIL_NOTIFICATION] Skipped historical pending (not due): ${counts.stale}`);
   }
 }
 
@@ -246,9 +341,13 @@ export async function startNotificationScheduler() {
     cron.schedule('0 8 * * *', () => {
       void runDailyDigests();
     });
+    const pending = env.pendingEmailNotificationsEnabled ? 'enabled' : 'disabled';
     console.log(
-      `[scheduler] notification jobs started (reminder every 15m, digest 08:00, after ${env.reminderAfterHours}h, max ${env.maxReminders})`
+      `[scheduler] notification jobs started (reminder every 15m is ${pending}, digest 08:00, after ${env.reminderAfterHours}h, max ${env.maxReminders})`
     );
+    if (!env.pendingEmailNotificationsEnabled) {
+      console.info('[EMAIL_NOTIFICATION] Disabled by configuration');
+    }
   } catch (error) {
     console.warn('[scheduler] node-cron not loaded:', error instanceof Error ? error.message : error);
   }

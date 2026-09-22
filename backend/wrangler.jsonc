@@ -30,7 +30,8 @@
     "APP_TIMEZONE": "Asia/Kolkata",
     "DATABASE_SSL": "true",
     "CORS_ORIGIN": "https://pms.careyu.ai,https://careyu-backend-api.aicareyuautomation.workers.dev,http://localhost:3000,http://127.0.0.1:3000",
-    "FRONTEND_URL": "https://pms.careyu.ai"
+    "FRONTEND_URL": "https://pms.careyu.ai",
+    "ENABLE_PENDING_EMAIL_NOTIFICATIONS": "false"
   },
   "hyperdrive": [
     {

@@ -290,27 +290,36 @@ export default {
     });
   },
 
-  async scheduled(event: { cron: string; scheduledTime: number }, env: WorkerEnv, _ctx: unknown): Promise<void> {
+  async scheduled(
+    event: { cron: string; scheduledTime: number },
+    env: WorkerEnv,
+    ctx: { waitUntil?: (promise: Promise<unknown>) => void }
+  ): Promise<void> {
     bindWorkerEnv(env);
-    await ensureInitialized();
-    const cron = event.cron || '';
-    console.info(`[worker-cron] Triggered cron="${cron}" at ${new Date().toISOString()}`);
-
+    setWorkerWaitUntil(ctx?.waitUntil ? (promise) => ctx.waitUntil!(promise) : null);
     try {
-      if (cron.includes('15') && cron.includes('*')) {
-        await runPendingReminders();
+      await ensureInitialized();
+      const cron = event.cron || '';
+      console.info(`[worker-cron] Triggered cron="${cron}" at ${new Date().toISOString()}`);
+
+      try {
+        if (cron === '*/15 * * * *') {
+          await runPendingReminders();
+        }
+        if (cron === '0 2 * * *') {
+          await runDailyDigests();
+        }
+        if (cron === '30 5 * * *' || cron === '45 5 * * *') {
+          await runMorningLockAndEmail();
+        }
+        if (cron === '45 13 * * *') {
+          await sendConfiguredEmailReport({ slot: 'evening', source: 'schedule' });
+        }
+      } catch (error) {
+        console.error('[worker-cron] Scheduled task failed:', error);
       }
-      if (cron === '0 2 * * *') {
-        await runDailyDigests();
-      }
-      if (cron === '30 5 * * *' || cron === '45 5 * * *') {
-        await runMorningLockAndEmail();
-      }
-      if (cron === '45 13 * * *') {
-        await sendConfiguredEmailReport({ slot: 'evening', source: 'schedule' });
-      }
-    } catch (error) {
-      console.error('[worker-cron] Scheduled task failed:', error);
+    } finally {
+      setWorkerWaitUntil(null);
     }
   },
 };

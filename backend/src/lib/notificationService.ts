@@ -18,6 +18,7 @@ import {
   appendNotificationHistory,
   reminderDueAt,
 } from './smartNotifications.js';
+import { notificationDateKey } from './pendingEmailPolicy.js';
 import {
   acceptedEmail,
   assignmentEmail,
@@ -511,7 +512,7 @@ export async function notifyReminder(params: {
     entityId: params.entityId,
     actionUrl,
     priority: 'MEDIUM',
-    eventKey: `REMINDER:${params.entityType}:${params.entityId}:${recipient.id}:${params.reminderCount}`,
+    eventKey: `REMINDER:${params.entityType}:${params.entityId}:${recipient.id}:${notificationDateKey()}`,
     preferenceCategory: 'reminder',
     emailType: 'DAILY_REMINDER',
     emailSubject: email.subject,

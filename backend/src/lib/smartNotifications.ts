@@ -114,7 +114,15 @@ export async function dispatchNotificationEmail(params: {
   actor?: User;
 }): Promise<{ notification: NotificationItem; error?: string }> {
   const item = store.getNotifications().find((row) => row.id === params.notification.id) || params.notification;
-  if (item.email_status === 'SENT' && (item.email_dispatch === 'MANUALLY_SENT' || item.email_dispatch === 'AUTOMATICALLY_SENT')) {
+  if (params.mode === 'AUTOMATIC' && !env.pendingEmailNotificationsEnabled) {
+    console.info('[EMAIL_NOTIFICATION] Disabled by configuration');
+    return { notification: item, error: 'disabled' };
+  }
+  const alreadyDispatched =
+    item.email_status === 'SENT' ||
+    item.email_dispatch === 'MANUALLY_SENT' ||
+    item.email_dispatch === 'AUTOMATICALLY_SENT';
+  if (alreadyDispatched || (params.mode === 'AUTOMATIC' && item.email_status === 'PENDING')) {
     return { notification: item, error: 'already_sent' };
   }
   const recipient = store.findUserById(item.recipient_id);
