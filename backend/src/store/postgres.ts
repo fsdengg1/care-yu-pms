@@ -105,7 +105,10 @@ export function getPool(): pg.Pool {
       max: 5,
       idleTimeoutMillis: 10000,
       connectionTimeoutMillis: 10000,
-      allowExitOnIdle: Boolean(worker),
+      // Idle clients are still removed after idleTimeoutMillis. allowExitOnIdle
+      // calls tid.unref(), which Cloudflare Workers timers do not implement,
+      // and that exception is returned as a 503 on login.
+      allowExitOnIdle: false,
       application_name: worker ? 'careyu-worker' : 'careyu-local',
     });
     pool.on('error', (err) => {
