@@ -105,10 +105,14 @@ export function getPool(): pg.Pool {
       max: 5,
       idleTimeoutMillis: 10000,
       connectionTimeoutMillis: 10000,
-      // Idle clients are still removed after idleTimeoutMillis. allowExitOnIdle
-      // calls tid.unref(), which Cloudflare Workers timers do not implement,
-      // and that exception is returned as a 503 on login.
+      // allowExitOnIdle calls tid.unref(). Workers timers do not implement it,
+      // and that exception fails login. Idle clients are still closed after
+      // idleTimeoutMillis.
       allowExitOnIdle: false,
+      // A Worker isolate freezes between requests and the pooled socket dies.
+      // Reusing it makes the next query hang until the request timeout. Close
+      // the client after one checkout; the same Pool is still shared.
+      maxUses: worker ? 1 : Infinity,
       application_name: worker ? 'careyu-worker' : 'careyu-local',
     });
     pool.on('error', (err) => {
