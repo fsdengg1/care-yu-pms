@@ -4,6 +4,7 @@ import { runPendingReminders, runDailyDigests } from './lib/reminderJob.js';
 import { sendConfiguredEmailReport } from './lib/emailReportSchedule.js';
 import { runMorningLockAndEmail } from './lib/emailReportJob.js';
 import { hydrateRemainingWorkerCollections, setWorkerWaitUntil } from './store/db.js';
+import { discardIdlePoolClients } from './store/postgres.js';
 
 type WorkerEnv = Record<string, unknown> & {
   ASSETS?: { fetch: (request: Request) => Promise<Response> };
@@ -192,6 +193,7 @@ function dispatchExpress(request: Request, raw: Buffer): Promise<Response> {
 
 async function handleApiRequest(request: Request, env: WorkerEnv, ctx?: { waitUntil: (promise: Promise<unknown>) => void }): Promise<Response> {
   bindWorkerEnv(env);
+  discardIdlePoolClients();
   setWorkerWaitUntil(ctx ? (promise) => ctx.waitUntil(promise) : null);
   const pathname = new URL(request.url).pathname;
   const isAuthRoute = pathname.startsWith('/api/auth/');
@@ -296,6 +298,7 @@ export default {
     ctx: { waitUntil?: (promise: Promise<unknown>) => void }
   ): Promise<void> {
     bindWorkerEnv(env);
+    discardIdlePoolClients();
     setWorkerWaitUntil(ctx?.waitUntil ? (promise) => ctx.waitUntil!(promise) : null);
     try {
       await ensureInitialized();

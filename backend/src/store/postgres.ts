@@ -95,24 +95,97 @@ function connectionStringWithoutSslMode(url: string): string {
   }
 }
 
+type IdlePoolItem = {
+  client: pg.PoolClient;
+  timeoutId?: ReturnType<typeof setTimeout>;
+};
+
+type WorkerSocket = {
+  destroyed?: boolean;
+  _cfSocket?: { close?: () => void };
+  _cfReader?: { cancel?: () => Promise<void> };
+};
+
+function installWorkerTimerUnref(): void {
+  const globalState = globalThis as typeof globalThis & { __careyuTimerUnref?: boolean };
+  if (globalState.__careyuTimerUnref) return;
+  globalState.__careyuTimerUnref = true;
+  const original = globalThis.setTimeout.bind(globalThis);
+  globalThis.setTimeout = ((handler: TimerHandler, timeout?: number, ...args: unknown[]) => {
+    const handle = original(handler, timeout, ...args);
+    if (handle && typeof handle === 'object') {
+      const timer = handle as { unref?: () => unknown; ref?: () => unknown };
+      // Workers timers omit unref(). pg calls it while returning a connection
+      // to the pool, and that throw becomes a 503 on every API route.
+      if (typeof timer.unref !== 'function') timer.unref = () => timer;
+      if (typeof timer.ref !== 'function') timer.ref = () => timer;
+    }
+    return handle;
+  }) as typeof setTimeout;
+}
+
+function forceCloseWorkerClient(client: pg.PoolClient): void {
+  const raw = client as pg.PoolClient & {
+    _ending?: boolean;
+    _ended?: boolean;
+    _queryable?: boolean;
+    connection?: { stream?: WorkerSocket };
+  };
+  raw._ending = true;
+  raw._ended = true;
+  raw._queryable = false;
+  const stream = raw.connection?.stream;
+  if (!stream || stream.destroyed) return;
+  stream.destroyed = true;
+  try {
+    void stream._cfReader?.cancel?.();
+  } catch {
+    // The reader is already closed.
+  }
+  try {
+    stream._cfSocket?.close?.();
+  } catch {
+    // The socket is already closed.
+  }
+}
+
+/**
+ * Worker isolates reuse this process-wide pool, but a socket left idle by the
+ * previous request is already dead. Handing it out makes the next API call
+ * wait until the Worker request timeout. Drop idle clients before each request.
+ * The Node server keeps them and lets idleTimeoutMillis close them.
+ */
+export function discardIdlePoolClients(): void {
+  if (process.env.CLOUDFLARE_WORKER !== '1' || !pool) return;
+  const internal = pool as pg.Pool & { _idle?: IdlePoolItem[]; _clients?: pg.PoolClient[] };
+  const idle = internal._idle;
+  if (!idle?.length) return;
+  const stale = idle.splice(0, idle.length);
+  const staleClients = new Set(stale.map((item) => item.client));
+  internal._clients = (internal._clients || []).filter((client) => !staleClients.has(client));
+  for (const item of stale) {
+    if (item.timeoutId) clearTimeout(item.timeoutId);
+    forceCloseWorkerClient(item.client);
+  }
+}
+
 export function getPool(): pg.Pool {
   if (!pool) {
     const worker = process.env.CLOUDFLARE_WORKER === '1';
     const hyperdrive = process.env.HYPERDRIVE_ACTIVE === '1';
+    if (worker) installWorkerTimerUnref();
     pool = new Pool({
       connectionString: hyperdrive ? env.databaseUrl : connectionStringWithoutSslMode(env.databaseUrl),
       ssl: hyperdrive ? false : env.databaseSsl ? { rejectUnauthorized: false } : false,
       max: 5,
       idleTimeoutMillis: 10000,
       connectionTimeoutMillis: 10000,
-      // allowExitOnIdle calls tid.unref(). Workers timers do not implement it,
-      // and that exception fails login. Idle clients are still closed after
-      // idleTimeoutMillis.
+      // pg only calls timer.unref() when this is true. Workers timers do not
+      // implement it. Idle clients are still closed after idleTimeoutMillis.
       allowExitOnIdle: false,
-      // A Worker isolate freezes between requests and the pooled socket dies.
-      // Reusing it makes the next query hang until the request timeout. Close
-      // the client after one checkout; the same Pool is still shared.
-      maxUses: worker ? 1 : Infinity,
+      // If a Worker query is talking to a dead socket, fail that query and
+      // return the client instead of blocking every later request.
+      query_timeout: worker ? 12000 : undefined,
       application_name: worker ? 'careyu-worker' : 'careyu-local',
     });
     pool.on('error', (err) => {
